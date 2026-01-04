@@ -569,61 +569,83 @@ class TimingGenApp {
         const lowY = baseY + this.config.rowHeight - 20;
         const midY = baseY + this.config.rowHeight / 2;
         
+        // First, identify all X spans
+        const xSpans = [];
+        let i = 0;
+        while (i < this.config.cycles) {
+            const value = this.getBitValueAtCycle(signal, i);
+            if (value === 'X') {
+                const spanStart = i;
+                let spanEnd = i;
+                // Find the end of this X span
+                for (let j = i + 1; j < this.config.cycles; j++) {
+                    const nextValue = this.getBitValueAtCycle(signal, j);
+                    if (nextValue !== 'X') {
+                        spanEnd = j - 1;
+                        break;
+                    }
+                    if (j === this.config.cycles - 1) {
+                        spanEnd = j;
+                    }
+                }
+                xSpans.push({ start: spanStart, end: spanEnd });
+                i = spanEnd + 1;
+            } else {
+                i++;
+            }
+        }
+        
+        // Draw the line path, skipping X regions
         const path = new paper.Path();
         path.strokeColor = this.config.signalColor;
         path.strokeWidth = 2;
         
-        let lastValue = this.getBitValueAtCycle(signal, 0);
-        let lastY = (lastValue === 1) ? highY : (lastValue === 'Z') ? midY : lowY;
-        let inXRegion = (lastValue === 'X');
-        
         for (let i = 0; i <= this.config.cycles; i++) {
             const x = this.config.nameColumnWidth + i * this.config.cycleWidth;
-            const value = (i < this.config.cycles) ? this.getBitValueAtCycle(signal, i) : lastValue;
+            const value = (i < this.config.cycles) ? this.getBitValueAtCycle(signal, i) : this.getBitValueAtCycle(signal, this.config.cycles - 1);
             const currentY = (value === 1) ? highY : (value === 'Z') ? midY : lowY;
-            const currentInX = (value === 'X');
+            
+            // Check if this cycle is in an X span
+            const inXSpan = xSpans.some(span => i >= span.start && i <= span.end);
+            
+            if (value === 'X') {
+                // Skip drawing lines in X regions
+                continue;
+            }
             
             if (i === 0) {
-                if (!currentInX) {
-                    path.moveTo(new paper.Point(x, currentY));
-                }
+                path.moveTo(new paper.Point(x, currentY));
             } else {
-                // Check if value changed at this cycle
-                if (signal.values[i] !== undefined && value !== lastValue) {
-                    // Value changed
-                    if (inXRegion && !currentInX) {
-                        // Transitioning out of X region - start new path segment
-                        path.moveTo(new paper.Point(x, currentY));
-                    } else if (!inXRegion && currentInX) {
-                        // Transitioning into X region - end current path
-                        path.lineTo(new paper.Point(x, lastY));
-                    } else if (!inXRegion && !currentInX) {
-                        // Normal transition between non-X values
-                        path.lineTo(new paper.Point(x, lastY));
+                const prevValue = this.getBitValueAtCycle(signal, Math.max(0, i - 1));
+                const prevInXSpan = xSpans.some(span => (i - 1) >= span.start && (i - 1) <= span.end);
+                
+                if (prevValue === 'X' && value !== 'X') {
+                    // Starting new path segment after X region
+                    path.moveTo(new paper.Point(x, currentY));
+                } else if (prevValue !== 'X' && value === 'X') {
+                    // Ending path segment before X region
+                    path.lineTo(new paper.Point(x, (prevValue === 1) ? highY : (prevValue === 'Z') ? midY : lowY));
+                } else if (!inXSpan && !prevInXSpan) {
+                    // Normal line drawing
+                    if (signal.values[i] !== undefined && value !== prevValue) {
+                        // Value changed - draw transition
+                        const prevY = (prevValue === 1) ? highY : (prevValue === 'Z') ? midY : lowY;
+                        path.lineTo(new paper.Point(x, prevY));
                         path.lineTo(new paper.Point(x, currentY));
-                    }
-                } else {
-                    // Value hasn't changed
-                    if (!currentInX) {
+                    } else {
+                        // Value same - continue line
                         path.lineTo(new paper.Point(x, currentY));
                     }
                 }
             }
-            
-            lastValue = value;
-            lastY = currentY;
-            inXRegion = currentInX;
         }
         
-        // Draw X patterns for cycles with X value
-        for (let i = 0; i < this.config.cycles; i++) {
-            const value = this.getBitValueAtCycle(signal, i);
-            if (value === 'X') {
-                const x1 = this.config.nameColumnWidth + i * this.config.cycleWidth;
-                const x2 = x1 + this.config.cycleWidth;
-                this.drawXPattern(x1, x2, baseY, highY, lowY);
-            }
-        }
+        // Draw X patterns as continuous spans
+        xSpans.forEach(span => {
+            const x1 = this.config.nameColumnWidth + span.start * this.config.cycleWidth;
+            const x2 = this.config.nameColumnWidth + (span.end + 1) * this.config.cycleWidth;
+            this.drawXPattern(x1, x2, baseY, highY, lowY);
+        });
     }
     
     drawBusWaveform(signal, baseY) {
