@@ -575,33 +575,44 @@ class TimingGenApp {
         
         let lastValue = this.getBitValueAtCycle(signal, 0);
         let lastY = (lastValue === 1) ? highY : (lastValue === 'Z') ? midY : lowY;
+        let inXRegion = (lastValue === 'X');
         
         for (let i = 0; i <= this.config.cycles; i++) {
             const x = this.config.nameColumnWidth + i * this.config.cycleWidth;
             const value = (i < this.config.cycles) ? this.getBitValueAtCycle(signal, i) : lastValue;
             const currentY = (value === 1) ? highY : (value === 'Z') ? midY : lowY;
+            const currentInX = (value === 'X');
             
             if (i === 0) {
-                path.moveTo(new paper.Point(x, currentY));
+                if (!currentInX) {
+                    path.moveTo(new paper.Point(x, currentY));
+                }
             } else {
                 // Check if value changed at this cycle
                 if (signal.values[i] !== undefined && value !== lastValue) {
-                    // Draw transition
-                    if (lastValue === 'X' || value === 'X') {
-                        // Draw X pattern - we'll handle this separately
+                    // Value changed
+                    if (inXRegion && !currentInX) {
+                        // Transitioning out of X region - start new path segment
+                        path.moveTo(new paper.Point(x, currentY));
+                    } else if (!inXRegion && currentInX) {
+                        // Transitioning into X region - end current path
                         path.lineTo(new paper.Point(x, lastY));
-                    } else {
-                        // Normal transition
+                    } else if (!inXRegion && !currentInX) {
+                        // Normal transition between non-X values
                         path.lineTo(new paper.Point(x, lastY));
                         path.lineTo(new paper.Point(x, currentY));
                     }
                 } else {
-                    path.lineTo(new paper.Point(x, currentY));
+                    // Value hasn't changed
+                    if (!currentInX) {
+                        path.lineTo(new paper.Point(x, currentY));
+                    }
                 }
             }
             
             lastValue = value;
             lastY = currentY;
+            inXRegion = currentInX;
         }
         
         // Draw X patterns for cycles with X value
@@ -620,13 +631,32 @@ class TimingGenApp {
         const bottomY = baseY + this.config.rowHeight - 20;
         const slew = this.config.slew;
         
-        for (let i = 0; i < this.config.cycles; i++) {
-            const x1 = this.config.nameColumnWidth + i * this.config.cycleWidth;
-            const x2 = x1 + this.config.cycleWidth;
-            
+        // First pass: identify value spans
+        let i = 0;
+        while (i < this.config.cycles) {
             const value = this.getBusValueAtCycle(signal, i);
-            const nextValue = (i < this.config.cycles - 1) ? this.getBusValueAtCycle(signal, i + 1) : value;
-            const valueChanged = (signal.values[i + 1] !== undefined);
+            
+            // Find where this value span starts and ends
+            let spanStart = i;
+            let spanEnd = i;
+            
+            // Find the end of this value span
+            for (let j = i + 1; j < this.config.cycles; j++) {
+                if (signal.values[j] !== undefined) {
+                    spanEnd = j - 1;
+                    break;
+                }
+                if (j === this.config.cycles - 1) {
+                    spanEnd = j;
+                }
+            }
+            
+            if (spanEnd === i && i < this.config.cycles - 1 && signal.values[i + 1] === undefined) {
+                spanEnd = this.config.cycles - 1;
+            }
+            
+            const x1 = this.config.nameColumnWidth + spanStart * this.config.cycleWidth;
+            const x2 = this.config.nameColumnWidth + (spanEnd + 1) * this.config.cycleWidth;
             
             if (value === 'Z') {
                 // High-Z state - draw middle line
@@ -638,18 +668,21 @@ class TimingGenApp {
                     strokeWidth: 2
                 });
             } else if (value === 'X') {
-                // Unknown state - draw X pattern
+                // Unknown state - draw X pattern for the entire span
                 this.drawXPattern(x1, x2, baseY, topY, bottomY);
             } else {
-                // Valid value - draw bus shape
+                // Valid value - draw bus shape for the entire span
                 const path = new paper.Path();
                 path.strokeColor = this.config.signalColor;
                 path.strokeWidth = 2;
                 path.fillColor = '#e8f4f8';
                 
+                // Check if there's a transition at the end
+                const hasNextValue = (spanEnd + 1 < this.config.cycles && signal.values[spanEnd + 1] !== undefined);
+                
                 path.moveTo(new paper.Point(x1 + slew, topY));
                 
-                if (valueChanged) {
+                if (hasNextValue) {
                     // Transition at end
                     path.lineTo(new paper.Point(x2 - slew, topY));
                     path.lineTo(new paper.Point(x2, topY + (bottomY - topY) / 2));
@@ -663,28 +696,20 @@ class TimingGenApp {
                 path.lineTo(new paper.Point(x1, bottomY + (topY - bottomY) / 2));
                 path.closePath();
                 
-                // Draw value text only when value changes (at the start of the value span)
-                if (signal.values[i] !== undefined) {
-                    // Calculate how many cycles this value spans
-                    let spanCycles = 1;
-                    for (let j = i + 1; j < this.config.cycles; j++) {
-                        if (signal.values[j] !== undefined) break;
-                        spanCycles++;
-                    }
-                    
-                    // Draw text in the middle of the span
-                    const spanWidth = spanCycles * this.config.cycleWidth;
-                    const textX = x1 + spanWidth / 2;
-                    const text = new paper.PointText({
-                        point: [textX, baseY + this.config.rowHeight / 2 + 4],
-                        content: value,
-                        fillColor: 'black',
-                        fontFamily: 'Arial',
-                        fontSize: 12,
-                        justification: 'center'
-                    });
-                }
+                // Draw value text in the middle of the span
+                const textX = (x1 + x2) / 2;
+                const text = new paper.PointText({
+                    point: [textX, baseY + this.config.rowHeight / 2 + 4],
+                    content: value,
+                    fillColor: 'black',
+                    fontFamily: 'Arial',
+                    fontSize: 12,
+                    justification: 'center'
+                });
             }
+            
+            // Move to next span
+            i = spanEnd + 1;
         }
     }
     
