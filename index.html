@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- Version 3.0.1 -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,6 +15,7 @@
         <!-- Top Menu Bar -->
         <div id="menu-bar">
             <button id="add-signal-btn" class="menu-btn">Add Signal</button>
+            <button id="global-option-btn" class="menu-btn">Global Option</button>
             <button id="save-btn" class="menu-btn">Save</button>
             <button id="load-btn" class="menu-btn">Load</button>
             <button id="export-svg-btn" class="menu-btn">Export SVG</button>
@@ -102,6 +104,44 @@
         <div class="menu-item" data-value="1">1 (High)</div>
         <div class="menu-item" data-value="X">X (Unknown)</div>
         <div class="menu-item" data-value="Z">Z (High-Z)</div>
+    </div>
+
+    <!-- Global Option Dialog -->
+    <div id="global-option-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content" style="min-width: 400px;">
+            <h3>Global Options</h3>
+            
+            <label>Clock Period:</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <input type="number" id="clock-period-input" value="10" min="0.001" step="0.001" style="flex: 1;">
+                <select id="clock-period-unit-select" style="flex: 0 0 80px;">
+                    <option value="ps">ps</option>
+                    <option value="ns" selected>ns</option>
+                    <option value="us">μs</option>
+                    <option value="ms">ms</option>
+                </select>
+            </div>
+            
+            <label>Slew (transition pixels):</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                <input type="number" id="slew-input" value="4" min="0" max="50" style="flex: 1;">
+                <span style="flex: 0 0 30px;">px</span>
+            </div>
+            
+            <label>Delay:</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <input type="number" id="delay-input" value="0" min="0" step="0.001" style="flex: 1;">
+                <select id="delay-unit-select" style="flex: 0 0 80px;">
+                    <option value="ps">ps</option>
+                    <option value="ns" selected>ns</option>
+                    <option value="us">μs</option>
+                    <option value="ms">ms</option>
+                </select>
+            </div>
+            
+            <button id="global-option-ok-btn" class="dialog-btn">OK</button>
+            <button id="global-option-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
     </div>
 
     <script src="js/timing_gen.js"></script>

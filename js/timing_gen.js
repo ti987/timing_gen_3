@@ -1,5 +1,15 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
+// Version 3.0.1
 // Main JavaScript Application using Paper.js
+//
+// Key Features:
+// - Multiple signal types: Clock, Bit, and Bus signals
+// - Interactive waveform editing with click and right-click menus
+// - Global options: Clock period, slew rate, and propagation delay
+// - Signal reordering via drag-and-drop
+// - JSON save/load with version control
+// - SVG export for documentation
+// - Configurable cycles and timing parameters
 
 class TimingGenApp {
     constructor() {
@@ -15,7 +25,11 @@ class TimingGenApp {
             cycleWidth: 60,
             rowHeight: 80,
             headerHeight: 50,
-            slew: 5, // pixels for slew transition
+            slew: 4, // pixels for slew transition (default: 4)
+            clockPeriod: 10, // default clock period value
+            clockPeriodUnit: 'ns', // default time unit
+            delay: 0, // default delay value
+            delayUnit: 'ns', // default delay time unit
             gridColor: '#e0e0e0',
             signalColor: '#000000',
             backgroundColor: '#ffffff'
@@ -51,6 +65,7 @@ class TimingGenApp {
     setupEventListeners() {
         // Menu buttons
         document.getElementById('add-signal-btn').addEventListener('click', () => this.showAddSignalDialog());
+        document.getElementById('global-option-btn').addEventListener('click', () => this.showGlobalOptionDialog());
         document.getElementById('save-btn').addEventListener('click', () => this.saveToJSON());
         document.getElementById('load-btn').addEventListener('click', () => document.getElementById('file-input').click());
         document.getElementById('export-svg-btn').addEventListener('click', () => this.exportToSVG());
@@ -68,6 +83,10 @@ class TimingGenApp {
         // Bus value dialog
         document.getElementById('bus-dialog-ok-btn').addEventListener('click', () => this.setBusValue());
         document.getElementById('bus-dialog-cancel-btn').addEventListener('click', () => this.hideBusValueDialog());
+        
+        // Global option dialog
+        document.getElementById('global-option-ok-btn').addEventListener('click', () => this.saveGlobalOptions());
+        document.getElementById('global-option-cancel-btn').addEventListener('click', () => this.hideGlobalOptionDialog());
         
         // Signal context menu
         document.getElementById('edit-signal-menu').addEventListener('click', () => this.showEditSignalDialog());
@@ -142,11 +161,60 @@ class TimingGenApp {
         this.hideAddSignalDialog();
         this.hideEditSignalDialog();
         this.hideBusValueDialog();
+        this.hideGlobalOptionDialog();
     }
     
     hideAllMenus() {
         document.getElementById('signal-context-menu').style.display = 'none';
         document.getElementById('bit-cycle-context-menu').style.display = 'none';
+    }
+    
+    showGlobalOptionDialog() {
+        // Populate dialog with current values
+        document.getElementById('clock-period-input').value = this.config.clockPeriod;
+        document.getElementById('clock-period-unit-select').value = this.config.clockPeriodUnit;
+        document.getElementById('slew-input').value = this.config.slew;
+        document.getElementById('delay-input').value = this.config.delay;
+        document.getElementById('delay-unit-select').value = this.config.delayUnit;
+        
+        document.getElementById('global-option-dialog').style.display = 'flex';
+        document.getElementById('clock-period-input').focus();
+    }
+    
+    hideGlobalOptionDialog() {
+        document.getElementById('global-option-dialog').style.display = 'none';
+    }
+    
+    saveGlobalOptions() {
+        const clockPeriod = parseFloat(document.getElementById('clock-period-input').value);
+        const clockPeriodUnit = document.getElementById('clock-period-unit-select').value;
+        const slew = parseInt(document.getElementById('slew-input').value);
+        const delay = parseFloat(document.getElementById('delay-input').value);
+        const delayUnit = document.getElementById('delay-unit-select').value;
+        
+        if (isNaN(clockPeriod) || clockPeriod <= 0) {
+            alert('Please enter a valid clock period');
+            return;
+        }
+        
+        if (isNaN(slew) || slew < 0) {
+            alert('Please enter a valid slew value');
+            return;
+        }
+        
+        if (isNaN(delay) || delay < 0) {
+            alert('Please enter a valid delay value');
+            return;
+        }
+        
+        this.config.clockPeriod = clockPeriod;
+        this.config.clockPeriodUnit = clockPeriodUnit;
+        this.config.slew = slew;
+        this.config.delay = delay;
+        this.config.delayUnit = delayUnit;
+        
+        this.hideGlobalOptionDialog();
+        this.render();
     }
     
     addSignal() {
@@ -163,6 +231,13 @@ class TimingGenApp {
             type: type,
             values: {}
         };
+        
+        // Add base_clock for bit and bus signals
+        if (type === 'bit' || type === 'bus') {
+            // Find the first clock signal, or use 'clk' as default
+            const clockSignal = this.signals.find(s => s.type === 'clock');
+            signal.base_clock = clockSignal ? clockSignal.name : 'clk';
+        }
         
         // Initialize default values
         if (type === 'clock') {
@@ -195,13 +270,22 @@ class TimingGenApp {
             signal.name = name;
             signal.type = type;
             
-            // If type changed, reset values
+            // If type changed, reset values and update base_clock
             if (oldType !== type) {
                 signal.values = {};
                 if (type === 'bit') {
                     signal.values[0] = 0;
+                    // Add base_clock for bit signals
+                    const clockSignal = this.signals.find(s => s.type === 'clock');
+                    signal.base_clock = clockSignal ? clockSignal.name : 'clk';
                 } else if (type === 'bus') {
                     signal.values[0] = 'X';
+                    // Add base_clock for bus signals
+                    const clockSignal = this.signals.find(s => s.type === 'clock');
+                    signal.base_clock = clockSignal ? clockSignal.name : 'clk';
+                } else if (type === 'clock') {
+                    // Remove base_clock for clock signals
+                    delete signal.base_clock;
                 }
             }
             
@@ -760,9 +844,14 @@ class TimingGenApp {
     
     saveToJSON() {
         const data = {
-            version: '3.0',
+            version: '3.0.1',
             config: {
-                cycles: this.config.cycles
+                cycles: this.config.cycles,
+                clockPeriod: this.config.clockPeriod,
+                clockPeriodUnit: this.config.clockPeriodUnit,
+                slew: this.config.slew,
+                delay: this.config.delay,
+                delayUnit: this.config.delayUnit
             },
             signals: this.signals
         };
@@ -788,13 +877,38 @@ class TimingGenApp {
             try {
                 const data = JSON.parse(event.target.result);
                 
-                if (data.config && data.config.cycles) {
-                    this.config.cycles = data.config.cycles;
-                    document.getElementById('cycles-input').value = this.config.cycles;
+                if (data.config) {
+                    if (data.config.cycles) {
+                        this.config.cycles = data.config.cycles;
+                        document.getElementById('cycles-input').value = this.config.cycles;
+                    }
+                    // Load global options if available
+                    if (data.config.clockPeriod !== undefined) {
+                        this.config.clockPeriod = data.config.clockPeriod;
+                    }
+                    if (data.config.clockPeriodUnit !== undefined) {
+                        this.config.clockPeriodUnit = data.config.clockPeriodUnit;
+                    }
+                    if (data.config.slew !== undefined) {
+                        this.config.slew = data.config.slew;
+                    }
+                    if (data.config.delay !== undefined) {
+                        this.config.delay = data.config.delay;
+                    }
+                    if (data.config.delayUnit !== undefined) {
+                        this.config.delayUnit = data.config.delayUnit;
+                    }
                 }
                 
                 if (data.signals) {
                     this.signals = data.signals;
+                    // Ensure all bit and bus signals have base_clock
+                    this.signals.forEach(signal => {
+                        if ((signal.type === 'bit' || signal.type === 'bus') && !signal.base_clock) {
+                            const clockSignal = this.signals.find(s => s.type === 'clock');
+                            signal.base_clock = clockSignal ? clockSignal.name : 'clk';
+                        }
+                    });
                 }
                 
                 this.initializeCanvas();
