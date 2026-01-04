@@ -1,0 +1,3204 @@
+#!/usr/bin/env perl
+#
+#    Timing-gen is a tool to generate high quality timing diagrams from
+#    text input files. The output results would look like timing diagrams
+#    in device data sheets.
+#
+#    Copyright (C) 2010-2013 Toshi Isogai
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+#.
+#. timing diagram generator
+#. written by toshi isogai toshi@isogai.us, 2010-2013
+#. usage
+#.   timing-gen [option] <infile>
+#.
+#. option
+#.   --png           generate .png file (requires imageMagick convert)
+#.   --emf           generate .emf file
+#.   --asc-comm=s    set comment starter to <s> in ascii waveform (def. "//")
+#.   --asc-hcyc=f    set <f> columns as a half cycle in ascii waveform (def. 3)
+#.                   1 column of each cycle is used by a transition character.
+#.   --asc-sig-wd=i  set <i> as a number of columns reserved for signal names. (def. 10)
+#.   --asc-use-delay use delay specified in tg2 file.
+#.
+
+# 
+
+#  xfig info
+# polyline (polygon)
+#       type    name                    (brief description)
+#       ----    ----                    -------------------
+#       int     object_code             (always 2)
+#       int     sub_type                (1: polyline
+#                                        2: box
+#                                        3: polygon
+#                                        4: arc-box)
+#                                        5: imported-picture bounding-box)
+#       int     line_style              (enumeration type)
+#       int     thickness               (1/80 inch)
+#       int     pen_color               (enumeration type, pen color)
+#       int     fill_color              (enumeration type, fill color)
+#       int     depth                   (enumeration type)
+#       int     pen_style               (pen style, not used)
+#       int     area_fill               (enumeration type, -1 = no fill)
+#       float   style_val               (1/80 inch) dashed line dash length
+#       int     join_style              (enumeration type)
+#       int     cap_style               (enumeration type, only used for POLYLINE)
+#       int     radius                  (1/80 inch, radius of arc-boxes)
+#       int     forward_arrow           (0: off, 1: on)
+#       int     backward_arrow          (0: off, 1: on)
+#       int     npoints                 (number of points in line)
+
+use v5.10;
+
+#use strict;
+use Getopt::Long;
+use Clone qw(clone);
+
+my $ver = "2.0.0";
+
+#my $path = $0;
+#$path =~ s{[^/]+$}{};
+#require "$path/.pl";
+
+my %Opts; # option holder
+#. standard options
+#. -h   print invocation help message
+#. -d   print debugging info
+#        256 - print get_state value
+#.       128 - continue after error
+#        64  - print virtual signal equations
+#        32  - print delta values 
+#        2   - print the ascii wave file output to terminal
+#        1   - print the output to terminal (stdout)
+#. -v   version info
+$Opts{asc_comm} = "--"; # comment starter for ascii waveform
+$Opts{asc_hcyc} = 3; # the number chars in non-transition portion in a half cycle ascii waveform
+$Opts{asc_sig_wd} = 10; # ascii waveform signal name width
+
+my @Opts = ("d:i",\$Opts{d}, "h",\$Opts{h}, "v", \$Opts{v});
+
+push (@Opts, 
+      "--help", \$Opts{h},
+      "--version", \$Opts{v},
+      "--asc-comm=s", \$Opts{asc_comm},
+      "--asc-hcyc=f", \$Opts{asc_hcyc},
+      "--asc-sig-wd=i", \$Opts{asc_sig_wd},
+      "--asc-use-delay", \$Opts{asc_use_delay},
+      );
+
+
+if (!GetOptions (@Opts) || $Opts{h} || ($#ARGV<0 && !$Opts{v})) {
+  help();
+}
+
+# this line may cause conflict in multi-developer environment
+
+if ($Opts{v}) {
+  #  using rcs revision
+  print STDERR "$0 revision $ver\n";
+  exit(51);
+}
+
+
+
+
+# GLOBALS
+my $RE_PAREN = qr{(?:\([^\)]+\))}; # parenthesis protected
+my $RE_SQUARE = qr{(?:\[[^\]]+\])}; # squares protected
+my $RE_ID = '([a-zA-Z]\w*)';    # alphanum
+my $RE_NUMBER = '([0-9]+(?:\.[0-9]+)?)';
+my $RE_VAR = '(\$\w+)';
+my $RE_Z   = '[zZ]';
+my $RE_X   = '[xX]';
+my $RE_D   = '(dontcare|-)';
+my $RE_U   = '[uU]';
+my $RE_L   = '[lL]';
+my $RE_H   = '[hH]';
+my $RE_DQUOTE = '"(\\\\.|[^"\\\\])*"';  # double quoted string
+my $RE_NAN = '[$]';  # signal leading
+
+my @Lines;  # all lines in input file
+my $Line;   # current line being parsed
+my $Ln;     # current line number 
+
+our @Waves; # wave info - array of hash
+
+our %Conf;   # wave configuration - hash
+
+our %USER_COLOR; # user defined colors
+
+# Conf
+#   parameter => value
+
+our @Virtual; # virtual signal configuration
+
+# Virtual 
+#   name => { equation }
+
+my  %Conf2;  # generated conf with overrides
+my  @Counter; # hold counter type
+my  @Tear;  # tear cycle list
+my  %Point;  # saving point IDs
+my  %All_id; # all IDs to check duplicated usage
+my %Type;    # drawing item type (of each name)
+my %Periods;   #keep track of frequencies
+my %Clkoff_x;  # x offset due to clock delay
+my $Mclk;      # main clock name
+my $Max_cycle; # max cycle count among all clocks
+
+my %Prog; 
+# put program name and version
+$Prog{'name'} = $0;
+$Prog{'name'} =~ s{.*/}{};
+$Prog{'ver'}  = $ver;
+
+
+
+# fig format constants
+my $F_TEXT = 4;
+my $F_POLY = 2;
+my $F_POLYLINE = "";
+my $F_BOX  = 2;
+my $F_POLYGON = 3;
+my $F_BLACK = "black";
+my $F_WHITE = "white";
+my $F_GRAY  = "gray";
+my $F_RED   = "red";
+my $F_COUR = "courier new' font-weight='normal"; #courier
+my $F_COURB = "courier new' font-weight='bold"; #courier bold
+my $F_FONT_SIZE = 20;
+my $F_LEFT   = "start";
+my $F_CENTER = "middle"; #center justify
+my $F_RIGHT  = "end";  
+my $F_FONTFLAGS = 4; #postscript
+my $F_ANGLE = 0;
+my $F_CIRCLE = 1;
+my $F_RADIUS = 3;
+my $F_SPLINE = 3;
+my $F_THICKNESS = 1;
+my $F_CROSS = 43;
+my $F_DIAG = 41;
+my $F_SLEW = 3;
+my $F_META = 3; # meta width
+my $F_HBAR = 4; # horiz bar for measure bar cross over
+my $F_DASH_LINE = '10,5'; # dashed line dash size
+my $F_DASH_BAR  = '10,5'; # dashed line for bars
+my $F_BG_COLOR = $F_WHITE;  #default background color
+
+
+# default depth
+my %DEPTH = 
+  (
+   MAX => 999,
+   bar => 110,
+   clock => 100,
+   counter => 100,
+   bit => 100,
+   bus => 100,
+   measure => 100,
+   legend => 100,
+   tear => 80,
+   blank => 70,
+   arrow => 60,
+   text => 60);
+
+# default size 
+my $ROW_HEIGHT = 50;
+my $SIG_HEIGHT = int($ROW_HEIGHT*0.6);
+my $SIG_HI = -int($SIG_HEIGHT*0.7);
+my $SIG_LO = $SIG_HEIGHT+$SIG_HI;
+my $BASE_Y = 50;   # top
+my $BASE_X = 0;   # left
+my $LEFT_X = $BASE_X+100;  # input signal
+my $RIGHT_X = 1000;
+my $PARAM_RATIO = 0.7;
+
+my $RAD = 3.14159/180; # deg to rad conversion
+
+my $Xpos_max;    # max x-coord
+
+main();
+
+
+sub main {
+
+  my $file=shift(@ARGV);
+
+  #open (F, $file) || die "$file: $!";
+  #@Lines = <F>;
+  #close (F);
+
+  $Line = '';
+
+  #parse timing data
+  parse($file);
+
+  #make fig
+   #printArray(\@Waves);
+  make_fig(\%Prog, \%Opts, \@Waves, $file );
+}
+
+
+sub parse {
+    my ($file) = @_;
+    push(@INC, ".");
+    require $file;
+}
+
+
+
+
+
+sub make_fig {
+  my ($p_prog, $p_opts, $p_waves, $ofile) = @_;
+  my $aofile;  # ascii waveform output file name
+  my $apoly="";   # ascii waveform string
+
+  our $Period = 100; # 1 cycle in fig units. dummy default
+  my $Cycles = 10;      # number of cycles
+
+  my $Def_name = "def000";  # default name if not defined
+
+  $, = " ";
+
+  #$ofile =~ s{.*/}{};
+  $aofile = $ofile;
+  $ofile =~ s/(\.tg2)?$/.svg/;
+  $aofile =~ s/(\.tg2)?$/.asc/;
+
+  if ($$p_opts{'d'} & 1) {
+    open (OF, ">&STDOUT");
+  } elsif ($$p_opts{'d'} & 2) {
+    open (AOF, ">&STDOUT");
+  } else {
+    #if ($$p_opts{'outdir'}) {
+    #  $ofile = "$$p_opts{'outdir'}/$ofile";
+    #}
+    open (OF, ">$ofile") || die "$! : $ofile";
+    open (AOF, ">$aofile") || die "$! : $aofile";
+  }
+
+
+
+  # header
+  print OF "<svg xmlns='http://www.w3.org/2000/svg' >\n";
+
+  # arrow ends
+  # "context-stroke" does not work. Every arrow is defined with hard coded color. replace context- with the color
+  my $Arrow = "<defs>  <marker id='startarrow_XXX' markerWidth='10' markerHeight='7' " .
+      "refX='0' refY='3.5' orient='auto' markerUnits='strokeWidth'> " .
+      "<polygon points='10 0, 10 7, 0 3.5' stroke='context-stroke' fill='context-fill' />  </marker> \n" .
+      "<marker id='endarrow_XXX' markerWidth='10' markerHeight='7' " .
+      "refX='10' refY='3.5' orient='auto' markerUnits='strokeWidth'> " .
+      "<polygon points='0 0, 10 3.5, 0 7' stroke='context-stroke' fill='context-fill'  />  </marker> \n" .
+      "</defs> \n";
+  my $Arrow_ix = 0; # unique index 
+  
+  my $opix = 0;
+  my $Ypos_max;
+  my $Ypos_min;
+  my $Base_freq = 0;
+
+  my %Y_pos;  #keep track where 
+
+  $Cycles = $Conf{cycles} if defined $Conf{cycles} ;   # total count of cycles
+  $Max_cycle = $Cycles;
+
+  my $Right_x = $RIGHT_X;
+  $Right_x = $Conf{right_x} if defined $Conf{right_x};
+
+  my $Left_x = $LEFT_X;
+  $Left_x = $Conf{left_x} if defined $Conf{left_x};
+
+  $Xpos_max = $Right_x;
+  
+
+  $Period = int(($Right_x - $Left_x) / $Cycles); # fig units per cycle
+
+  # just to keep position absolute
+  # print OF "$F_POLY $F_BOX 0 1 $F_BLACK $F_WHITE 100 -1 20 0.000 0 0 -1 0 0 5\n"; # box
+  # print OF ($BASE_X, 0, $BASE_X, 1, $BASE_X+1, 1, $BASE_X+1, 0, $BASE_X, 0, "\n");
+
+
+  %Conf2 = %{clone(\%Conf)};
+  
+  foreach my $sig (@Waves) {
+    my $ypos;
+    my $xpos;
+    my $type = lc $$sig{type};
+    my $sname = $$sig{name};
+
+
+    if ($sname eq '') {
+      $sname = $Def_name++;
+      $$sig{name} = $sname;
+    }
+    if ($All_id{$sname}) {
+      error ("'$sname' already defined\n");
+    } 
+    $All_id{$sname} = 1;
+
+
+    $Type{$sname} = $type;
+
+    my %conf;
+    %conf = (
+        arrow_adj    => 1,   # adjust arrow start (rev0.9.4)
+        arrow_curve  => 0,   # arrow curve, 0-normal (s-curve), -1-left convex, 1-right convex
+             arrow_end_y  => 0,   # arrrow ending  y pos
+                                  # -1 low, 0-middle, 1 high
+             arrow_start_y=> "state",   # arrrow starting y pos
+                                  # state, low, middle, high
+             arrow_type   => 0,   # 0 spline w/ circle, 1 spline no circle
+                                  # 2 straight w/ circle, 3 straight no circle
+             assert_value => undef, # assert value for auto return signal
+             bg_color     => $F_BG_COLOR, # background color
+             clock_delay  => 0,   # delay on clock
+        clock_slew   => 0,   # clock slew rate in 1/40 inch
+        counter_init => 0,   # counter initial value
+             cycle_delay  => 0,   # delay for counters and bars
+             justify      => $F_CENTER, # non-name justification
+             color        => $F_BLACK,
+             depth        => $DEPTH{$type},
+             duty         => 0.5,      # clock duty cycle 50%
+             fill_color   => $F_WHITE,
+             #fill_d       => $F_DIAG,   # dontcare pattern
+             #fill_pattern => '#888',
+             fill_u       => $F_GRAY, # undef pattern
+             font         => $F_COUR,
+             font_size    => $F_FONT_SIZE,
+             hide         => 0,   # hide from timing chart
+             hide_name    => 0,   # hide signal name or measure text
+             line_style   => 0,  # 0 solid, $F_DASH_LINE dash
+             init         => 1,         # clock initial state
+             row_y        => 0,   # move row in y axis, relative
+             measure_point=> 0,   # measure point at before,middle,after (-1,0,1) slew, end of meta at middle (4)
+             meta         => 0,   # meta-stable state width, natural number
+             meta_color   => 'none',  # 0 or above to fill metastable area
+             name_color   => $F_BLACK,
+             name_font    => $F_COURB, # signal name font 
+             name_font_size => $F_FONT_SIZE, # signal name font size
+             name_justify => $F_RIGHT,  # right
+             name_y       => 0,
+             return_value => undef, # return value for auto return signal
+             slew         => 0,   # slew rate in 24/1200 inch
+        slew_offset  => 0, # if 1, offset x to cross period line at middle ('Z') value.
+             spike        => 0,   # spike in bit signal
+             text_angle   => 0,   # text counter clock wise rotation angle in degrees 
+             text_x       => 0,   # for (non signal) text 
+             text_y       => 0,   # for (non signal) text
+             text_color   => $F_BLACK,
+             value_format => undef,  # bus value printing format
+             value_x      => 0,     # signal value position 
+             value_y      => 0,     # signal value position 
+             thickness    => $F_THICKNESS, # line thickness
+             width        => 1,   # (tear) width [natural #]
+             top          => undef, # bar/measure top point
+             bottom       => undef, # bar/measure bottom point
+             # global only
+             cycles       => 10,  # number of cycles to show
+             left_x      => $Left_x,  # begin and end of waveform
+             right_x        => $Right_x,
+            );
+               
+    # type unique default
+    if ($type eq 'bar') {
+      $conf{line_style} = $F_DASH_BAR;
+      $conf{color} = "gray";   # 40 seems to be good in .eps (!) file 
+    } elsif ($type eq 'arrow') {
+      $conf{color} = "blue";
+    } elsif ($type eq 'measure') {
+      $conf{color} = $F_RED;
+    }
+
+    while (my ( $key,$val) = each %Conf) {
+      if ($key ne 'waves') {
+        $conf{$key} = $val;
+      }
+    }
+    # override
+    if (defined $Conf{waves} && %{$Conf{waves}} && defined $Conf{waves}{$sname} && %{$Conf{waves}{$sname}}) {
+      while (my ( $key,$val) = each %{$Conf{waves}{$sname}}) {
+        $conf{$key} = $val;
+      }
+    }
+    # override
+    if (defined $$sig{conf} &&  %{$$sig{conf}}) {
+      while (my ($key,$val) = each %{$$sig{conf}}) {
+        if ($key =~ /^(right_x|left_x|cycles)$/) {
+          # these values can't be overridden
+          next;
+        }
+        $conf{$key} = $val;
+      }
+    }
+
+    if($conf{justify} eq '0' ) {
+      $conf{justify} = 'start';
+    } elsif ($conf{justify} eq '1') {
+      $conf{justify} = 'middle';
+    } elsif ($conf{justify} eq '2') {
+      $conf{justify} = 'end';
+    }
+
+    %{$Conf2{":$sname:"}} = %{clone(\%conf)};
+    @{$Conf2{":$sname:"}{":local:"}} = ();
+    $Conf2{":$sname:"}{"clock"} = $Mclk;
+
+    my $clkoff_x = 0;
+    my $period = $Period;
+    if ($conf{clock}) {
+      if ($type !~ /^(counter|bar)$/) { 
+        if (! defined $Periods{$conf{clock}}) {
+          error("Sync clock not defined. (typos? definition sequence?)");
+        } else {
+          $period = $Periods{$conf{clock}};
+          $clkoff_x = $Clkoff_x{$conf{clock}};
+          my $c_cycles = int(($Right_x - $Left_x) / $period); # # of cycle of this clock
+          $Max_cycle = $c_cycles > $Max_cycle ? $c_cycles : $Max_cycle;
+        }
+      } 
+      $Conf2{":$sname:"}{"clock"} = $conf{clock};
+    }
+
+
+    # common for waves
+    if (!$conf{hide} && $type =~ /^(clock|bit|bus)$/) {
+      
+      $ypos = $BASE_Y + $ROW_HEIGHT * ($opix + $conf{row_y});
+      $opix += 1 if $conf{row_y} == 0;
+
+      $xpos = int($conf{left_x}-10);
+
+      $Y_pos{$sname} = $ypos;
+      $Ypos_max = $BASE_Y + $ROW_HEIGHT * ($opix - 0.5);
+
+      $Ypos_min = $ypos+$SIG_HI if ! defined $Ypos_min;
+
+      if (!$conf{hide_name}) {
+        my $name_y = int($ypos + $conf{name_y} * $ROW_HEIGHT);
+        #signal name
+        my $text_angle = $conf{text_angle} * $RAD;
+        my $text = amp_char_code($sname);
+        #print (OF 
+        #       "$F_TEXT $conf{name_justify} $conf{name_color} $conf{depth} -1 "
+        #       . "$conf{name_font} $conf{name_font_size} $text_angle $F_FONTFLAGS "
+        #       . "$f_height $len $xpos $name_y $sname\\001\n");
+        print OF 
+            "<text text-anchor='$conf{name_justify}' fill='$conf{name_color}' class='text' "
+               . "font-family='$conf{name_font}' font-size='$conf{name_font_size}' "
+               . "x='$xpos' y='$name_y'> $text </text>\n";
+      }
+    }
+    if (!$conf{hide} && $type =~ /^(clock)$/) {
+        $apoly .= sprintf ("%s%$Opts{asc_sig_wd}s: ", $Opts{asc_comm}, $text);
+    }
+
+
+
+    my $hi_pos = int($ypos+$SIG_HI);     #signal high y position
+    my $lo_pos = int($ypos+$SIG_LO);   
+    my $z_pos =  int(($hi_pos+$lo_pos)/2);   
+
+    if ($type eq 'clock') {
+      ################################
+      # clock type
+      print OF "<!--clock-->\n";
+      my $cycles;
+      my $period;
+
+      my $state = ! $conf{init};
+
+      # main clock
+      if ($Mclk eq '') {
+        $Mclk = $sname;
+        $Cyc_limit{$Mclk} = $Cycles;
+      }
+
+      #frequency
+      if ($conf{frequency} == 0) {
+        # undefined - use default
+        $cycles = $Cycles;
+        $Period = int(($conf{right_x} - $conf{left_x}) / $Cycles); # fig units per cycle
+        $period = $Period;
+
+      } else {
+        if ($Base_freq == 0) {
+          $Base_freq = $conf{frequency};
+          $cycles = $Cycles;
+          $Period = int(($conf{right_x} - $conf{left_x}) / $Cycles); # fig units per cycle
+          $period = $Period;
+
+        } elsif ($Base_freq == $conf{frequency}) {
+          # same freq
+          $cycles = $Cycles;
+          $period = $Period;
+        } else {
+          $period = int($Period / $conf{frequency} * $Base_freq );
+          $cycles = int($Cycles * $conf{frequency} / $Base_freq );
+          
+        }
+      }
+      $Periods{$sname} = $period;
+      $Cyc_limit{$sname} = $cycles;
+      $Clkoff_x{$sname} = int ($conf{clock_delay} * $period);
+
+      next if $conf{hide};
+
+      my $t1 = $Clkoff_x{$sname}; # first edge
+      # offset is calculated with base clock period, duty cycle is with its own period
+      my $t2 = int ($period * $conf{duty} + $Clkoff_x{$sname} ); 
+
+      # 6 segments per cycle 
+      #    polyline
+      #my @poly = ($F_POLY, $F_POLYLINE, $conf{line_style},
+      #            $conf{thickness}, $conf{color}, $conf{fill_color}, $conf{depth}, 
+      #            -1, -1, "4.0", 0, 0, -1, 0, 0, 6*$cycles-2, "\n");
+      my $poly = "<path class='clock'  stroke-dasharray='$conf{line_style}'" .
+                  " stroke-width='$conf{thickness}' stroke='$conf{color}' fill='none'" .
+                  " d='M"; 
+
+      my $slew = $F_SLEW * $conf{clock_slew};
+      my $soff = $conf{slew_offset} ? $slew / 2 : 0;  # adjust to cross period at mid value
+      $slew -= $soff;
+      
+
+      my $cur_x = $Left_x;                 #current x position
+      my $cur_y = $state ? $hi_pos : $lo_pos;
+
+      for (my $ix=1; $ix<=$cycles; $ix++) {
+        if ($ix!=1 || $conf{clock_delay}>0) {
+
+          if ($ix>1 && $t2+$slew > $period) {
+            # don't draw the first segment if delay is larger than period
+            $poly .= " " . int($cur_x+$t1-$soff) . " " . int($cur_y); # 2nd point
+          } else {
+            $poly .= " " .  int($cur_x) . " " . int($cur_y);
+          }
+          $poly .= " ". int($cur_x+$t1-$soff)." ". int($cur_y);
+        }
+
+        # 4 segments per cycle for ascii waveform. not a polyline but to have symmetrical name
+        # $state re
+        if ($conf{init} == 1) {
+            $apoly .= "¯"x($Opts{asc_hcyc}-1) . "|" . "_"x ($Opts{asc_hcyc}-1) . "|"; 
+        } else {
+            $apoly .= "_"x($Opts{asc_hcyc}-1) . "|" . "¯"x ($Opts{asc_hcyc}-1) . "|"; 
+        }
+
+
+        $state = 1-$state;
+        $cur_y = $state ? $hi_pos : $lo_pos;
+        $poly .= " " . int($cur_x+$t1+$slew)." ". int($cur_y);
+        $poly .= " ". int($cur_x+$t2-$soff)." ". int($cur_y);
+        $state = 1-$state;
+        $cur_y = $state ? $hi_pos : $lo_pos;
+        $poly .= " ". int($cur_x+$t2+$slew)." ". int($cur_y);
+
+        # if delay is larger, don't draw the last segment
+        if ($t2+$slew > $period) {
+          $poly .= " ". int($cur_x+$t2+$slew)." ". int($cur_y); #5th point
+        } else { 
+          $poly .= " ". int($cur_x+$period)." " . int($cur_y);
+        }
+
+        $cur_x += $period ;
+      }
+      print OF $poly, "'/>\n";
+      $apoly .= "\n";
+
+
+    } elsif ($type eq 'bit' || $type eq 'bus') {
+      ################################
+      # bit/bus type
+      #
+      #   drawing is postponed 
+      #
+
+      $Clkoff_x{$sname} = $clkoff_x;
+      $Periods{$sname} = $period;
+      if ($conf{virtual}) {
+        next; #postponed
+      }
+      
+      my $lcycles = int(($Right_x - $Left_x) / $period);
+      my @chg;
+      
+      if (defined $conf{return_value}) {
+        # auto return value specified
+        my $jx = 0;
+        for(my $ix=0; $ix<=$lcycles; $ix++) {
+          $chg[$ix][0] = $ix;
+          $chg[$ix][1] = $conf{return_value};
+          if (${$$sig{change}}[$jx][0] == $ix) {
+            %{$chg[$ix][2]} = %{clone(${$$sig{change}}[$jx][2])};
+
+            if (defined ${$$sig{change}}[$jx][1]) {
+              $chg[$ix][1] = ${$$sig{change}}[$jx][1];
+            } else {
+              $chg[$ix][1] = $conf{assert_value};
+            }
+            $jx++;
+          } 
+        }
+
+      } else {
+        # no auto return value
+        @chg = @{$$sig{change}};
+        
+        # add extra cycle if necessary, to draw to the end
+        # fix the last one at the right end
+        my $ext = 12 / ($Right_x-$Left_x) * $lcycles; #extra cycle to get 40 dots
+        for (my $ix=0; $ix<=$#{chg}; $ix++) {
+          if ($chg[$ix][0] > $lcycles) {
+            $chg[$ix][0] = $lcycles+$ext;
+            $chg[$ix][1] = $chg[$ix-1][1] if $ix>0;
+          }
+        }
+        if ($#chg>0 && $chg[-1][0] < $lcycles) {
+          push @chg, [$lcycles+$ext, $chg[-1][1]];
+        }
+      }
+      @{$$sig{change}} = @{clone (\@chg)};
+
+      #postponed (drawing is postponed for virtual)
+
+
+    } elsif ($type eq 'counter') {
+      ################################
+      # counter type - print count in each cycle
+      # postponed 
+      #
+      if (! $conf{hide}) {
+        push @Counter, $sig;
+        
+        $ypos = $BASE_Y + $ROW_HEIGHT * ($opix + $conf{row_y});
+        $opix += 1 if $conf{row_y} == 0;
+        $xpos = int($conf{left_x}-100);
+        $len = length($sname) * $conf{font_size} * 10;
+        
+        $Y_pos{$sname} = $ypos;
+        #$Ypos_max = $ypos+$SIG_LO;
+        $Ypos_max = $BASE_Y + $ROW_HEIGHT * ($opix - 0.5);
+        
+        $Ypos_min = $ypos+$SIG_HI if ! defined $Ypos_min;
+      }
+
+
+
+    } elsif ($type eq 'arrow') {
+      ################################
+      # response arrow type
+
+      #postponed
+
+    } elsif ($type eq 'text' || $type eq 'blank') {
+      ################################
+      # text or blank
+      #
+      if ($type eq 'blank') {
+        # blank row
+        $ypos = $BASE_Y + $ROW_HEIGHT * ($opix + $conf{row_y});
+        $opix += 1 if $conf{row_y} == 0;
+        $opix += $conf{row_y};
+        $Y_pos{$sname} = $ypos;
+        $Periods{$sname} = $Period;
+      }
+      #postponed
+
+    } elsif ($type eq 'legend') {
+      ################################
+      # put legend
+      #
+        print OF "<!-- legend -->\n";
+      $ypos = $BASE_Y + $ROW_HEIGHT * ($opix + $conf{row_y});
+      $opix += 1 if $conf{row_y} == 0;
+
+      $Y_pos{$sname} = $ypos;
+      #$Ypos_max = $ypos+$SIG_LO;
+      $Ypos_max = $BASE_Y + $ROW_HEIGHT * ($opix - 0.5);
+      $Ypos_min = $ypos+$SIG_HI if ! defined $Ypos_min;
+
+      my $xpos = $Right_x-20;
+
+      #legend title
+      while ( my ($lg, $val) = each %{$$sig{list}}) {
+
+        my $len = length($lg) * $conf{font_size};
+        my $f_height = 14*$conf{font_size};
+        my $text_angle = $conf{text_angle} * $RAD;
+
+        # override %conf with %$val
+        my %l_conf = {};
+        while (my ($key2,$val2) = each(%conf) ) {
+            $l_conf{$key2} = $val2;
+        }
+        while (my ($key2,$val2) = each(%$val) ) {
+            $l_conf{$key2} = $val2;
+        }
+        
+        #print (OF 
+        #       "$F_TEXT $F_RIGHT $conf{text_color} $conf{depth} -1 "
+        #       . "$conf{font} $conf{font_size} $text_angle $F_FONTFLAGS "
+        #       . "$f_height $len $xpos $ypos $lg\\001\n");
+        $xpos -=$len;
+        my $text = amp_char_code($lg);
+        print OF 
+            "<text text-anchor='start' fill='$l_conf{text_color}' class='text' "
+            . "font-family='$l_conf{font}' font-size='$l_conf{font_size}' "
+            . "x='$xpos' y='". ($ypos+($SIG_LO+$SIG_HI)/2). "'> $text </text>\n";
+
+        $xpos  += $SIG_HI-4;
+
+        
+        #print OF "$F_POLY $F_BOX 0 1 $color $f_color $conf{depth} -1 $fill 0.000 0 0 -1 0 0 5\n"; # box
+        #print OF ($xpos,         $ypos, 
+        #          $xpos-$SIG_HI, $ypos, 
+        #          $xpos-$SIG_HI, $ypos+$SIG_HI, 
+        #          $xpos,         $ypos+$SIG_HI, 
+        #          $xpos,         $ypos, "\n");
+        print OF "<rect stroke='$l_conf{color}' fill='$l_conf{fill}' class='legend' " . # box
+            " x='" .$xpos."' y='". ($ypos+$SIG_HI)."' width='". -$SIG_HI ."' height='". -$SIG_HI. "' /> \n";
+        
+
+        if ($xpos < 200) {
+          #next line
+          $xpos = $Right_x - 20;
+          $ypos = $BASE_Y + $ROW_HEIGHT * $opix ;
+          $opix += 1;
+        }
+      }
+
+    } elsif ($type eq 'measure') {
+      ################################
+      #postpone processing
+      $ypos = $BASE_Y + $ROW_HEIGHT * $opix ;
+      $opix += $PARAM_RATIO;
+      $Y_pos{$sname} = $ypos;
+
+    } elsif ($type eq 'tear') {
+      ################################
+      # time tear 
+      # postponed
+
+    }
+
+  }
+
+
+  # 2nd pass process
+  $Def_name = "def000";  # default name if not defined
+
+  ################################
+  # calc virtual bit/bus
+  if (@Virtual) {
+  # vituals are only with main clock for now
+    nanosim(int(($Right_x - $Left_x) / $Period),
+            $Left_x, $Right_x
+           );
+    
+  }
+  
+  foreach my $sig (@Waves) {
+
+    my $type = $$sig{type};
+    my $sname = $$sig{name};
+
+    if ($sname eq '') {
+      $sname = $Def_name++;
+    }
+
+    my $p_conf = $Conf2{":$sname:"};
+
+    if (! $$p_conf{hide}) {
+
+      my $ypos = $Y_pos{$sname}; 
+      my $hi_pos = int($ypos+$SIG_HI);     #signal high y position
+      my $lo_pos = int($ypos+$SIG_LO);   
+      my $z_pos =  int(($hi_pos+$lo_pos)/2);   
+
+      if ($type eq 'bit') {
+        $apoly .= sprintf ("%s%$Opts{asc_sig_wd}s: ", $Opts{asc_comm}, $sname);
+        draw_bit($sname,            # signal name
+                 $$sig{change},     # pointer to @chg
+                 $ypos,             # signal base y coord
+                 $hi_pos, $lo_pos,  # high and low signal y-coord
+                 $z_pos,
+                 $Left_x, $Right_x, # left and right max x-coord
+                 $p_conf,            # pointer to %conf
+                 \$apoly             # ascii wave string
+                );
+
+        
+      } elsif ($type eq 'bus') {
+        $apoly .= sprintf ("%s%$Opts{asc_sig_wd}s: ", $Opts{asc_comm}, $sname);
+        draw_bus($sname,            # signal name
+                 $$sig{change},     # pointer to @chg
+                 $ypos,             # signal base y coord
+                 $hi_pos, $lo_pos,  # high and low signal y-coord
+                 $z_pos,
+                 $Left_x, $Right_x, # left and right max x-coord
+                 $p_conf,           # pointer to %conf
+                 \$apoly             # ascii wave string
+                );
+      }
+    }
+  }
+
+
+
+  #
+  # 3nd pass process
+  #
+  $Def_name = "def000";  # default name if not defined
+
+  my $BAR_TIP = 5; #vertical bar tip beyond arrow 
+  my $SIG_MID2 = int(($SIG_HI+$SIG_LO)/2);
+
+  foreach my $sig (@Waves) {
+    
+    my $type = $$sig{type};
+    my $sname = $$sig{name};
+
+    if ($sname eq '') {
+      $sname = $Def_name++;
+    }
+
+    my $ypos = $Y_pos{$sname}; 
+    my $hi_pos = int($ypos+$SIG_HI);     #signal high y position
+    my $lo_pos = int($ypos+$SIG_LO);   
+    my $z_pos =  int(($hi_pos+$lo_pos)/2);   
+
+    my $p_conf = $Conf2{":$sname:"};
+
+    next if $$p_conf{'hide'};
+
+
+    my $f_height = 14*$$p_conf{font_size};
+
+    my $clkoff_x = 0;
+    my $period = $Period;
+    if($type!='title' && $$p_conf{clock}) {
+      if (! defined $Periods{$$p_conf{clock}}) {
+        error("Sync clock not defined for $sname");
+      } 
+      $clkoff_x = $Clkoff_x{$$p_conf{clock}}; 
+      $period = $Periods{$$p_conf{clock}}; 
+    }
+
+    next if $$p_conf{hide};
+
+
+    if ($type eq 'measure') {
+      ################################
+      # place vertical bars, arrows, and measure id
+      print OF "<!-- measure -->\n";
+      my $list = $$sig{list};
+      while ( my ($id,$val) =  each %{$list}) {
+        my @name;
+        my @cycle;
+        my @i_conf;
+        ($name[0],$cycle[0],$i_conf[0]) = get_point($$val[0]);
+        if (defined $$val[1]) {
+          ($name[1],$cycle[1],$i_conf[1]) = get_point($$val[1]);
+        }
+
+        my @y_pos;
+        my @period;
+        my @clkoff_x;
+        my @xpos;
+
+        my %conf_save = %{clone($p_conf)};
+
+        foreach my $key (keys %{$$val[2]}) {
+          $$p_conf{$key} = $$val[2]{$key};
+        }         
+      
+        # find y_pos for each point
+        foreach my $wv (@Waves) {
+          if ($$wv{name} eq $name[0]) {
+            $y_pos[0] = $Y_pos{$name[0]};
+            $period[0] = $Periods{$name[0]};
+            $clkoff_x[0] = $Clkoff_x{$name[0]};
+          }
+          if ($$wv{name} eq $name[1]) {
+             $y_pos[1] = $Y_pos{$name[1]};
+            $period[1] = $Periods{$name[1]};
+            $clkoff_x[1] = $Clkoff_x{$name[1]};
+          }
+        }
+      
+        # vertical bars
+        my $mx = 0;
+        if (defined $$val[1]) {
+          $mx = 1;
+        }
+        
+        for( my $ix=0; $ix<=$mx; $ix++) {
+          my @pos = ();
+          my $x_delay = get_local($name[$ix], $cycle[$ix], 'delay') * $period[$ix];
+          my $state = get_state($name[$ix], $cycle[$ix]);
+          my $prev_st = get_prev_st($name[$ix], $cycle[$ix]);
+
+          my ($cur_xa, $slewc, $mid_x, $cur_xb) 
+            = calc_xpos($name[$ix], $cycle[$ix], $cycle[$ix], $period[$ix], $clkoff_x[$ix], 
+                        $state, $prev_st, $F_SLEW, $Conf2{":$name[$ix]:"}, $i_conf[$ix], 1);
+
+          my $ypos1;
+          my $ypos2;
+          my $mp = get_local($name[$ix], $cycle[$ix], 'measure_point');
+
+          if (defined $$p_conf{measure_point}) {
+            # override by measure conf
+            $mp = $$p_conf{measure_point};
+          }
+          if (defined $i_conf[$ix]{measure_point}) {
+            # override by point conf
+            $mp = $i_conf[$ix]{measure_point};
+          }
+
+          if ($mp == 4) {
+            my $meta = get_local($name[$ix], $cycle[$ix], 'meta');
+            # comment out because measure's meta is always defined and it would override
+            #if (defined $$p_conf{meta}) {
+            #  $meta =$$p_conf{meta};
+            #}
+            if (defined $i_conf[$ix]{meta}) {
+              # override by point conf
+              $meta = $i_conf[$ix]{meta};
+            }
+            $xpos[$ix] = $mid_x + $F_META*2*$meta;            
+          }elsif ($mp == 1) {
+            $xpos[$ix] = $cur_xa;
+          } elsif ($mp < 0) {
+            $xpos[$ix] = $cur_xb;
+          } else {
+            $xpos[$ix] = $mid_x;
+          }
+
+
+          #cross point
+          my $ycross = int($y_pos[$ix]+$SIG_MID2);
+          if($Type{$name[$ix]} eq 'bit') {
+            my $cross_st = $state;
+            if ($mp==1 || $mp==-1) {
+              if ($mp==-1) {
+                #use prev state
+                $cross_st = get_state($name[$ix], $cycle[$ix]-1);
+              }
+              if ($cross_st eq '1') {
+                $ycross = int($y_pos[$ix]+$SIG_HI);
+              } elsif ($cross_st eq '0') {
+                $ycross = int($y_pos[$ix]+$SIG_LO);
+              }
+            }
+          }
+          
+          #print OF ($F_POLY, $F_POLYLINE, 0, $$p_conf{thickness}, 
+          #          $$p_conf{color}, 0, $$p_conf{depth}, -1, -1, "0.0", 0, 0, -1, 0, 0, 2, "\n");
+          #print OF ($xpos[$ix]-$F_HBAR, $ycross, $xpos[$ix]+$F_HBAR, $ycross, "\n");
+          print OF "<!-- measure cross point-->\n";
+          print OF "<line stroke-width='$$p_conf{thickness}' stroke='$$p_conf{color}' class='measure' " .
+              "x1='" . ($xpos[$ix]-$F_HBAR) . "' y1='".  $ycross . 
+              "' x2='". ($xpos[$ix]+$F_HBAR) ."' y2='". $ycross . "' />\n";
+
+          
+          if($y_pos[$ix] > $ypos) {
+            $ypos1 = $y_pos[$ix]+$SIG_LO+$BAR_TIP;  # push through a little
+            $ypos2 = $ypos+$ROW_HEIGHT*$$p_conf{row_y}-$BAR_TIP * 3;
+          } else {
+            $ypos1 = $y_pos[$ix]+$SIG_HI-$BAR_TIP;
+            $ypos2 = $ypos+$ROW_HEIGHT*$$p_conf{row_y}+$BAR_TIP;
+          }
+
+          if($Y_pos{$$p_conf{top}}) {
+            $ypos1 = $Y_pos{$$p_conf{top}}+$SIG_HI;
+          }
+          if($Y_pos{$$p_conf{bottom}}) {
+            $ypos2 = $Y_pos{$$p_conf{bottom}}+$SIG_LO;
+          }
+          $ypos1 = int($ypos1);
+          $ypos2 = int($ypos2);
+          
+          print OF ("<!-- measure vertical bar --> \n");
+          #@pos = ($xpos[$ix], int($ypos1), $xpos[$ix], int($ypos2));
+          #print OF ($F_POLY, $F_POLYLINE, $$p_conf{line_style}, $$p_conf{thickness}, 
+          #          $$p_conf{color}, 0, $$p_conf{depth}, -1, -1, 
+          #          $$p_conf{style_val}, 0, 0, -1, 0, 0, 2, "\n");
+          #print OF @pos, "\n";
+          print OF "<line stroke-dasharray='$$p_conf{line_style}' stroke-width='$$p_conf{thickness}' " .  
+              "stroke='$$p_conf{color}' class='$$p_conf{depth}' " .
+              "x1='$xpos[$ix]' y1='$ypos1' " .
+              "x2='$xpos[$ix]' y2='$ypos2' />\n";
+
+        }
+
+        # arrow
+        # conf row_y moves arrow up/down
+        #      text_y moves text up/down
+        if (defined $$val[1]) {
+
+          my $min_len = 30;
+          my $a_ypos  = $ypos + $ROW_HEIGHT*$$p_conf{row_y} - 5;
+
+          if (abs($xpos[0]-$xpos[1]) > $min_len) {
+            #print OF ($F_POLY, $F_POLYLINE, 0, $$p_conf{thickness}, 
+            #          $$p_conf{color}, 0, $$p_conf{depth}, -1, -1, "0.0", 0, 0, -1, 1, 1, 2, "\n");
+            #print OF ("1 1 1.00 40.00 80.00\n");  #arrow
+            #print OF ("1 1 1.00 40.00 80.00\n");  #arrow
+            #print OF $xpos[0], $a_ypos, $xpos[1], $a_ypos, "\n";
+            print OF "<line stroke-width='$$p_conf{thickness}' stroke='$$p_conf{color}' fill='none' class='measure' " .
+                "x1='$xpos[0]' y1='$a_ypos' x2='$xpos[1]' y2='$a_ypos' " .
+                "marker-end='url(#endarrow_$Arrow_ix)' marker-start='url(#startarrow_$Arrow_ix)' />\n";
+          } else {
+            # too narrow. outer arrows
+            #my @poly = ($F_POLY, $F_POLYLINE, 0, $$p_conf{thickness}, 
+            #          $$p_conf{color}, 0, $$p_conf{depth}, -1, -1, "0.0", 0, 0, -1, 0, 1, 2, "\n");
+            #my @arrow = ("1 1 1.00 40.00 80.00\n");  #arrow
+            my $poly = "<line stroke-width='$$p_conf{thickness}' stroke='$$p_conf{color}' fill='none' class='measure' ";
+
+            my $len0 = 25;
+            my $len1 = -$len0;
+            if ($xpos[0] < $xpos[1]) {
+              # flip side
+              $len0 = -$len0;
+              $len1 = -$len1;
+            }
+            print OF $poly . "x1='$xpos[0]' y1='$a_ypos' x2='".($xpos[0]+$len0)."' y2='$a_ypos' marker-start='url(#startarrow_$Arrow_ix)' />\n";
+            print OF $poly . "x1='$xpos[1]' y1='$a_ypos' x2='".($xpos[1]+$len1)."' y2='$a_ypos' marker-start='url(#startarrow_$Arrow_ix)' />\n";
+          }
+          
+          my $arr_def = substr($Arrow,0);
+          $arr_def =~ s/XXX/$Arrow_ix/g;
+          $arr_def =~ s/context-(stroke|fill)/$$p_conf{color}/g;
+          print OF $arr_def;
+          $Arrow_ix++;
+          
+        }
+
+        
+        # text
+        if (! $$p_conf{hide_name})  {
+          my $t_xpos;
+          my $t_ypos = $ypos + $ROW_HEIGHT*($$p_conf{text_y})- 15;
+          if (defined $$val[1]) {
+            $t_xpos = int(($xpos[0]+$xpos[1])/2);
+          } else {
+            $t_xpos = int($xpos[0]);
+          }
+          $t_xpos += int($$p_conf{text_x} * $period);
+          my $len = length($id) * $$p_conf{font_size} * 10;
+          my $f_height = 14*$$p_conf{font_size};
+          my $text_angle = $$p_conf{text_angle} * $RAD;
+
+          #my @text = ($F_TEXT, $$p_conf{justify}, $$p_conf{text_color}, $$p_conf{depth}, -1,
+          #            $$p_conf{font}, $$p_conf{font_size}, $text_angle, $F_FONTFLAGS,
+          #            $f_height, $len,
+          #            $t_xpos, $t_ypos,
+          #            $id, "\\001\n");
+          #print OF @text;
+          my $text = amp_char_code($id);
+          print OF 
+              "<text text-anchor='middle' fill='$conf{text_color}' class='text' "
+              . "font-family='$conf{font}' font-size='$conf{font_size}' "
+              . "x='$t_xpos' y='$t_ypos'> $text </text>\n";
+        }
+
+        #restore
+        %{$p_conf} = %{clone(\%conf_save)};
+
+      }
+
+
+    } elsif ($type eq 'tear') {
+      ################################
+      # time disconn
+      print OF "<!-- tear -->\n";
+
+      my @point = @{$$sig{point}};
+      push @Tear, @point;
+
+      my $delay = $$p_conf{delay}; 
+
+      foreach my $pt (@point) {
+        my $x1 = int($Left_x+ ($pt+$delay)*$period);
+        my $x2 = $x1*$$p_conf{width} + 10; # width of tear
+        my $x3 = int($Left_x+($pt+1)*$period); #next cycle
+        
+        #my @spline = ($F_SPLINE, 1, 0, 1, $F_WHITE, $F_WHITE, 
+        #              $$p_conf{depth}, -1, 20, "0.0", 0, 0, 0, 8, "\n");
+        #my @spline2 = ($F_SPLINE, 2, 0, 1, $$p_conf{color}, $F_WHITE, 
+        #               $$p_conf{depth}-1, -1, 20, "0.0", 0, 0, 0, 4, "\n");
+        
+        while ( my ($nm, $yp) = each %Y_pos) {
+          my $ytop = int ($yp + $SIG_HI) - 5;
+          my $ybot = int ($yp + $SIG_LO) + 5;
+          my $y0 = $ytop - 2;
+          my $y1 = int ($ytop + ($ybot-$ytop)*1/4);
+          my $y2 = int ($ytop + ($ybot-$ytop)*2/4);
+          my $y3 = int ($ytop + ($ybot-$ytop)*3/4);
+          my $y4 = $ybot + 2;
+
+          if ($Type{$nm} =~ /^(counter|clock|bit|bus)$/) {
+
+              my $spline = 
+                  "d='M ".
+                  int($x1+10) ."," . int($y0) . " ".
+                  "Q ".
+                  int($x1+0) ."," . int($y1) ." ".
+                  int($x1+10) ."," . int($y2) ." ".
+                  "Q ".
+                  int($x1+20) ."," . int($y3) ." ".
+                  int($x1+10) ."," . int($y4) ." ".
+                  "M ".
+                  int($x2+10) ."," . int($y4) ." ".
+                  "Q ".
+                  int($x2+20) ."," . int($y3) ." ".
+                  int($x2+10) ."," . int($y2) ." ".
+                  "Q ".
+                  int($x2+0) ."," . int($y1) ." ".
+                  int($x2+10) ."," . int($y0) ." '/>\n";
+               
+              my $spline2 = 
+                  "d='M ".
+                  int($x1+10) ."," . int($y0) . " ".
+                  "Q ".
+                  int($x1+0) ."," . int($y1) ." ".
+                  int($x1+10) ."," . int($y2) ." ".
+                  "Q ".
+                  int($x1+20) ."," . int($y3) ." ".
+                  int($x1+10) ."," . int($y4) ." ".
+                  "L ".
+                  int($x2+10) ."," . int($y4) ." ".
+                  "Q ".
+                  int($x2+20) ."," . int($y3) ." ".
+                  int($x2+10) ."," . int($y2) ." ".
+                  "Q ".
+                  int($x2+0) ."," . int($y1) ." ".
+                  int($x2+10) ."," . int($y0) ." ".
+                  "L ".
+                  int($x1+10) ."," . int($y0) . "' />\n";
+               
+                
+            
+            #print (OF @spline, @pos, "\n","0.0 1.0 1.0 0.0 0.0 1.0 1.0 0.0 \n");
+            # erase top and bot lines
+            #print (OF @spline2, @pos[0..7], "\n0.0 1.0 1.0 0.0\n");
+            #print (OF @spline2, @pos[8..15], "\n0.0 1.0 1.0 0.0\n");
+            print OF "<path fill='white' stroke='white' ".$spline2 ;
+            print OF "<path fill='none' stroke='black' ".$spline ;
+          }
+        }
+      }
+
+    } elsif ($type eq 'bar') {
+      ################################
+      # cycle bar
+      #my @poly = ($F_POLY, $F_POLYLINE, $$p_conf{line_style}, $$p_conf{thickness}, 
+      #            $$p_conf{color}, 0, $$p_conf{depth}, -1, -1, $$p_conf{style_val}, 0, 0, -1, 0, 0, 2, "\n");
+      print OF "<!-- bar -->\n";
+      my $poly = "<line stroke-dasharray='$$p_conf{line_style}' stroke='$$p_conf{color}' class='bar' ";
+      my $yt = $Ypos_min+$SIG_HI;
+      my $yb = $Ypos_max;
+
+      if($Y_pos{$$p_conf{top}}) {
+        $yt = $Y_pos{$$p_conf{top}}+$SIG_HI-10;
+      }
+      if($Y_pos{$$p_conf{bottom}}) {
+        $yb = $Y_pos{$$p_conf{bottom}}+$SIG_LO +10;
+      }
+
+      my $delay = $$p_conf{delay}; 
+
+      # default points are all
+      if ($$p_conf{clock}) {
+        $period = $Periods{$$p_conf{clock}};
+      }
+      my $cycles = int(($Right_x-$Left_x) / $period);
+      my @point = (0..$cycles);
+      if ( @{$$sig{point}}){
+        @point = @{$$sig{point}};
+      }
+
+      foreach my $pt (@point) {
+        my $cur_x = int($Left_x + $clkoff_x + $pt*$period + $$p_conf{cycle_delay}*$period);
+        last if $cur_x > $Right_x;
+        next if $cur_x < $Left_x;
+
+        print OF $poly . "x1='$cur_x' y1='$yt' x2='$cur_x' y2='$yb' />\n";
+        $cur_x += $Period;
+      }
+
+    } elsif ($type eq 'arrow') {
+      #####################
+      # arrow
+
+      print OF "<!-- arrow -->\n";
+      my @point = @{$$sig{point}};
+      my $msg = $$sig{text};
+
+      my($name1,$cycle1,$conf1) = get_point($point[0]);
+      my($name2,$cycle2,$conf2) = get_point($point[1]);
+
+
+      my $clkoff_x1 = $Clkoff_x{$name1};
+      my $clkoff_x2 = $Clkoff_x{$name2};
+      my $ypos1;
+      my $ypos2;
+      my $period1;
+      my $period2;
+      my $state1;
+
+      # find ypos for each point
+      foreach my $wv (@Waves) {
+        if ($$wv{name} eq $name1) {
+          $ypos1 = $Y_pos{$name1};
+          $period1 = $Periods{$name1};
+          # get state
+          foreach my $st (@{$$wv{change}}) {
+            if (!$$p_conf{arrow_adj}) {
+              if($$st[0] >= $cycle1) {
+                last;
+              }
+              $state1 = $$st[1];
+            } else {
+              if($$st[0] > $cycle1) {
+                last;
+              }
+              $state1 = $$st[1];
+            }
+          }
+        }
+        if ($$wv{name} eq $name2) {
+          $ypos2 = $Y_pos{$name2};
+          if ($$p_conf{arrow_end_y} == -1) { 
+            $ypos2 += $SIG_LO; #low point
+          } elsif ($$p_conf{arrow_end_y} == 1) { 
+            $ypos2 += $SIG_HI; #mid point
+          } else {
+            $ypos2 += ($SIG_HI+$SIG_LO)/2; #mid point
+          }
+          $period2 = $Periods{$name2};
+        }
+      }
+       
+
+      if ($period1==0 || $period2==0) {
+        error("Invalid point in arrow $sname");
+      }
+
+      my $xpos1;
+      my $xpos1t;
+
+      if ($$p_conf{arrow_adj}) {
+        my ($cur_xa)
+          = calc_xpos($name1, 1, $cycle1, $period1, $clkoff_x1, $state1, 'ABC', $F_SLEW, 
+                      $Conf2{":$name1:"}, $$sig{conf}, 1); #override with just arrow local conf
+        my ($dum1,$dum2,$dum3, $next_xb, $next_xe) 
+          = calc_xpos($name1, 1, $cycle1+1, $period1, $clkoff_x1, $state1, 'ABC', $F_SLEW, 
+                      $Conf2{":$name1:"}, $$sig{conf}, 1); #override with just arrow local conf
+        if ($next_xe < $next_xb) {
+          $next_xb = $next_xe;  # if next clock edge is closer
+        }
+        $xpos1 = ($cur_xa + $next_xb) / 2; # roughly center
+
+      }else {
+        #async - on the spot rather than the center of the period
+        my %lconf = %{clone($$sig{conf})};
+        # override
+        if (defined $point[0][2] && %{$point[0][2]}) {
+          while (my ($key,$val) = each %{$point[0][2]}) {
+            if ($key =~ /^(right_x|left_x|cycles)$/) {
+              # these values can't be overridden
+              next;
+            }
+            $lconf{$key} = $val;
+          }
+        }
+
+       #  (int $cur_xa, int $slewc, int $mid_x, int $cur_xb, int $cur_xe);
+        my($xa,$dum1,$xm,$xb) 
+          = calc_xpos($name1, 1, $cycle1, $period1, $clkoff_x1, $state1, 'ABC', $F_SLEW, 
+                      $Conf2{":$name1:"}, $$sig{conf},1); #override with just arrow local conf
+        if ($$p_conf{arrow_start_y} eq "state") { 
+          # current state position
+          $xpos1 = $xa;
+        } else {
+          $xpos1 = $xm;
+        }
+
+      }
+
+      if ($$p_conf{arrow_start_y} eq "low") { 
+        $ypos1 += $SIG_LO;
+      } elsif ($$p_conf{arrow_start_y} eq "high") { 
+        $ypos1 += $SIG_HI;
+      } elsif ($$p_conf{arrow_start_y} eq "middle") { 
+          $ypos1 += ($SIG_HI+$SIG_LO)/2
+              ;  #mid
+      } else {
+        # start at state instead of edge, mid point
+        # from state. (mid point for bus)
+        if ($Type{$name1} eq 'bus') {
+          $ypos1 += ($SIG_HI+$SIG_LO)/2;  #mid_pos
+        } else {
+          if ($state1 eq '1') {
+            $ypos1 += $SIG_HI;  #hi_pos
+          } elsif ($state1 eq '0') {
+            $ypos1 += $SIG_LO;  #lo_pos
+          } else {
+            $ypos1 += ($SIG_HI+$SIG_LO)/2;  #middle
+          }     
+        }
+      }
+      $ypos1 = int $ypos1;
+      $xpos1 = int $xpos1;
+
+      # start and end of arrow
+      my ($dum1,$dum2,$dum3, $xpos2) =
+        calc_xpos($name2, 1, $cycle2, $period2, $clkoff_x2, 'Z', 'Z', $F_SLEW, 
+                  $Conf2{":$name2:"}, $$sig{conf},1); #override with just arrow local conf
+      my $edge_x = 30;  # arrow start at circle edge
+      
+      if (abs($xpos2-$xpos1) <100 || abs(($ypos2-$ypos1)/($xpos2-$xpos1))>12) {
+        $edge_x = 0;
+      }
+      $edge_x = 0; #for now
+      my $edge_y = 0;
+
+
+      if (($$p_conf{arrow_type}&1) == 0) {
+        # 0 and 2 has circle
+        #my @circle = ($F_CIRCLE, $F_RADIUS, 0, 1, 
+        #              $$p_conf{color}, 7, $$p_conf{depth}, -1, -1, 0.000, 1, 0.0000);
+          my $circle = "<circle r='$F_RADIUS' fill='white' stroke='$$p_conf{color}' class='arrow' ";
+        #my @pos = ($xpos1,$ypos1,
+        #           50, 50,  #radii
+        #           $xpos1,$ypos1,
+        #           $xpos1+50,$ypos1);
+          my $pos = "cx='$xpos1' cy='$ypos1' />";
+
+        print OF $circle, $pos, "\n";
+
+      }
+
+      my $xpos3 = int(($xpos1 + $xpos2)/2);
+      my $xpos3_1 = int(($xpos1 + $xpos2)/2);
+      my $xpos3_2 = int(($xpos1 + $xpos2)/2);
+      my( $ypos3, $ypos3_1, $ypos3_2);
+
+      if (($$p_conf{arrow_type}&2) ==0) {
+        # set mid point to make nice curve
+        #my @spline = ($F_SPLINE, 2, $$p_conf{line_style}, $$p_conf{thickness}, 
+        #               $$p_conf{color}, 7, $$p_conf{depth}, -1, -1, "4.0", 0, 1, 0, 4, "\n");
+        my $spline = "<path stroke-dasharray='$$p_conf{line_style}' stroke-width='$$p_conf{thickness}' ". 
+                      "stroke='$$p_conf{color}' fill='none' class='arrow' ";
+
+        $ypos3 = int($ypos1+$ROW_HEIGHT/4);
+        if ($ypos2 > $ypos1) {
+          $ypos3_1 = int($ypos1+$ROW_HEIGHT/4);
+          $ypos3_2 = int($ypos2-$ROW_HEIGHT/2);
+        } else {
+          $ypos3_1 = int($ypos1-$ROW_HEIGHT/4);
+          $ypos3_2 = int($ypos2+$ROW_HEIGHT/4);
+        }
+
+        if($$p_conf{arrow_curve} < 0) {
+              $xpos3_1 = $xpos1+$edge_x;
+              $xpos3_2 = $xpos1+$edge_x;
+#              $ypos3_1 = $ypos2-8;
+              $ypos3_2 = $ypos2;
+        }elsif($$p_conf{arrow_curve} > 0) {
+              $xpos3_1 = $xpos2;
+              $xpos3_2 = $xpos2;
+              $ypos3_1 = $ypos1;
+#              $ypos3_2 = $ypos2;
+        }
+            
+        my $pos = "d='M ". ($xpos1+$edge_x).",".($ypos1+$edge_y).
+            " C $xpos3_2,". ($ypos3_1+$edge_y)." $xpos1,$ypos3_2 $xpos2,$ypos2' marker-end='url(#endarrow_$Arrow_ix)' />";
+          
+          
+        my $arr_def = substr($Arrow,0);
+        $arr_def =~ s/XXX/$Arrow_ix/g;
+        $arr_def =~ s/context-(stroke|fill)/$$p_conf{color}/g;
+        print OF $arr_def;
+        $Arrow_ix++;
+
+      
+        print OF $spline, $pos, "\n";
+
+      } elsif (($$p_conf{arrow_type}&2) == 2) {
+        #straight arrow
+        my $poly = "<line stroke-dasharray='$$p_conf{line_style}' stroke-width='$$p_conf{thickness}'" .
+                   " stroke='$$p_conf{color}' fill='none' class='$$p_conf{depth}' marker-end='url(#endarrow_$Arrow_ix)' ";
+        my $pos = " x1='" .($xpos1+$edge_x). "' y1='". ($ypos1+$edge_y). "' x2='". $xpos2." y2='". $ypos2."' />";
+
+        my $arr_def = substr($Arrow,0);
+        $arr_def =~ s/XXX/$Arrow_ix/g;
+        $arr_def =~ s/context-(stroke|fill)/$$p_conf{color}/g;
+        print OF $arr_def;
+        $Arrow_ix++;
+        
+        print OF $poly, $pos, "\n";
+        #for text
+        $xpos3 = $xpos1; 
+        $ypos3 = $ypos1; 
+      }
+
+      if ($msg) {
+        my $len = length($$p_conf{text}) * $$p_conf{font_size} * 10;
+        my $f_height = 14*$$p_conf{font_size};
+        $xpos3 += $period*$$p_conf{text_x};
+        $ypos3 += $ROW_HEIGHT*$$p_conf{text_y};
+        my $text_angle = $$p_conf{text_angle} * $RAD;
+
+       # my @text = ($F_TEXT, $$p_conf{justify}, $$p_conf{text_color}, $$p_conf{depth}, -1,
+       #             $$p_conf{font}, $$p_conf{font_size}, $text_angle, $F_FONTFLAGS,
+       #             $f_height, $len,
+       #             int($xpos3), int($ypos3),
+       #             $msg, "\\001\n");
+        my $text = "<text text-anchor='$$p_conf{justify}' fill='$$p_conf{text_color}' class='text' ".
+            "font-family='$$p_conf{font}' font-size='$$p_conf{font_size}' x='". int($xpos3)."' y='". int($ypos3)."' >";
+
+        my $text2 = amp_char_code($msg);
+
+        print OF $text, $text2, "</text>\n";
+
+      }
+
+    } elsif ($type eq 'text' || $type eq 'blank') {
+      ######################
+      # text or blank
+      my $msg = $$sig{text};
+      my $period = $Period;
+      my($name1,$cycle) = ($sname, 0);
+      if (defined $$sig{point}) {
+        ($name1,$cycle) = get_point($$sig{point}); 
+        # find ypos 
+        foreach my $wv (@Waves) {
+          if ($$wv{name} eq $name1) {
+            $ypos = $Y_pos{$name1};
+            $period = $Periods{$name1};
+            $period = $Period if $period==0;
+          }
+        }
+      }
+
+      my $delay = $$p_conf{delay}; 
+
+      my $xpos = $Left_x + $period*$cycle;
+      $xpos += $period * ($$p_conf{text_x} + $delay);
+      if ($type eq 'text') {
+        $ypos += $ROW_HEIGHT*$$p_conf{text_y};
+      }
+
+      my $color = int $$p_conf{color};
+
+      my $len = length($msg) * $$p_conf{font_size} * 10;
+      my $f_height = 14*$$p_conf{font_size};
+      my $text_angle = $$p_conf{text_angle} * $RAD;
+      #my @text = ($F_TEXT, $$p_conf{justify}, $$p_conf{text_color}, $$p_conf{depth}, -1,
+      #            $$p_conf{font}, $$p_conf{font_size}, $text_angle, $F_FONTFLAGS,
+      #            $f_height, $len,
+      #            int($xpos+100), int ($ypos),
+      #            $msg, "\\001\n");
+      my $text = "<text text-anchor='$$p_conf{justify}' fill='$$p_conf{text_color}' class='text' ".
+          "font-family='$$p_conf{font}' font-size='$$p_conf{font_size}' x='". int($xpos + 100)."' y='". int($ypos)."' >";
+
+      my $text2 = amp_char_code($msg);
+      print OF "<!-- text -->\n";
+      print OF $text, $text2, "</text>\n";
+
+
+    } # eof if type
+  }
+
+  # 4th pass - counter
+  
+  foreach my $sig (@Counter) {
+      print OF "<!-- counter -->\n";
+      my @pos = ();
+      my @pos2 = ();
+      my $prev_st;
+      my $value = $$sig{value};
+      my $sname = $$sig{name};
+
+      my $period = $Period;
+
+      my $ypos = $Y_pos{$sname};
+      my $p_conf = $Conf2{":$sname:"};
+
+      if ($$p_conf{clock}) {
+        $period = $Periods{$$p_conf{clock}}; 
+      }
+      my $delay = $$p_conf{cycle_delay}; 
+
+      # init state
+      my $vx = 0;
+      my $val = $$p_conf{counter_init};  #initial value
+      if ($$value[$vx]) {
+        $val = $$value[$vx];
+      }
+      my @chg;
+
+      my $cycles = int(($Right_x - $Left_x) / $period);
+
+      if ($$p_conf{cycle_delay}>=0.5) {
+        @chg = (0..$cycles-2);
+      } else {
+        @chg = (0..$cycles-1);
+      }
+      
+
+      foreach my $cycle (@chg) {
+
+        if (grep (/^$cycle$/, @Tear)) {
+          # fetch next starting value
+          if (defined $$value[++$vx]) {
+            $val = $$value[$vx];
+          }
+          next;
+        }
+
+        # don't print if the value is a space
+        next if $val eq ' ';
+
+        #my $clk_dly = get_local($$p_conf{clock}, 0, 'clock_delay');
+        my $clk_dly = $delay;
+        my $cur_x = $cycle * $period + $Left_x + $clk_dly*$period;
+        last if $cur_x > $Right_x;
+
+        if ($cur_x < $Left_x) {
+          # too left. just increment
+          $val =~ s/(-?[0-9]+)$//;
+          my $nv = $1+1;
+          $val .= $nv;
+          next;
+        }
+
+        my $next_x = ($cycle+1) * $period + $Left_x + $clk_dly*$period;
+
+        # print value
+        $val =~ /(-?\d+)/;
+        my $nval = $1;
+
+        if (($$p_conf{even_only} && ($nval % 2)==1) ||
+            ($$p_conf{odd_only} && ($nval % 2)==0)) {
+          #skip printing
+
+        } else {
+          my $xpos; 
+          if ($$p_conf{justify} eq 'start') {
+            $xpos = $cur_x+6;
+          } elsif ($$p_conf{justify} eq 'middle') {
+            $xpos = ($cur_x+$next_x)/2;
+          } elsif ($$p_conf{justify} eq 'end') {
+            $xpos = $next_x-6;
+          } else {
+              $xpos = ($cur_x+$next_x)/2;
+          }
+
+          $xpos = int($xpos+ $$p_conf{text_x}*$period );
+          my $f_height = 14*$$p_conf{font_size};
+          my $len = length($val) * $$p_conf{font_size} * 10;
+          
+          my $text_angle = $$p_conf{text_angle} * $RAD;
+          #my @text = ($F_TEXT, $$p_conf{justify}, $$p_conf{text_color}, $$p_conf{depth}, -1,
+          #            $$p_conf{font}, $$p_conf{font_size}, $text_angle, $F_FONTFLAGS,
+          #            $f_height, $len, 
+          #            int($xpos),
+          #            int($ypos + $$p_conf{value_y}*$ROW_HEIGHT), 
+          #            "$val\\001\n");
+          my $text2 = amp_char_code($val);
+          my $text = "<text text-anchor='$$p_conf{justify}' fill='$$p_conf{text_color}' class='counter' ".
+              "font-family='$$p_conf{font}' font-size='$$p_conf{font_size}' x='". int($xpos)."' y='". 
+              int($ypos + $$p_conf{value_y}*$ROW_HEIGHT) . "'>"; 
+
+          print OF $text, $text2, "</text>\n";
+        }
+        $val =~ s/(-?[0-9]+)$//;
+        my $nv = $1+1;
+        $val .= $nv;
+      }
+
+  }    
+
+  # draw background
+  #my $ypos_extra = 50;
+  #print OF "$F_POLY $F_BOX 0 1 $F_BG_COLOR $F_BG_COLOR $DEPTH{MAX} -1 20 0.000 0 0 -1 0 0 5\n"; # box
+  #print OF (0, 0, 
+  #          0, $Ypos_max+$ypos_extra, 
+  #          $Xpos_max+50, $Ypos_max+$ypos_extra, 
+  #          $Xpos_max+50, 0, 
+  #          0, 0, "\n");
+
+  # extra room for visibility
+  #print OF "$F_POLY $F_POLYLINE 0 1 $F_BG_COLOR $F_BG_COLOR 100 -1 20 0.000 0 0 -1 0 0 2\n"; 
+  #print OF $Left_x, $Ypos_max+$ypos_extra, $Right_x, $Ypos_max+$ypos_extra, "\n";
+
+  #print OF "$F_POLY $F_POLYLINE 0 1 1 7 100 -1 20 0.000 0 0 -1 0 0 2\n"; 
+  #print OF $Left_x, $Ypos_max+$ypos_extra, $Left_x+1, $Ypos_max+$ypos_extra, "\n";
+
+  # mask anything beyond right_x
+  #print OF "$F_POLY $F_BOX 0 1 $F_BG_COLOR $F_BG_COLOR 1 -1 20 0.000 0 0 -1 0 0 5\n"; # box
+  print OF "<rect fill='$F_BG_COLOR' stroke='$F_BG_COLOR' " . # box
+      "x='". ($Right_x-1). "' y='0' width='26' " .
+      "height='" . ($Ypos_max+$ypos_extra) ."'/>\n";
+
+  #debug - green right edge
+  #  print OF "$F_POLY $F_POLYLINE 0 3 2 7 1 -1 20 0.000 0 0 -1 0 0 2\n"; 
+  #  print OF 0, 0, $Xpos_max-4200, $Ypos_max, "\n";
+
+
+  #print STDERR ("geo $Left_x $Right_x $Xpos_max: 0 $Ypos_max\n");
+
+  #my $convfile = $ofile;
+  #my $convtype = "eps";
+  #$convfile =~ s/\.fig/.eps/;
+  #print "generating eps file...\n";
+  #system2("fig2dev -L eps $ofile $convfile");
+  #my $psfile = $convfile;
+
+  #$convfile = $ofile;
+  #print "generating tk file...\n";
+  #$convfile =~ s/\.fig/.tk/;
+  #system2("fig2dev -L tk $ofile $convfile");
+
+  #$convfile = $ofile;
+  #print "generating jpg file...\n";
+  #$convfile =~ s/\.fig/.jpg/;
+  #system2("fig2dev -L jpeg -q 100 -F  $ofile $convfile");
+
+
+#  $convfile = $ofile;
+#  $convtype = "tiff";
+#  print "generating $convtype file...\n";
+#  $convfile =~ s/\.fig/.$convtype/;
+#  system("fig2dev -L $convtype $ofile $convfile");
+
+  #if ($Opts{png}) {
+  #  # fig2dev creates a terrible png file
+  #  # use imagemagick convert (from eps). Not great but better
+  #  $convfile = $ofile;
+  #  $convfile2 = $ofile;
+  #  print "generating png file...\n";
+  #  $convfile2 =~ s/.fig/.tmp.png/;
+  #  $convfile =~ s/.fig/.png/;
+  #  system2("convert $psfile $convfile");
+  #}
+
+  #if ($Opts{emf}) {
+  #  my $format = 'emf';
+  #  $convfile = $ofile;
+  #  print "generating $format file...\n";
+  #  $convfile =~ s/.fig/.$format/;
+  #  system2("fig2dev -L $format $ofile $convfile");
+  #}
+  print OF "</svg>\n";
+
+  print AOF $apoly;
+}
+
+# get a value based on local conf
+sub get_local {
+  my($name, $cycle, $cname) = @_;
+  my $val = $Conf2{":$name:"}{$cname};
+  foreach my $lc (@{$Conf2{":$name:"}{":local:"}}) {
+    if($$lc[0]==$cycle && $$lc[1] eq $cname) {
+      $val = $$lc[2];
+      last;
+    }
+  }
+  $val;
+}
+
+sub get_local_0 {
+  my($val, $p_conf, $cycle, $cname) = @_;
+  foreach my $lc (@{$p_conf}) {
+    if($$lc[0]==$cycle && $$lc[1] eq $cname) {
+      $val = $$lc[2];
+      last;
+    }
+  }
+  $val;
+}
+
+
+# get previous state
+sub get_prev_st {
+  my($name, $cycle) = @_;
+  my $state = 'U';
+  foreach my $wv (@Waves) {
+    if ($$wv{name} eq $name) {
+      foreach my $ch (@{$$wv{change}}) {
+        if ($$ch[0] >= $cycle) {
+          return $state;
+        }
+        $state = $$ch[1];
+      }
+    }
+  }
+  'U';
+}
+
+# get a state of $name at $cycle
+sub get_state {
+  my($name, $cycle) = @_;
+  my $state = 'U';
+  foreach my $wv (@Waves) {
+    if ($$wv{name} eq $name) {
+      foreach my $ch (@{$$wv{change}}) {
+        if ($$ch[0] > $cycle) {
+          print "$cycle $name $state\n" if $Opts{d} & 256;
+
+          return $state;
+        }
+        $state = $$ch[1];
+      }
+    }
+  }
+  #'U';
+  $state;
+}
+
+# calc x pos
+sub calc_xpos{
+  my($name, $ix, $cycle, $period, $clkoff_x, $state, $prev_st, $f_slew, 
+     $p_conf,  #original signal conf
+     $p_over,   #overriding conf
+     $nondraw, # non-drawing waveform. don't force to xpos=0
+     $dbg_print # print info
+    ) = @_;
+  my ($cur_xa, # xpos of current stable
+      $slewc,  # current slew value
+      $soffc,  # current slew offset value
+      $mid_x,  # xpos of current mid point
+      $cur_xb, # xpos of current beginning of changes (before slew)
+      $cur_xe  # xpos of clock edge
+     ); 
+
+  my ($conf_slew, $conf_slew_offset, $conf_delay); 
+
+  # get all conf
+  if ($Type{$name} eq 'clock') {
+    $conf_slew = $$p_conf{clock_slew};
+    $conf_delay =  $$p_conf{clock_delay};
+
+    $clkoff_x = 0;
+  } else {
+    $conf_slew = $$p_conf{slew};
+    $conf_delay =  $$p_conf{delay};
+  }
+  $conf_slew_offset = $$p_conf{slew_offset};
+
+  my $prev_conf_slew = $conf_slew;
+  my $prev_conf_delay = $conf_delay; 
+  my $prev_conf_slew_offset = $conf_slew_offset;
+
+  if (defined $$p_conf{":local:"}) {
+    if ($Type{$name} eq 'clock') {
+      $conf_slew = get_local_0($conf_slew,$$p_conf{":local:"}, $cycle, 'clck_slew');
+      $conf_delay = get_local_0($conf_delay, $$p_conf{":local:"}, $cycle, 'clock_delay');
+      $prev_conf_slew = get_local_0($prev_conf_slew,$$p_conf{":local:"}, $cycle-1, 'clck_slew');
+      $prev_conf_delay = get_local_0($prev_conf_delay, $$p_conf{":local:"}, $cycle-1, 'clock_delay');
+    } else {
+      $conf_slew = get_local_0($conf_slew,$$p_conf{":local:"}, $cycle, 'slew');
+      $conf_delay = get_local_0($conf_delay, $$p_conf{":local:"}, $cycle, 'delay');
+      $prev_conf_slew = get_local_0($prev_conf_slew,$$p_conf{":local:"}, $cycle-1, 'slew');
+      $prev_conf_delay = get_local_0($prev_conf_delay, $$p_conf{":local:"}, $cycle-1, 'delay');
+    }
+    $conf_slew_offset = get_local_0($conf_slew_offset, $$p_conf{":local:"}, $cycle, 'slew_offset');
+    $prev_conf_slew_offset = get_local_0($prev_conf_slew_offset, $$p_conf{":local:"}, $cycle-1, 'slew_offset');
+  }
+  if (defined $p_over) {
+    if ($Type{$name} eq 'clock') {
+      $conf_slew = defined $$p_over{clock_slew} 
+        ? $$p_over{clock_slew} : $conf_slew;
+      $conf_delay = defined $$p_over{clock_delay} 
+        ? $$p_over{clock_delay} : $conf_delay;
+      $prev_conf_slew = defined $$p_over{clock_slew} 
+        ? $$p_over{clock_slew} : $prev_conf_slew;
+      $prev_conf_delay = defined $$p_over{clock_delay} 
+        ? $$p_over{clock_delay} : $prev_conf_delay;
+    } else {
+      $conf_slew = defined $$p_over{slew} 
+        ? $$p_over{slew} : $conf_slew;
+      $conf_delay = defined $$p_over{delay} 
+        ? $$p_over{delay} : $conf_delay;
+      $prev_conf_slew = defined $$p_over{slew} 
+        ? $$p_over{slew} : $prev_conf_slew;
+      $prev_conf_delay = defined $$p_over{delay} 
+        ? $$p_over{delay} : $prev_conf_delay;
+    }
+    $conf_slew_offset = defined $$p_over{slew_offset} 
+      ? $$p_over{slew_offset} : $conf_slew_offset;
+    $prev_conf_slew_offset = defined $$p_over{slew_offset} 
+      ? $$p_over{slew_offset} : $prev_conf_slew_offset;
+  }
+
+  $cur_xb = $cycle * $period + $$p_conf{left_x};
+  $cur_xe = $cur_xb;
+  # delay
+  if ($cycle>0 || $nondraw) {
+    $cur_xb += $period * $conf_delay + $clkoff_x;
+    $cur_xe += $clkoff_x;
+  }
+
+  # current start
+  $slewc = int ($conf_slew*$f_slew);
+  $slewc = 0 if $ix==0 || $cycle==0;
+
+  my ($slewb , $slewa); #slew before and after mid point
+
+  if ($state =~ /^($RE_Z)$/) {
+    # a half slew time from z to 0 or 1
+    $slewb = $slewc/2;
+    $slewa = 0;
+  } elsif ($prev_st =~ /^($RE_Z)$/) {
+    $slewa = $slewc/2;
+    $slewb = 0;
+  } else {
+    $slewa = $slewc/2;
+    $slewb = $slewc/2;
+  }
+
+  # align mid point with reference point
+  if ($conf_slew_offset) {
+    $cur_xb -= $slewb;
+  }
+
+  $mid_x  = $cur_xb+$slewb;
+  $cur_xa = $mid_x+$slewa; 
+  (int $cur_xa, int $slewc, int $mid_x, int $cur_xb, int $cur_xe);
+}
+
+sub get_point {
+  my($point) = @_;
+  
+  my ($name1,$cycle1,$conf1);
+
+  if (defined $Point{$$point[0]}) {
+    $name1 = $Point{$$point[0]}[0];
+    $cycle1 = $Point{$$point[0]}[1];
+    $conf1 = $$point[1];
+  } else {
+    $name1 = $$point[0];
+    $cycle1 = $$point[1];
+    $conf1 = $$point[2];
+  }
+  ($name1, $cycle1, $conf1);
+}
+
+
+  
+#
+# calculate virtual signals
+#
+# Create equation strings fro Virtual and eval. ex.
+#     if (get_state("csn",$cycle) == 0) {
+#       $var{"data4"}[$cycle+1][0]= $var{"data3"}[$cycle][$delta];
+#     }
+#
+# It uses get_state for real signals and $var{sn} for virtual.
+# Evaluated values are copied to change parameter in @Waves.
+# Cycle based delta delay evaluation is used.
+#
+sub nanosim {
+  my($lcycles,
+     $Left_x, $Right_x, # left and right max x-coord
+    ) = @_;
+  # vituals are only with main clock for now
+
+  my %var;
+  my @table = (); #signal table
+  my $tix = 0;  #table index
+
+  my $RE_INV = '(\+\+|--)'; # keyword that cannot be used
+
+  #construct signame to @Waves index
+  my %index;
+  foreach my $sig (@Waves) {
+    if ($$sig{type} =~ /\b(bit|bus)\b/) {
+      $index{$$sig{name}} = $sig;
+    }
+  }
+
+  
+  # modify assignments
+  foreach my $elem (@Virtual) {
+    my $eq = $$elem{assign};
+
+    my $key = $$elem{type};
+
+    # ~:00_xx:~ for signal subst
+    # ~:01:~ for  special signal _cycle_. cycle # for the clock domain
+    # ~:02:~ for  $delta
+    # ~:03:~ for signal to be replaced by &get_r_state_at
+    # ~:04:~ for signal to be replaced by &get_v_state_at
+    # ~:05:~ for double quote
+    # ~:08_xx:~ keywords
+    while ($eq =~ s/($RE_DQUOTE)/~:05_$tix:~/) {
+      $table[$tix++] = $1;
+    }
+    
+    $eq =~ s/\$_cycle_/~:01:~/g; 
+    #save keyword
+    #$eq =~ s/\b($re_key)\b/~:08_$subst{$1}:~/g; 
+    if ($eq =~ /$RE_INV/) {
+      error("$& not supported");
+    }
+
+    # save signal names
+    if ($key eq 'register') {
+      # $signame = -> $var{signame}[$cycle~+1][0]
+      while ($eq =~ s/($RE_NAN)$RE_ID\s*=(?!=)/$1~:00_$tix:~[~:01:~+1][0]=/) {
+        $table[$tix++] = $2; # there will be duplicated registration
+      }
+        
+    } else {
+      # $signame = -> $var{signame}[$cycle][$delta]
+      while( $eq =~ s/($RE_NAN)$RE_ID\s*=(?!=)/$1~:00_$tix:~[~:01:~][~:02:~]=/) {
+        $table[$tix++] = $2; # there will be duplicated registration
+      }
+
+    }
+
+    # id -> get_state(id, cycle) or $var{signame}[$cycle][$delta-1]
+    my @sid; # signal names
+    # replace every signal with sid
+    while ($eq =~ /$RE_NAN$RE_ID/g) {
+      my $sn = $1;
+      push @sid,$sn;
+
+      # get_state for real sig, %var for virtual sig
+      if ($index{$sn} && !$index{$sn}{conf}{virtual}) {
+        # real sig
+        $eq =~ s/($RE_NAN)($sn)/$1~:03:~("~:9$#sid:~",~:01:~)/;
+        $table[$tix++] = $2; # there will be duplicated registration
+      } else {
+        # virtual sig
+        #$eq =~ s/($RE_NAN)($sn)/$1~:00_$tix:~[~:01:~][~:02:~-1]/;
+        $eq =~ s/($RE_NAN)($sn)/$1~:03:~("~:9$#sid:~",~:01:~)/;
+        # currently get_v_state_at is not used
+        #$eq =~ s/($RE_NAN)($sn)/$1~:04:~("~:9$#sid:~",~:01:~,~:02:~-1)/;
+
+        $table[$tix++] = $2; # there will be duplicated registration
+      }
+    }
+
+
+    $eq =~ s/~:00_(\d+):~/var\{\"$table[$1]\"\}/g;
+    my $sn = $table[$1];
+    $eq =~ s/~:01:~/\$cycle/g;
+    $eq =~ s/~:02:~/\$delta/g;
+
+    #    $eq =~ s/\$~:03:~\(/&get_state_at("$sn",/g; 
+    # this replace with the last assignment var for all assignments. bad.
+
+    # don't use /g. redo every time from the beginning because it needs to match var{xx}[cycle][0]
+    # replace $var{"we_sync_n1"}[$cycle+1][0]= $~:03:~("we_n",$cycle);
+    # with $var{"we_sync_n1"}[$cycle+1][0]= &get_r_state_at("we_sync_n1","we_n",$cycle);
+
+    # reg assign
+    while ($eq =~ s/(\$var\{"$RE_ID"\}\[\$cycle\+1\]\[0\]=[^;]*?)\$~:03:~\(/
+                    $1&get_r_state_at("$2",/x) {
+      ;
+    }
+    # comb assign
+    while ($eq =~ s/(\$var\{"$RE_ID"\}\[\$cycle\]\[\$delta\]=[^;]*?)\$~:03:~\(/
+                    $1&get_r_state_at("$2",/x) {
+      ;
+    }
+
+
+    # virtual value currently not used
+    while ($eq =~ s/(\$var\{"$RE_ID"\}\[\$cycle\+1\]\[0\]=[^;]*?)\$~:04:~\(/
+                    $1&get_v_state_at("$2",/x) {
+      ;
+    }
+    while ($eq =~ s/(\$var\{"$RE_ID"\}\[\$cycle\]\[\$delta\]=[^;]*?)\$~:04:~\(/
+                    $1&get_v_state_at("$2",/x) {
+      ;
+    }
+    for( my $ix=0; $ix<=$#sid; $ix++) {
+      $eq =~ s/~:9$ix:~/$sid[$ix]/g;
+    }
+
+    #restore keyword
+    #while ( my ($key,$val) = each %subst) {
+    #  $eq =~ s/~:08_$val:~/$key/g;
+    #}
+
+    # restore signal names
+    for(my $ix=0; $ix<=$#table; $ix++) {
+      $eq =~ s/~:00_$ix:~/$table[$ix]/;
+      $eq =~ s/~:05_$ix:~/$table[$ix]/;
+    }
+
+    # replace other references - assuming that they are conditional terms
+    while ($eq =~ s/\$~:03:~\("$RE_ID",/&get_r_state_at("$1","$1",/) {
+    }
+
+
+    $$elem{assign} = $eq; # store back
+    print "$eq\n" if $Opts{d} & 64;
+
+  }
+
+
+  my %prev_st; #previous state for delta event
+
+
+  # calculate
+  my $dlimit = 12;
+
+  # clarify clock domain and register clocks
+  my %clock;
+  foreach my $key (keys %index) {
+    my $sig = $index{$key};
+    if ($$sig{conf}{clock} eq '') {
+      $$sig{conf}{clock} = $Mclk;
+    }
+    $clock{$$sig{conf}{clock}} = [];
+  }
+
+  for (my $cycle=0; $cycle<=$Max_cycle; $cycle++) {
+    foreach my $key (keys %index) {
+      my $sig = $index{$key};
+
+
+      # another clock domain
+      next if $cycle > $Cyc_limit{$$sig{conf}{clock}} ;
+
+      if ($$sig{conf}{virtual}) {
+        if ($cycle==0) {
+          #print $$sig{name}, $Conf2{":$$sig{name}:"}{init}, "\n";
+          if (defined $Conf2{":$$sig{name}:"}{init}) {
+            #initial value defined
+            $var{$key}[$cycle][0] = $Conf2{":$$sig{name}:"}{init};
+          }
+          
+          if (defined $$sig{conf}{init}) {
+            #initial value defined
+            $var{$key}[$cycle][0] = $$sig{conf}{init};
+          }
+        }
+        my $val = $var{$key}[$cycle][0];
+        $prev_st{$key} = $val;
+        push (@{$$sig{change}}, [$cycle,$val,{},0]);
+        #print "nano $$sig{name}  $cycle , $val, $$sig{conf}{clock}, $Cyc_limit{$$sig{conf}{clock}}\n";
+
+      } else {
+        #print STDERR "##@@ $$sig{name} $cycle ", get_state($$sig{name}, $cycle),"\n";
+      }
+    }
+    
+    my $delta;
+    for($delta=1; $delta<=$dlimit; $delta++) {
+      # default. copy previous value
+      foreach my $key (keys %var) {
+        my $sig = $index{$key};
+        if ($sig eq '' || $$sig{conf}{virtual} ) {
+          $var{$key}[$cycle][$delta] = $var{$key}[$cycle][$delta-1];
+        }
+      }
+
+
+      foreach my $eq (@Virtual) {
+        if ($$eq{type} eq 'combination') {
+          print "eval $cycle $delta  $$eq{'assign'}\n" if $Opts{d} & 256;
+
+          eval $$eq{'assign'};
+        }
+      }
+
+
+
+      my $any_chg = 0;
+
+      # copy only what's changed to sig{change}
+      foreach my $key (keys %var) {
+        my $sig = $index{$key};
+        if ($sig eq '' || $$sig{conf}{virtual} ) {
+            my $val = $var{$key}[$cycle][$delta];
+            $val = 0 if $val eq '';
+            if ($val ne $prev_st{$key}) {
+              if ($delta==$dlimit) {
+                # max iteration is hit
+                $val = 'X';
+                $var{$key}[$cycle][$delta] = $val;
+
+              }
+              push (@{$$sig{change}}, [$cycle,$val,{},$delta]);
+              $prev_st{$key} = $val;
+              $any_chg = 1;
+
+                
+            }
+            $var{$key}[$cycle+1][0] = $val; # pre calc for next cycle
+
+        }
+      }
+
+      last if $any_chg==0;
+      # if anything changed run delta
+
+    }
+
+      if ($Opts{d} & 32) {
+        print "\ncycle $cycle-$delta:\n";
+        print_var(\%var, $cycle);
+      }
+
+    # only main clock can be used (for now)
+    foreach my $eq (@Virtual) {
+      if ($$eq{type} eq 'register') {
+        eval $$eq{'assign'};
+      }
+    }
+
+  }
+
+
+
+
+  # extend last for drawing purpose
+  my $ext = 12 / ($Right_x-$Left_x) * $lcycles; #extra cycle to get 40 dots
+  foreach my $sig (values %index) {
+    if ($$sig{conf}{virtual}) {
+      push (@{$$sig{change}}, [$Max_cycle+$ext,'Z']);  # force to draw
+    }
+  }
+
+}
+
+
+# get a state of $name at $cycle of $dest_sname 
+# $dest_name for in case it is in a different clock domain 
+# crossing clock domains for nanosim
+sub get_r_state_at {
+  my($dest_sname, $sname, $cycle ) = @_;
+  my $dest_clock = $Conf2{":$dest_sname:"}{clock};
+  my $src_clock = $Conf2{":$sname:"}{clock};
+
+  if ($dest_clock eq "") {
+    # dest sig has no clock
+    $dest_clock = $Mclk;
+  } 
+  my $dest_period = $Periods{$dest_clock};
+  my $time = $cycle * $dest_period;
+
+  if ($src_clock eq "") {
+    $src_clock = $Mclk;
+  }
+  my $src_period = $Periods{$src_clock};
+  
+  my $state = 'U';
+
+  my $decl = 0;
+  foreach my $wv (@Waves) {
+    if ($$wv{name} eq $sname) {
+      $decl = 1;
+      if ($src_period == $dest_period) {
+        $state = get_state($sname, $cycle);
+            #print "state $dest_sname, $cycle, $state, $dest_clock, $time, $dest_period\n" if $Opts{d} & 64;
+        return $state;
+      } else {
+        $time = ($cycle+1) * $dest_period; # to get the state at the capture point 
+      
+        foreach my $ch (@{$$wv{change}}) {
+          if ($$ch[0]*$src_period >= $time) {
+            #print "state $dest_sname, $cycle, $state, $dest_clock, $time, $dest_period\n" if $Opts{d} & 64;
+            return $state;
+          }
+          $state = $$ch[1];
+        }
+      }
+    }
+  }
+  if ($decl == 0) {
+    error("$sname not declared");
+  }
+
+  $state;
+}
+
+# get a state of virtual signal $name at $cycle, $delta of $dest_sname 
+# $dest_name for in case it is in a different clock domain 
+# crossing clock domains for nanosim
+# currently not used
+sub get_v_state_at {
+  my($dest_sname, $sname, $cycle, $delta ) = @_;
+  my $dest_clock = $Conf2{":$dest_sname:"}{clock};
+  my $src_clock = $Conf2{":$sname:"}{clock};
+
+  if ($dest_clock eq "") {
+    # dest sig has no clock specified
+    $dest_clock = $Mclk;
+  } 
+  if ($src_clock eq "") {
+    $src_clock = $Mclk;
+  }
+  my $state = 'U';
+  my $dest_period = $Periods{$dest_clock};
+  my $src_period = $Periods{$src_clock};
+  my $time = $cycle * $dest_period;
+
+  if ($src_period != $dest_period) {
+    error ("Can't assign in combination. Clock domain of $sname and $dest_name are different");
+    return 'U';
+  }
+  $state = $var{"$sname"}[$cycle][$delta];
+            print "state $dest_sname, $sname, $cycle, $delta, $state\n" if $Opts{d} & 64;
+
+  $state;
+}
+
+# HTM ampersand character coding
+sub amp_char_code{
+    my($text) = @_; 
+    $text =~ s/&/&amp;/g;
+    $text =~ s/"/&quot;/g;
+    $text =~ s/</&lt;/g;
+    $text =~ s/>/&gt;/g;
+    #$text =~ s/ /&nbsp;/g;
+    return $text;
+}
+
+# draw bit signal
+sub draw_bit {
+  my($sname,            # signal name
+     $p_chg,            # pointer to @chg
+     $ypos,             # signal base y coord
+     $hi_pos, $lo_pos,  # high and low signal y-coord
+     $z_pos,
+     $Left_x, $Right_x, # left and right max x-coord
+     $p_conf,           # pointer to %conf
+     $p_apoly             # ascii wave string
+    ) = @_;
+
+  print OF "<!-- bit $sname -->\n";
+  print  "<!-- bit $sname -->\n";
+  my %prev_conf;
+  my %conf = %{clone($p_conf)};
+
+  my @pos = ();
+  my $prev_st;
+  my $exceeded = 0; # info already beyond the right end
+
+  my $clkoff_x = $Clkoff_x{$sname};
+  my $period = $Periods{$sname};
+  my $lcycles = int(($Right_x - $Left_x) / $period);
+
+  # init state
+  my $cur_y = $$p_chg[0][1] ? $hi_pos : $lo_pos;
+  $cur_y = $$p_chg[0][1] =~ /^($RE_Z)$/ ? $z_pos : $cur_y;
+  
+  my $cycle;
+  my $prev_cycle= 0;
+  my $prev_y = $cur_y;
+  my $prev_y2 = $cur_y;
+  my $prev_xa = $Left_x;
+  my $prev_xb = $Left_x;
+  my $next_x;
+
+  my $adelay = int($conf{delay} * $Opts{asc_hcyc} * 2);
+  #init delay for ascii waveform
+  if ($Opts{asc_use_delay}) {
+      my $state;
+      if ($$p_chg[0][1] =~ /^($RE_Z|$RE_U|$RE_X)$/) {
+          $state = "-";
+      } elsif ($$p_chg[0][1] =~ /^($RE_D)$/) {
+          $state = "X";
+      } elsif ($$p_chg[0][1] == 1) {
+          $state = "¯";
+      } else {
+          $state = "_";
+      }
+      $$p_apoly .= $state x $adelay;
+  }
+  
+  # save before overriding with local conf
+  # shallow copy is enough
+  my %conf_save = %{clone(\%conf)};
+  
+  my ($cur_xa, $slewc, $mid_x, $cur_xb) ;
+  for (my $ix=0; $ix<=$#{$p_chg}; $ix++) {
+    $cycle = $$p_chg[$ix][0];
+    print "  cycle $cycle\n";
+    # if there is delta, use the last one
+    next if ($ix<$#{$p_chg} && $cycle == $$p_chg[$ix+1][0] 
+             && defined $$p_chg[$ix][3]
+             && $$p_chg[$ix][3] < $$p_chg[$ix+1][3]);
+      
+    #restore
+    %conf = %{clone(\%conf_save)};
+    
+    if ($cycle > $lcycles) {
+      # 1 point beyond the right end
+      last if ($exceeded);
+      $exceeded = 1;
+    }
+
+    if ($ix>0 &&
+        ($cycle*1000+$$p_chg[$ix][3] <= $$p_chg[$ix-1][0]*1000+$$p_chg[$ix-1][3]) 
+       ) {
+      # cycle # and delta # is same or lower
+      error ("Cycle $cycle of $sname $ix not incrementing. Prev cycle $$p_chg[$ix-1][0], $$p_chg[$ix-1][1], This cycle $$p_chg[$ix][0], $$p_chg[$ix][1] ");
+    }
+    if ($ix<$#{$p_chg}) {
+      $next_x = $Left_x + $clkoff_x + $period * $$p_chg[$ix+1][0];
+    } else {
+      $next_x = $conf{right_x};
+    }
+    
+    my $state = $$p_chg[$ix][1];
+    
+    # cycle conf
+    if (defined $$p_chg[$ix][2] && %{$$p_chg[$ix][2]}) {
+      while (my ($key,$val) = each %{$$p_chg[$ix][2]}) {
+        if ($key =~ /^(right_x|left_x|cycles)$/) {
+          # these values can't be overridden
+          next;
+        }
+print "key $key, val $val\n";   
+        $conf{$key} = $val;
+        # keep  local conf [cycle#, conf key, conf val] in Conf{sig name}{":local:"}
+        push @{$Conf2{":$sname:"}{":local:"}}, [$$p_chg[$ix][0], $key, $val]; 
+        if ($key eq 'id') {
+          if ($All_id{$val}) {
+            error( "'$val' already defined\n");
+          } 
+          $All_id{$val} = 1;
+          @{$Point{$val}} = ($sname,$$p_chg[$ix][0]);
+        }
+      }
+    }
+    if($conf{justify} eq '0' ) {
+      $conf{justify} = 'start';
+    } elsif ($conf{justify} eq '1') {
+      $conf{justify} = 'middle';
+    } elsif ($conf{justify} eq '2') {
+      $conf{justify} = 'end';
+    }
+
+print "fill_u $conf{fill_u}\n";   
+
+    # xpos calc
+    ($cur_xa, $slewc, $mid_x, $cur_xb) 
+      = calc_xpos($sname, $ix, $cycle, $period, $clkoff_x, $state, $prev_st, $F_SLEW, \%conf);
+    $Xpos_max = $cur_xa if $cur_xa > $Xpos_max;
+
+    # draw upto where it start changing the vaulue
+    push (@pos, $cur_xb, int $cur_y);
+    
+    $cur_y = $state ? $hi_pos : $lo_pos;
+    $cur_y = $state =~ /^($RE_Z)$/ ? $z_pos : $cur_y;
+    $cur_y = int ($cur_y);
+    
+
+
+    if ($ix>0 ) {
+      if ($prev_st =~ /^($RE_D|$RE_U|$RE_X)$/) {
+        print "debug prev_st u\n";
+        my $pos2 ="points='$prev_xb, $prev_y2 ".
+                  " $prev_xa, $hi_pos ". 
+                  " $cur_xb, $hi_pos ".
+                  " $cur_xa, $cur_y ".
+                  " $cur_xb, $lo_pos ". 
+                  " $prev_xa, $lo_pos ".
+                  " $prev_xb, $prev_y2";
+
+        #my $fill;
+        #if ($prev_st =~ /^($RE_D|$RE_U|$RE_X)$/) {
+        #  $fill = $prev_st =~ /($RE_U|$RE_X)/ ? $prev_conf{fill_u}: $prev_conf{fill_d};
+        #} else {
+        #  $fill = $prev_conf{fill_pattern};
+        #}
+
+        #my @polyg = ($F_POLY, $F_POLYGON, 0,1,
+        #             $prev_conf{color},$prev_conf{fill_color},$prev_conf{depth},
+        #             -1,$fill, "0.0",0,0,-1,0,0,7, "\n"); # polygon
+        my $polyg = "<polygon fill='$prev_conf{fill_u}' stroke='$prev_conf{color}' class='bit'";
+                     
+        print OF $polyg, $pos2, "' />\n";
+      }
+      
+      if ($prev_st ne $state) {
+        # state change - vertical line
+        print "debug prev_st ne state $state\n";
+        push (@pos, $cur_xa, $cur_y);
+
+        if ($conf{meta}) {
+          # meta-state
+          #my @poly2 = ($F_POLY, $F_POLYLINE, $conf{line_style}, $conf{thickness}, 
+          #             $conf{color}, 0, $conf{depth}, -1, -1, $conf{style_val}, 0, 0, -1, 0, 0, 3, "\n");
+          my $poly2 = "<polyline stroke-dasharray='$conf{line_style}' stroke-width='$conf{thickness}' ". 
+                      "stroke='$conf{color}' fill='none' class='bit'";
+
+          my $meta = $F_META*2;
+
+          for( my $mx=1; $mx<=$conf{meta}; $mx++) {
+            my $pos2 = int ($cur_xb + $meta*($mx-1)).",". int ($prev_y) . " " .
+                int ($cur_xb + $meta*$mx).",". int ($prev_y) ." ".
+                int ($cur_xa + $meta*$mx).",". int($cur_y);
+            print OF $poly2, "points='", $pos2, "' />\n";
+          }
+          
+          if ($conf{meta_color}>=0) {
+            #@poly2 = ($F_POLY, $F_POLYGON, $conf{line_style}, $conf{thickness}, 
+            #          $conf{color}, $conf{meta_color}, $conf{depth}-1, 
+            #          -1, 20, "0.0", 0, 0, -1, 0, 0, 5, "\n");
+            my $poly2 = "<polygon stroke-dasharray='$conf{line_style}' stroke-width='$conf{thickness}' ". 
+                      "stroke='$conf{color}' fill='$conf{meta_color}' class='bit'";
+            my $pos2 =  int ($cur_xb) .",". int($prev_y) ." ".
+                        int ($cur_xa) .",". int($cur_y) ." ".
+                        int ($cur_xa + $meta*$conf{meta}) .",". int($cur_y) ." ".
+                        int ($cur_xb + $meta*$conf{meta}) .",". int($prev_y) ." ".
+                        int ($cur_xb) .",". int ($prev_y);
+            print OF $poly2, "points='", $pos2, "' />\n";
+          }
+        }
+      } else {
+
+          if ($conf{spike}) {
+              print "spike\n";
+          # spike
+          #my @poly2 = ($F_POLY, $F_POLYLINE, $conf{line_style}, $conf{thickness}, 
+          #             $conf{color}, 0, $conf{depth}, -1, -1, $conf{style_val}, 0, 0, -1, 0, 0, 2, "\n");
+          my $poly2 = "<polyline stroke-dasharray='$conf{line_style}' stroke-width='$conf{thickness}' ". 
+                      "stroke='$conf{color}' class='bit'";
+
+          my $pos2 = int ($cur_xb) .",". int ($hi_pos) ." ".
+                      int ($cur_xb) .",". int ($lo_pos) ;
+          print OF $poly2, "points='", $pos2, "' /> \n";
+          
+          
+
+        }elsif ($conf{meta}) {
+          # transient - for meta on same state. 0 or 1 only
+          # draw trapezoid
+          my $fill = -1;
+          $fill = 20 if ($conf{meta_color}>=0); # saturate
+          #my @poly2 = ($F_POLY, $F_POLYGON, $conf{line_style}, $conf{thickness}, 
+          #             $conf{color}, $conf{meta_color}, $conf{depth}-1, 
+          #             -1, $fill, "0.0", 0, 0, -1, 0, 0, 5, "\n");
+          my $poly2 = "<polygon stroke-dasharray='$conf{line_style}' stroke-width='$conf{thickness}' ". 
+                      "stroke='$conf{color}' fill='$conf{meta_color}' class='bit' ";
+
+          my $pos2 =  int ($cur_xb) .",". int ($cur_y) ." ".
+              int ($cur_xb + $F_META) .",". int ($hi_pos+$lo_pos-$cur_y) ." ".
+              int ($cur_xb + $F_META*$conf{meta}) .",". int ($hi_pos+$lo_pos-$cur_y) ." ".
+              int ($cur_xb + $F_META*($conf{meta}+1)) .",". int ($prev_y) ." ".
+              int ($cur_xb) .",". int ($cur_y);
+          
+          print OF $poly2,"points='", $pos2, "' />\n";
+        }         
+      }
+          
+      # draw polyline
+      #my @poly = ($F_POLY, $F_POLYLINE, $prev_conf{line_style}, $prev_conf{thickness}, 
+      #            $prev_conf{color}, 0, $prev_conf{depth}, -1, -1, $prev_conf{style_val}, 
+      #            0, 0, -1, 0, 0, ($#pos+1)/2, "\n");
+      my $poly = "<polyline stroke-dasharray='$conf{line_style}' stroke-width='$conf{thickness}' ". 
+      "stroke='$conf{color}' fill='none' class='bit'";
+      $, = " ";
+      print OF $poly,"points='", @pos, " ' />\n";
+      @pos = splice(@pos,-2,2);
+
+      #ascii waveform
+      if( $prev_cycle >= 0) {
+          my $cyc = ($cycle - $prev_cycle);
+          my $space = int(($Opts{asc_hcyc}*2) * $cyc -1);
+
+          if($prev_st eq "0") {
+              $$p_apoly .= "_" x $space;
+              if($state eq "0") {
+                  $$p_apoly .= "_";
+              } else {
+                  $$p_apoly .= "/";
+              }
+          }elsif($prev_st eq "1" ) {
+              $$p_apoly .= "¯" x $space;
+              if($state eq "1") {
+                  $$p_apoly .= "¯";
+              } else {
+                  $$p_apoly .= "\\";
+              }
+          }elsif($prev_st =~ /$RE_D/ ) {
+              $$p_apoly .= "X" x $space;
+              if($state eq "0") {
+                  $$p_apoly .= "\\";
+              } elsif ($state eq "1") {
+                  $$p_apoly .= "/";
+              } else {
+                  $$p_apoly .= "X";
+              }
+          }else{
+              $$p_apoly .= "-" x $space;
+              if($state eq "0") {
+                  $$p_apoly .= "\\";
+              } elsif ($state eq "1") {
+                  $$p_apoly .= "/";
+              } else {
+                  $$p_apoly .= "-";
+              }
+          }
+
+      }
+      $prev_cycle = $cycle;
+    }
+
+    my $xpos; 
+    if ($conf{justify} eq 'start') {
+      $xpos = $cur_xa+$conf{delay}*$period+$slewc+$F_META*2*$conf{meta}+6;
+    } elsif ($conf{justify} eq 'middle') {
+      $xpos = ($cur_xa+$conf{delay}*$period+$slewc+$F_META*2*$conf{meta}+$next_x)/2;
+    } elsif ($conf{justify} eq 'end') {
+      $xpos = $conf{delay}*$period + $next_x-6;
+    }
+    $xpos = int($xpos+ $conf{text_x}*$period);
+    
+    %prev_conf = %{clone(\%conf)};
+    
+    $prev_st = $state;
+    $prev_xa = $cur_xa;
+    $prev_xb = $cur_xb;
+    
+    $prev_y2 = $prev_y;
+    $prev_y = $cur_y;
+  } # end of for-loop
+
+  if ($Opts{asc_use_delay}) {
+      # remove excess chars
+      if ($adelay>0) {
+           $$p_apoly = substr($$p_apoly, 0, -$adelay);
+#          $$p_apoly = substr($$p_apoly, 0, -$adelay);
+      }
+  }
+  $$p_apoly .= "\n";
+               
+  #restore
+  %conf = %{clone(\%conf_save)};
+  
+  # draw line to the end
+  #push(@pos, int $conf{right_x}, int $cur_y);
+  
+  # draw polyline
+#  my @poly = ($F_POLY, $F_POLYLINE, $conf{line_style}, $conf{thickness}, 
+#              $conf{color}, 0, $conf{depth}, -1, -1, $conf{style_val}, 0, 0, -1, 0, 0, ($#pos+1)/2, "\n");
+#  print OF @poly, @pos, "\n";
+  
+}
+
+# draw bus signal
+sub draw_bus {
+  my($sname,            # signal name
+     $p_chg,            # pointer to @chg
+     $ypos,             # signal base y coord
+     $hi_pos, $lo_pos,  # high and low signal y-coord
+     $z_pos,
+     $Left_x, $Right_x, # left and right max x-coord
+     $p_conf,           # pointer to %conf
+     $p_apoly             # ascii wave string
+   
+    ) = @_;
+
+  print OF "<!-- bus $sname -->\n";
+  my @pos = ();
+  my @posf = ();
+  my $prev_st;
+  my %prev_conf;
+
+  my %conf = %{clone($p_conf)};
+
+  my $clkoff_x = $Clkoff_x{$sname};
+  my $period = $Periods{$sname};
+
+  my $exceeded = 0; # info already beyond the right end
+  my $lcycles = int(($Right_x - $Left_x) / $period);
+
+
+  # init state
+  my $pos1 = 0;
+  my $cur_y = $$p_chg[0][1] =~ /^($RE_Z)$/ ? $z_pos : $hi_pos;
+  my $cur_yf = $$p_chg[0][1] =~ /^($RE_Z)$/ ? $z_pos : $lo_pos;
+
+  my $cycle;
+  my $prev_cycle = 0;
+  my $prev_y = $cur_y;
+  my $prev_y2 = $cur_y;
+  my $prev_yf = $cur_yf;
+  my $prev_yf2 = $cur_yf;
+  my $prev_xam; # with slew and meta
+  my $prev_xmm=-1; # mid with meta
+  my $next_x;
+
+  my $first_poly = 1;  # first poly to draw
+
+  my $adelay = int($conf{delay} * $Opts{asc_hcyc} * 2);
+  #init delay for ascii waveform
+  if ($Opts{asc_use_delay}) {
+      my $state;
+      if ($$p_chg[0][1] =~ /^($RE_Z)$/) {
+          $state = "-";
+      } elsif ($$p_chg[0][1] =~ /^($RE_L)$/) {
+          $state = "_";
+      } elsif ($$p_chg[0][1] =~ /^($RE_H)$/) {
+          $state = "¯";
+      } elsif ($$p_chg[0][1] =~ /^($RE_D|$RE_U|$RE_X)$/) {
+          $state = "X";
+      } else {
+          $state = " ";
+      }
+      $$p_apoly .= $state x $adelay;
+  }
+
+
+
+  # save before overriding with local conf
+  # shallow copy is enough
+  my %conf_save = %{clone(\%conf)};
+  %prev_conf = %{clone(\%conf)};
+
+  my ($cur_xa, $slewc, $mid_x, $cur_xb) ;
+
+  for (my $ix=0; $ix<=$#{$p_chg}; $ix++) {
+    $cycle = $$p_chg[$ix][0];
+
+    # if there is delta, use the last one
+    next if ($ix<$#{$p_chg} && $cycle == $$p_chg[$ix+1][0] 
+             && defined $$p_chg[$ix][3]
+             && $$p_chg[$ix][3] < $$p_chg[$ix+1][3]);
+
+    if ($conf{virtual} && $$p_chg[$ix][0] > 0
+        && $$p_chg[$ix][1] eq $prev_st) {
+      next;
+    }
+
+
+    #restore
+    %conf = %{clone(\%conf_save)};
+
+    $pos1 = 1 - $pos1;
+
+
+    if ($cycle > $lcycles) {
+      # 2 point beyond the right end
+      last if ($exceeded);
+      $exceeded = 1;
+    }
+
+    if ($ix>0 &&
+        ($cycle*1000+$$p_chg[$ix][3] <= $$p_chg[$ix-1][0]*1000+$$p_chg[$ix-1][3]) 
+       ) {
+      # cycle # and delta # is same or lower
+      error ("Cycle $cycle of $sname $ix not incrementing. Prev cycle $$p_chg[$ix-1][0], $$p_chg[$ix-1][1], This cycle $$p_chg[$ix][0], $$p_chg[$ix][1] ");
+    }
+
+
+    if ($ix<$#{$p_chg}) {
+      $next_x = $Left_x + $clkoff_x + $period * $$p_chg[$ix+1][0];
+    } else {
+      $next_x = $conf{right_x};
+    }
+    my $state = $$p_chg[$ix][1];
+
+    # cycle conf
+    if (defined $$p_chg[$ix][2] && %{$$p_chg[$ix][2]}) {
+      while (my ($key,$val) = each %{$$p_chg[$ix][2]}) {
+        if ($key =~ /^(right_x|left_x|cycles)$/) {
+          # these values can't be overridden
+          next;
+        }
+        $conf{$key} = $val;
+        # keep  local conf [cycle#, conf key, conf val] in Conf{sig name}{":local:"}
+        push @{$Conf2{":$sname:"}{":local:"}}, [$$p_chg[$ix][0], $key, $val]; 
+        if ($key eq 'id') {
+          if ($All_id{$val}) {
+            error ( "'$val' already defined\n");
+          } 
+          $All_id{$val} = 1;
+          @{$Point{$val}} = ($sname,$$p_chg[$ix][0]);
+        }
+      }
+    }
+    if($conf{justify} eq '0' ) {
+      $conf{justify} = 'start';
+    } elsif ($conf{justify} eq '1') {
+      $conf{justify} = 'middle';
+    } elsif ($conf{justify} eq '2') {
+      $conf{justify} = 'end';
+    }
+
+    # xpos calc
+    ($cur_xa, $slewc, $mid_x, $cur_xb) 
+      = calc_xpos($sname, $ix, $cycle, $period, $clkoff_x, $state, $prev_st, $F_SLEW, \%conf);
+    $Xpos_max = $cur_xa if $cur_xa > $Xpos_max;
+    #print "debug $sname, $period, $cur_xa,  $Xpos_max, $cycle,  $state, $prev_st\n";
+
+    
+    if ($prev_xmm <0) {
+      # first one - not defined
+      $prev_xmm = $mid_x;#+$F_SLEW*2*$conf{meta};
+      $prev_xam = $cur_xa;#+$F_SLEW*2*$conf{meta};
+    }
+
+    # draw upto where it start changing the vaulue
+    if ($prev_st =~ /^($RE_Z|$RE_L|$RE_H)$/ ) {
+      if ($prev_st =~ /^($RE_Z)$/ ) {
+        push (@pos, $cur_xb, int $cur_y);
+      } elsif ($prev_st =~ /^($RE_L)$/ ) {
+        push (@pos, $prev_xmm, $z_pos);
+        push (@pos, $prev_xam, int $lo_pos);
+        push (@pos, $cur_xb, int $lo_pos);
+        push (@pos, $mid_x, $z_pos);
+      } else { # high
+        push (@pos, $prev_xmm, $z_pos);
+        push (@pos, $prev_xam, int $hi_pos);
+        push (@pos, $cur_xb, int $hi_pos);
+        push (@pos, $mid_x, $z_pos);
+      }
+      #push (@posf, $cur_xb, int $cur_yf);
+      #my @poly = ($F_POLY, $F_POLYLINE, 
+      #            $conf{line_style}, $conf{thickness}, 
+      #            $conf{color}, 
+      #            0, $conf{depth}, -1, -1, 
+      #            $conf{style_val}, 0, 0, -1, 0, 0, ($#pos+1)/2, "\n");
+      my $poly = "<polyline stroke-dasharray='$conf{line_style}' stroke-width='$conf{thickness}' ". 
+          "stroke='$conf{color}' fill='none' class='bus'";
+      $, = " ";
+      print OF $poly, " points='", @pos, "'/>\n";
+      @pos = ();
+
+      if ($prev_st =~ /^($RE_L|$RE_H)$/ ) {
+        # mask the vertical line of the initial poly
+        #print STDERR "$sname $ix $prev_xmm\n";
+        if ($first_poly==1) {
+            my $poly = "<polyline stroke-dasharray='$conf{line_style}' stroke-width='" . ($conf{thickness}+1)."' ". 
+          "stroke='$conf{bg_color}' fill='none' class='bus'";
+          #my @poly = ($F_POLY, $F_POLYLINE, 0, $conf{thickness}+1, 
+          #            $conf{bg_color}, 0, $conf{depth}-1, -1, -1, "0.0", 0, 0, -1, 0, 0, 2, "\n");
+            my @pos =($prev_xmm, $hi_pos+5, $prev_xmm, $lo_pos-5);
+            $, = " ";
+          print OF $poly, " points='", @pos, "'/>\n";
+        }
+      }
+      $first_poly = 0;  # don't mask first z-to-val transition. the mask is for vertical line in cycle 0 
+    }
+
+    $cur_y = $pos1 ? $hi_pos : $lo_pos;
+    $cur_yf = $pos1 ? $lo_pos : $hi_pos;
+    if($state =~ /^($RE_Z)$/) {
+      $cur_y =  $z_pos;
+      $cur_yf = $z_pos;
+    } elsif ($state =~ /^($RE_L)$/ ) {
+      $cur_y =  $lo_pos;
+      $cur_yf = $lo_pos;
+    } elsif ($state =~ /^($RE_H)$/ ) {
+      $cur_y =  $hi_pos;
+      $cur_yf = $hi_pos;
+    }
+    
+    if ($ix>0 && $$p_chg[$ix][0]>0) {
+      if ($prev_st !~ /^($RE_Z|$RE_L|$RE_H)$/) {
+        my @pos2;
+        @pos2 =($prev_xmm, $z_pos,
+                $prev_xam, $hi_pos, 
+                $cur_xb, $hi_pos,
+                $mid_x, $z_pos,
+                $cur_xb, $lo_pos, 
+                $prev_xam, $lo_pos,
+                $prev_xmm, $z_pos);
+        my $fill;
+          
+            if ($prev_st =~ /^($RE_D|$RE_U|$RE_X)$/) {
+                $fill = $prev_st =~ /($RE_U|$RE_X)/ ? $prev_conf{fill_u}: $prev_conf{fill_d};
+            } else {
+                $fill = $prev_conf{fill_pattern};
+            }
+            
+            #my @polyg = ($F_POLY, $F_POLYGON, $prev_conf{line_style}, $prev_conf{thickness}, 
+            #             $prev_conf{color},$prev_conf{fill_color},$prev_conf{depth},
+            #             -1,$fill, "0.0",0,0,-1,0,0,7, "\n"); # polygon
+            my $polyg = "<polygon stroke-dasharray='$conf{line_style}' stroke-width='$conf{thickness}' ". 
+            "stroke='$conf{color}' fill='$prev_conf{fill_color}' class='bus'";
+            $, = " ";
+            print OF $polyg, " points='",@pos2, "' />\n";
+            
+            # mask the vertical line of the initial poly
+            #print STDERR "$sname $ix $prev_xmm\n";
+            if ($first_poly==1) {
+                #my @poly = ($F_POLY, $F_POLYLINE, 0, $conf{thickness}+1, 
+                #            $conf{bg_color}, 0, $conf{depth}-1, -1, -1, "0.0", 0, 0, -1, 0, 0, 2, "\n");
+                my $poly = "<polyline stroke-dasharray='$conf{line_style}' stroke-width='".($conf{thickness}+1)."' ". 
+                    "stroke='$conf{bg_color}' fill='none' class='bus'";
+                my @pos =($prev_xmm, $hi_pos+5, $prev_xmm, $lo_pos-5);
+                $, = " ";
+                print OF $poly, " points='". @pos, "' />\n";
+                $first_poly = 0;
+            }
+
+
+            # print value
+            if ($prev_st !~ /^($RE_D|$RE_U|$RE_X)$/) {
+                my $xpos; 
+                if ($prev_conf{justify} eq 'start') {
+                    $xpos = $prev_xam+6;
+                } elsif ($prev_conf{justify} eq 'middle') {
+                    $xpos = ($prev_xam+$cur_xb+6)/2;
+                } elsif ($prev_conf{justify} eq 'end') {
+                    $xpos = $cur_xb-6;
+                }
+                $xpos = int($xpos+ $prev_conf{value_x}*$period);
+                
+                my $f_height = 14*$prev_conf{font_size};
+                my $len = length($state) * $prev_conf{font_size} * 10;
+                my $value = $prev_st;
+                if ($prev_conf{value_format}) {
+                    $value = sprintf($prev_conf{value_format},$prev_st);
+                }
+                my $text_angle = $prev_conf{text_angle} * $RAD;
+                #my @text = ($F_TEXT, $prev_conf{justify}, $prev_conf{text_color}, $DEPTH{tear}-2, -1,
+                #            $prev_conf{font}, $prev_conf{font_size}, $text_angle, $F_FONTFLAGS,
+                #            $f_height, $len, 
+                #            $xpos,
+                #            int($ypos + $prev_conf{value_y}*$ROW_HEIGHT), 
+                #            $value, "\\001\n");
+                my $text = "<text text-anchor='$prev_conf{justify}' fill='$prev_conf{text_color}' class='text' ".
+              "font-family='$prev_conf{font}' font-size='$prev_conf{font_size}' x='". int($xpos)."' y='". 
+              int($ypos + $prev_conf{value_y}*$ROW_HEIGHT) . "'> ";
+                my $text2 = amp_char_code($value);
+                print OF $text,$text2, "</text>\n";
+            }
+        
+      }
+
+
+      if ($conf{meta}) {
+        # meta-state
+        print OF "<!--  --meta -->\n";
+        if ($state =~ /^$RE_Z$/) {
+          #my @poly3 = ($F_POLY, $F_POLYLINE, 0, $conf{thickness}, 
+          #             $conf{color}, 0, $conf{depth}-1, -1, -1, "0.0", 0, 0, -1, 0, 0, 5, "\n");
+          my $poly3 = "<polyline stroke-dasharray='$conf{line_style}' stroke-width='$conf{thickness}' ". 
+          "stroke='$conf{color}' fill='none' class='bus'";
+          for( my $mx=1; $mx<=$conf{meta}; $mx++) {
+            my @pos3 = (int ($cur_xb + $F_META*2*($mx-1)), int $hi_pos,
+                        int ($cur_xb + $F_META*2*$mx), int $hi_pos,
+                        int ($cur_xa + $F_META*2*$mx), int $z_pos,
+                        int ($cur_xb + $F_META*2*$mx), int $lo_pos,
+                        int ($cur_xb + $F_META*2*($mx-1)), int $lo_pos);
+            #print OF @poly3, @pos3, "\n";
+            $, = " ";
+            print OF $poly3, " points='", @pos, "'/>\n";
+          }
+          
+          if ($conf{meta_color}>=0) {
+            #fill meta
+            #my @poly2 = ($F_POLY, $F_POLYGON, $conf{line_style}, $conf{thickness}, 
+            #          $conf{color}, $conf{meta_color}, $conf{depth}-1, 
+            #          -1, 20, "0.0", 0, 0, -1, 0, 0, 7, "\n");
+            my $poly2 = "<polygon stroke-dasharray='$conf{line_style}' stroke-width='$conf{thickness}' ". 
+            "stroke='$conf{color}' fill='$conf{meta_color}' class='bus'";
+            my @pos2 = ($mid_x, $z_pos,
+                        int ($cur_xb), $hi_pos,
+                        int ($cur_xb+$F_META*2*$conf{meta}), $hi_pos,
+                        int ($cur_xa+$F_META*2*$conf{meta}), int $z_pos,
+                        int ($cur_xb+$F_META*2*$conf{meta}), $lo_pos,
+                        int ($cur_xb), $lo_pos,
+                        $mid_x, $z_pos);
+            $, = " ";
+            print OF $poly2, " points='", @pos2, "'/>\n";
+          }
+
+        } else {
+          # non-z
+
+          # meta won't affect before changes. removed
+          # meta prev
+          #my $ch_start_x = $mid_x-($cur_xa-$mid_x);
+          #my @poly3 = ($F_POLY, $F_POLYLINE, $conf{line_style}, $conf{thickness}, 
+          #             $conf{color}, 0, $conf{depth}-1, -1, -1, $conf{style_val}, 0, 0, -1, 0, 0, 3, "\n");
+          #for( my $mx=1; $mx<=$conf{meta}; $mx++) {
+          #  my @pos3 = (int ($ch_start_x - $F_META*2*$mx), int $hi_pos,
+          #              int ($mid_x - $F_META*2*$mx), int $z_pos,
+          #              int ($ch_start_x - $F_META*2*$mx), int $lo_pos);
+          #  print OF @poly3, @pos3, "\n";
+          #}
+
+          # meta current
+          #my @poly3 = ($F_POLY, $F_POLYLINE, $conf{line_style}, $conf{thickness}, 
+          #             $conf{color}, 0, $conf{depth}-1, -1, -1, $conf{style_val}, 0, 0, -1, 0, 0, 3, "\n");
+          my $poly3 = "<polyline stroke-dasharray='$conf{line_style}' stroke-width='$conf{thickness}' ". 
+          "stroke='$conf{color}' fill='none' class='bus'";
+          for( my $mx=1; $mx<=$conf{meta}; $mx++) {
+            my @pos3 = (int ($cur_xa + $F_META*2*$mx), int $hi_pos,
+                        int ($mid_x + $F_META*2*$mx), int $z_pos,
+                        int ($cur_xa + $F_META*2*$mx), int $lo_pos);
+            print OF $poly3," points='", @pos3, "' />\n";
+          }
+
+          if ($conf{meta_color}>=0) {
+            #fill meta
+          
+            # meta won't affect before changes. removed
+            #my @poly2 = ($F_POLY, $F_POLYGON, $conf{line_style}, $conf{thickness}, 
+            #          $conf{color}, $conf{meta_color}, $conf{depth}-1, 
+            #          -1, 20, "0.0", 0, 0, -1, 0, 0, 7, "\n");
+            #my @pos2 = ($mid_x, $z_pos,
+            #            int ($ch_start_x), $hi_pos,
+            #            int ($ch_start_x - $F_META*2*$conf{meta}), $hi_pos,
+            #            int ($mid_x-$F_META*2*$conf{meta}), int $z_pos,
+            #            int ($ch_start_x - $F_META*2*$conf{meta}), $lo_pos,
+            #            int ($ch_start_x), $lo_pos,
+            #            $mid_x, $z_pos);
+            #print OF @poly2, @pos2, "\n";
+
+            #my @poly2 = ($F_POLY, $F_POLYGON, $conf{line_style}, $conf{thickness}, 
+            #          $conf{color}, $conf{meta_color}, $conf{depth}-1, 
+            #          -1, 20, "0.0", 0, 0, -1, 0, 0, 7, "\n");
+            my $poly2 = "<polygon stroke-dasharray='$conf{line_style}' stroke-width='$conf{thickness}' ". 
+            "stroke='$conf{color}' fill='$conf{meta_color}' class='bus'";
+            my @pos2 = ($mid_x, $z_pos,
+                        int ($cur_xa), $hi_pos,
+                        int ($cur_xa+$F_META*2*$conf{meta}), $hi_pos,
+                        int ($mid_x+$F_META*2*$conf{meta}), int $z_pos,
+                        int ($cur_xa+$F_META*2*$conf{meta}), $lo_pos,
+                        int ($cur_xa), $lo_pos,
+                        $mid_x, $z_pos);
+            $, = " ";
+            print OF $poly2, " points='", @pos2, "'/>\n";
+
+          }
+
+        }
+
+
+      }
+
+      #ascii waveform
+      my $cyc = ($cycle - $prev_cycle);
+      my $space = int(($Opts{asc_hcyc}*2) * $cyc -1);
+      
+      if ($prev_st =~ /^($RE_U|$RE_X|$RE_D)$/) {
+          $$p_apoly .= "X" x $space;
+          if ($state =~ /^($RE_Z)$/) {
+              $$p_apoly .= ">";
+          }elsif ($state =~ /^($RE_L)$/) {
+              $$p_apoly .= "\\";
+          }elsif ($state =~ /^($RE_H)$/) {
+              $$p_apoly .= "/";
+          }else {
+              $$p_apoly .= "X";
+          }
+      }elsif ($prev_st =~ /^($RE_Z)$/) {
+          $$p_apoly .= "-" x $space;
+          if ($state =~ /^($RE_U|$RE_X|$RE_D)$/ ) {
+              $$p_apoly .= "X";
+          }elsif ($state =~ /^($RE_Z)$/) {
+              $$p_apoly .= "-";
+          }elsif ($state =~ /^($RE_L)$/) {
+              $$p_apoly .= "\\";
+          }elsif ($state =~ /^($RE_H)$/) {
+              $$p_apoly .= "/";
+          }else {
+              $$p_apoly .= "<";
+          }
+
+      }elsif ($prev_st =~ /^($RE_L)$/) {
+          $$p_apoly .= "_" x $space;
+          if ($state =~ /^($RE_U|$RE_X|$RE_D)$/ ) {
+              $$p_apoly .= "X";
+          }elsif ($state =~ /^($RE_Z)$/) {
+              $$p_apoly .= "-";
+          }elsif ($state =~ /^($RE_L)$/) {
+              $$p_apoly .= "_";
+          }elsif ($state =~ /^($RE_H)$/) {
+              $$p_apoly .= "/";
+          }else {
+              $$p_apoly .= "<";
+          }
+
+      }elsif ($prev_st =~ /^($RE_H)$/) {
+          $$p_apoly .= "¯" x $space;
+          if ($state =~ /^($RE_U|$RE_X|$RE_D)$/ ) {
+              $$p_apoly .= "X";
+          }elsif ($state =~ /^($RE_Z)$/) {
+              $$p_apoly .= "-";
+          }elsif ($state =~ /^($RE_L)$/) {
+              $$p_apoly .= "\\";
+          }elsif ($state =~ /^($RE_H)$/) {
+              $$p_apoly .= "¯";
+          }else {
+              $$p_apoly .= "<";
+          }
+
+      }else {
+          $$p_apoly .= sprintf("%-${space}s", $prev_st);
+          if ($state =~ /^($RE_Z)$/ ) {
+              $$p_apoly .= ">";
+          }elsif ($state =~ /^($RE_L)$/) {
+              $$p_apoly .= "\\";
+          }elsif ($state =~ /^($RE_H)$/) {
+              $$p_apoly .= "/";
+          }else{
+              $$p_apoly .= "X";
+          }
+      }
+      $prev_cycle = $cycle;
+    }
+
+
+    if ($state =~ /^($RE_Z|$RE_L|$RE_H)$/) {
+      push (@pos, $cur_xa, int $cur_y);
+      push (@posf, $cur_xa, int $cur_yf);
+    }
+
+    my $xpos; 
+    if ($conf{justify} eq 'start') {
+      $xpos = $cur_xa+$conf{delay}*$period+$F_META*2*$conf{meta}+6;
+    } elsif ($conf{justify} eq 'middle') {
+      $xpos = ($cur_xa+$conf{delay}*$period+$F_META*2*$conf{meta}+$next_x)/2;
+    } elsif ($conf{justify} eq 'end') {
+      $xpos = $conf{delay}*$period + $next_x-6;
+    }
+    $xpos = int($xpos+ $conf{text_x}*$period);
+
+
+    $prev_st = $state;
+    if ($ix>0) {
+      $prev_xmm = $mid_x+$F_SLEW*2*$conf{meta};
+      $prev_xam = $cur_xa+$F_SLEW*2*$conf{meta};
+    }
+
+    %prev_conf = %{clone(\%conf)};
+    
+    last if ($ix==$#{$p_chg});
+
+    $prev_y2 = $prev_y;
+    $prev_y = $cur_y;
+    $prev_yf2 = $prev_yf;
+    $prev_yf = $cur_yf;
+  }
+
+  if ($Opts{asc_use_delay}) {
+      # remove excess chars
+      if($adelay > 0) {
+       $$p_apoly = substr($$p_apoly, 0, -$adelay);
+      }
+  }
+  $$p_apoly .= "\n";
+
+  #restore
+  %conf = %{clone(\%conf_save)};
+
+  # draw line to the end
+  #      push(@pos, int $conf{right_x}, int $cur_y);
+  #      push(@posf, int $conf{right_x}, int $cur_yf);
+
+  # draw polyline
+  my @poly = ($F_POLY, $F_POLYLINE, 
+              $conf{line_style}, $conf{thickness}, 
+              3, #    $conf{color}, 
+              0, $conf{depth}, -1, -1, 
+              $conf{style_val}, 0, 0, -1, 0, 0, ($#pos+1)/2, "\n");
+#  print OF @poly, @pos, "\n";
+#  print OF @poly, @posf, "\n";
+
+}
+
+
+
+sub help {
+  open (F, $0) || die $!;
+  while (<F>) {
+    print if s/^\#\.//;
+  }
+  close F;
+  exit 22;
+}
+
+sub error {
+  my ($msg) = @_;
+  print STDERR "<><><> $msg <><><>\n";
+  exit 1 if !($Opts{d} & 128);
+}
+
+# mask Ghostscript Font error
+sub system2 {
+  my($arg) = @_;
+  open(PRG, "$arg 2>&1|") || die "$! $arg";
+  my @msg = <PRG>;
+  close(PRG);
+  print @msg;
+}
+
+# debug
+
+# print arrays and hashes recursively
+sub printArray {
+  my ($ref,$ind) = @_;
+  my ($ix,$key,$value);
+
+  if ($ind eq '') {
+    print "TOP of array\n";
+  }
+  $ind .= "  ";
+  if (ref($ref) eq 'HASH') {
+    while (($key,$value) =  each %$ref) {
+      chomp($value);
+      print "$ind$key => $value\n";
+      if (ref($value) eq  'HASH'  || ref($value) eq  'ARRAY') {
+        printArray($value, $ind);
+      }
+    }
+  }elsif (ref($ref) eq 'ARRAY') {
+    for($ix=0; $ix<=$#{$ref}; $ix++) {
+      $value = $$ref[$ix];
+      chomp($value);
+      printf "${ind}%-5d $value\n",$ix;
+      if (ref($value) eq  'HASH'  || ref($value) eq  'ARRAY') {
+        printArray($value, $ind);
+      }
+    }
+  }else{
+    print "???\n";
+  }
+  $ind =~ s/  //;
+}
+
+sub print_var {
+  my($pv, $cyc) = @_;
+  my($max_cyc);
+  my($max_d);
+
+  $, = "_";
+  foreach my $key (keys %$pv) {
+    printf ("%5s:", $key); 
+    foreach my $dx (@{$$pv{$key}[$cyc]}) {
+      if ($dx eq '') {
+        $dx = 0;
+      }
+      printf "%1s", $dx;
+    }
+    print "\n";
+  }
+  $, = ',';
+}
+    

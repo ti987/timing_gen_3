@@ -1,0 +1,93 @@
+<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='1200' height='425'>
+<defs>
+<svg id='waveform'>
+ <text text-anchor='end' fill='black' class='text' font-family='courier new' font-weight='bold' font-size='18' x='190' y='150'> Clock </text>
+ <!--clock-->
+ <path class='clock'  stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' d='M 200 129 231 129 231 159 262 159 262 159 262 159 262 129 293 129 293 159 324 159 324 159 324 159 324 129 355 129 355 159 386 159 386 159 386 159 386 129 417 129 417 159 448 159 448 159 448 159 448 129 479 129 479 159 510 159 510 159 510 159 510 129 541 129 541 159 572 159 572 159 572 159 572 129 603 129 603 159 634 159 634 159 634 159 634 129 665 129 665 159 696 159 696 159 696 159 696 129 727 129 727 159 758 159 758 159 758 159 758 129 789 129 789 159 820 159 820 159 820 159 820 129 851 129 851 159 882 159 882 159 882 159 882 129 913 129 913 159 944 159 944 159 944 159 944 129 975 129 975 159 1006 159 1006 159 1006 159 1006 129 1037 129 1037 159 1068 159 1068 159 1068 159 1068 129 1099 129 1099 159 1130 159 1130 159 1130 159 1130 129 1161 129 1161 159 1192 159 '/>
+ <text text-anchor='end' fill='black' class='text' font-family='courier new' font-weight='bold' font-size='18' x='190' y='200'> LAD </text>
+ <text text-anchor='end' fill='black' class='text' font-family='courier new' font-weight='bold' font-size='18' x='190' y='250'> LALE </text>
+ <text text-anchor='end' fill='black' class='text' font-family='courier new' font-weight='bold' font-size='18' x='190' y='300'> LCSn </text>
+ <text text-anchor='end' fill='black' class='text' font-family='courier new' font-weight='bold' font-size='18' x='190' y='350'> LWEn </text>
+ <text text-anchor='end' fill='black' class='text' font-family='courier new' font-weight='bold' font-size='18' x='190' y='400'> LGTA </text>
+ <!-- bus LAD -->
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bus'  points=' 200 194 268 194 '/>
+ <polygon stroke-dasharray='0' stroke-width='1' stroke='black' fill='white' class='bus'  points=' 268 194 274 179 330 179 336 194 330 209 274 209 268 194 ' />
+ <text text-anchor='middle' fill='black' class='text' font-family='courier new' font-weight='normal' font-size='18' x='305' y='200'>  addr </text>
+ <polygon stroke-dasharray='0' stroke-width='1' stroke='black' fill='white' class='bus'  points=' 336 194 342 179 1136 179 1142 194 1136 209 342 209 336 194 ' />
+ <text text-anchor='middle' fill='black' class='text' font-family='courier new' font-weight='normal' font-size='18' x='742' y='200'>  write data </text>
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bus'  points=' 1142 194 1260 194 '/>
+ <!-- bit LALE -->
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bit' points=' 200 259 268 259 280 229  ' />
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bit' points=' 280 229 330 229 342 259  ' />
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bit' points=' 342 259 1260 259  ' />
+ <!-- bit LCSn -->
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bit' points=' 200 279 330 279 342 309  ' />
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bit' points=' 342 309 1136 309 1148 279  ' />
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bit' points=' 1148 279 1260 279  ' />
+ <!-- bit LWEn -->
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bit' points=' 200 329 392 329 404 359  ' />
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bit' points=' 404 359 1136 359 1148 329  ' />
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bit' points=' 1148 329 1260 329  ' />
+ <!-- bit LGTA -->
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bit' points=' 200 379 897 379 909 409  ' />
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bit' points=' 909 409 959 409 971 379  ' />
+ <polyline stroke-dasharray='0' stroke-width='1' stroke='black' fill='none' class='bit' points=' 971 379 1269 379  ' />
+ <!-- text -->
+ <text text-anchor='middle' fill='black' class='text' font-family='courier new' font-weight='normal' font-size='18' x='306' y='100' >  </text>
+ <!-- text -->
+ <text text-anchor='start' fill='#005000' class='text' font-family='courier new' font-weight='normal' font-size='18' x='306' y='100' > Local Bus </text>
+ <!-- tear -->
+ <!-- tear -->
+ <path fill='white' stroke='white' d='M 481,322 Q 471,334 481,344 Q 491,354 481,366 L 491,366 Q 501,354 491,344 Q 481,334 491,322 L 481,322' />
+ <path fill='none' stroke='gray' d='M 481,322 Q 471,334 481,344 Q 491,354 481,366 M 491,366 Q 501,354 491,344 Q 481,334 491,322 '/>
+ <path fill='white' stroke='white' d='M 481,172 Q 471,184 481,194 Q 491,204 481,216 L 491,216 Q 501,204 491,194 Q 481,184 491,172 L 481,172' />
+ <path fill='none' stroke='gray' d='M 481,172 Q 471,184 481,194 Q 491,204 481,216 M 491,216 Q 501,204 491,194 Q 481,184 491,172 '/>
+ <path fill='white' stroke='white' d='M 481,272 Q 471,284 481,294 Q 491,304 481,316 L 491,316 Q 501,304 491,294 Q 481,284 491,272 L 481,272' />
+ <path fill='none' stroke='gray' d='M 481,272 Q 471,284 481,294 Q 491,304 481,316 M 491,316 Q 501,304 491,294 Q 481,284 491,272 '/>
+ <path fill='white' stroke='white' d='M 481,122 Q 471,134 481,144 Q 491,154 481,166 L 491,166 Q 501,154 491,144 Q 481,134 491,122 L 481,122' />
+ <path fill='none' stroke='gray' d='M 481,122 Q 471,134 481,144 Q 491,154 481,166 M 491,166 Q 501,154 491,144 Q 481,134 491,122 '/>
+ <path fill='white' stroke='white' d='M 481,372 Q 471,384 481,394 Q 491,404 481,416 L 491,416 Q 501,404 491,394 Q 481,384 491,372 L 481,372' />
+ <path fill='none' stroke='gray' d='M 481,372 Q 471,384 481,394 Q 491,404 481,416 M 491,416 Q 501,404 491,394 Q 481,384 491,372 '/>
+ <path fill='white' stroke='white' d='M 481,22 Q 471,34 481,44 Q 491,54 481,66 L 491,66 Q 501,54 491,44 Q 481,34 491,22 L 481,22' />
+ <path fill='none' stroke='gray' d='M 481,22 Q 471,34 481,44 Q 491,54 481,66 M 491,66 Q 501,54 491,44 Q 481,34 491,22 '/>
+ <path fill='white' stroke='white' d='M 481,222 Q 471,234 481,244 Q 491,254 481,266 L 491,266 Q 501,254 491,244 Q 481,234 491,222 L 481,222' />
+ <path fill='none' stroke='gray' d='M 481,222 Q 471,234 481,244 Q 491,254 481,266 M 491,266 Q 501,254 491,244 Q 481,234 491,222 '/>
+ <!-- bar -->
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='200' y1='8' x2='200' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='262' y1='8' x2='262' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='324' y1='8' x2='324' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='386' y1='8' x2='386' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='448' y1='8' x2='448' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='510' y1='8' x2='510' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='572' y1='8' x2='572' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='634' y1='8' x2='634' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='696' y1='8' x2='696' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='758' y1='8' x2='758' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='820' y1='8' x2='820' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='882' y1='8' x2='882' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='944' y1='8' x2='944' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='1006' y1='8' x2='1006' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='1068' y1='8' x2='1068' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='1130' y1='8' x2='1130' y2='425' />
+ <line stroke-dasharray='1' stroke='black' class='bar' x1='1192' y1='8' x2='1192' y2='425' />
+ <!-- counter -->
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='231' y='50'> t0 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='293' y='50'> t1 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='355' y='50'> t2 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='417' y='50'> t3 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='479' y='50'> t4 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='541' y='50'> t5 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='603' y='50'> t6 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='665' y='50'> t7 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='727' y='50'> t8 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='789' y='50'> t9 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='851' y='50'> t10 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='913' y='50'> t11 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='975' y='50'> t12 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='1037' y='50'> t13 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='1099' y='50'> t14 </text>
+ <text text-anchor='middle' fill='black' class='counter' font-family='courier new' font-weight='normal' font-size='18' x='1161' y='50'> t15 </text>
+ </svg>
+ </defs>
+ <svg  viewBox='0 0 1200 425'  width='1200'  height='425' x='0' y='0'><use xlink:href='#waveform'/></svg>
+ </svg>
