@@ -1,0 +1,48 @@
+# timing-gen input file
+# tutorial 
+# conf scope
+
+%Conf = (
+         delay => 0.2,
+        );
+
+@Waves =
+  (
+   {type   => bar,
+    name   => bar1,
+    },
+   {type   => counter,
+   },
+
+   {type   => bit,
+    name   => sig_1,
+    change => [[0,0], [2,1], [4,0,{delay=>0}], [7,1]],
+   },
+
+   {type   => measure,
+    list   => {'global'=>[[sig_1,2,{delay=>0}],[sig_1,2]],
+               'local'=>[[sig_1,4,{delay=>0}],[sig_1,4,{delay=>0}]],
+               'global '=>[[sig_1,7,{delay=>0}],[sig_1,7,{delay=>0.2}]],
+              },
+    },
+
+   {type   => bit,
+    name   => sig_2,
+    conf   => {delay => 0.4},
+    change => [[0,0], [2,1, {delay=>0.7}], [4,0,{delay=>-0.1}], [7,1]],
+   },
+
+   {type   => measure,
+    list   => {'signal'=>[[sig_2,7, {delay=>0}],[sig_2,7,{delay=>0.4}]],
+               'local '=>[[sig_2,4,{delay=>0}],[sig_2,4,{delay=>-0.1}]],
+               'local'=>[[sig_2,2,{delay=>0}],[sig_2,2,{delay=>0.7}]],
+               },
+    },
+   { type => bit,
+     name => sig_3,
+    
+     change => [[0,0], [3,1], [6,0]]
+   }
+  );
+
+1;
