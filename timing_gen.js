@@ -1,10 +1,12 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Main JavaScript Application
+// Main JavaScript Application using Paper.js
 
 class TimingGenApp {
     constructor() {
         this.canvas = document.getElementById('waveform-canvas');
-        this.ctx = this.canvas.getContext('2d');
+        
+        // Setup Paper.js
+        paper.setup(this.canvas);
         
         // Configuration
         this.config = {
@@ -28,6 +30,11 @@ class TimingGenApp {
         this.draggedSignal = null;
         this.dragIndicator = null;
         
+        // Paper.js layers
+        this.backgroundLayer = new paper.Layer();
+        this.gridLayer = new paper.Layer();
+        this.signalLayer = new paper.Layer();
+        
         this.initializeCanvas();
         this.setupEventListeners();
         this.render();
@@ -38,6 +45,7 @@ class TimingGenApp {
         const height = this.config.headerHeight + 10 * this.config.rowHeight + 100;
         this.canvas.width = width;
         this.canvas.height = height;
+        paper.view.viewSize = new paper.Size(width, height);
     }
     
     setupEventListeners() {
@@ -65,8 +73,11 @@ class TimingGenApp {
         document.getElementById('edit-signal-menu').addEventListener('click', () => this.showEditSignalDialog());
         document.getElementById('delete-signal-menu').addEventListener('click', () => this.deleteSignal());
         
-        // Canvas events
-        this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+        // Canvas events using Paper.js tool
+        const tool = new paper.Tool();
+        tool.onMouseDown = (event) => this.handleCanvasClick(event);
+        
+        // Context menu
         this.canvas.addEventListener('contextmenu', (e) => this.handleCanvasRightClick(e));
         
         // Close dialogs and menus on outside click
@@ -234,16 +245,15 @@ class TimingGenApp {
         this.render();
     }
     
-    handleCanvasClick(e) {
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+    handleCanvasClick(event) {
+        const x = event.point.x;
+        const y = event.point.y;
         
         // Check if click is in signal name area
         if (x < this.config.nameColumnWidth) {
             const signalIndex = this.getSignalIndexAtY(y);
             if (signalIndex !== -1) {
-                this.startDragSignal(signalIndex, e);
+                this.startDragSignal(signalIndex, event);
             }
             return;
         }
@@ -370,7 +380,7 @@ class TimingGenApp {
         return (index >= 0 && index < this.signals.length) ? index : -1;
     }
     
-    startDragSignal(signalIndex, e) {
+    startDragSignal(signalIndex, event) {
         this.draggedSignal = signalIndex;
         
         const rect = this.canvas.getBoundingClientRect();
@@ -427,64 +437,80 @@ class TimingGenApp {
     }
     
     render() {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // Clear all layers
+        this.backgroundLayer.removeChildren();
+        this.gridLayer.removeChildren();
+        this.signalLayer.removeChildren();
         
-        // Draw background
-        this.ctx.fillStyle = this.config.backgroundColor;
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        // Activate background layer and draw
+        this.backgroundLayer.activate();
+        const background = new paper.Path.Rectangle({
+            point: [0, 0],
+            size: [paper.view.size.width, paper.view.size.height],
+            fillColor: this.config.backgroundColor
+        });
         
         // Draw grid
+        this.gridLayer.activate();
         this.drawGrid();
         
         // Draw header with cycle numbers
         this.drawHeader();
         
         // Draw signals
+        this.signalLayer.activate();
         this.signals.forEach((signal, index) => {
             this.drawSignal(signal, index);
         });
+        
+        paper.view.draw();
     }
     
     drawGrid() {
-        this.ctx.strokeStyle = this.config.gridColor;
-        this.ctx.lineWidth = 1;
-        
         // Vertical lines (cycle dividers)
         for (let i = 0; i <= this.config.cycles; i++) {
             const x = this.config.nameColumnWidth + i * this.config.cycleWidth;
-            this.ctx.beginPath();
-            this.ctx.moveTo(x, 0);
-            this.ctx.lineTo(x, this.canvas.height);
-            this.ctx.stroke();
+            const line = new paper.Path.Line({
+                from: [x, 0],
+                to: [x, paper.view.size.height],
+                strokeColor: this.config.gridColor,
+                strokeWidth: 1
+            });
         }
         
         // Horizontal lines (signal dividers)
         for (let i = 0; i <= this.signals.length; i++) {
             const y = this.config.headerHeight + i * this.config.rowHeight;
-            this.ctx.beginPath();
-            this.ctx.moveTo(0, y);
-            this.ctx.lineTo(this.canvas.width, y);
-            this.ctx.stroke();
+            const line = new paper.Path.Line({
+                from: [0, y],
+                to: [paper.view.size.width, y],
+                strokeColor: this.config.gridColor,
+                strokeWidth: 1
+            });
         }
         
         // Name column divider
-        this.ctx.strokeStyle = '#999';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(this.config.nameColumnWidth, 0);
-        this.ctx.lineTo(this.config.nameColumnWidth, this.canvas.height);
-        this.ctx.stroke();
+        const divider = new paper.Path.Line({
+            from: [this.config.nameColumnWidth, 0],
+            to: [this.config.nameColumnWidth, paper.view.size.height],
+            strokeColor: '#999',
+            strokeWidth: 2
+        });
     }
     
     drawHeader() {
-        this.ctx.fillStyle = '#000';
-        this.ctx.font = '12px Arial';
-        this.ctx.textAlign = 'center';
-        
         for (let i = 0; i < this.config.cycles; i++) {
             const x = this.config.nameColumnWidth + i * this.config.cycleWidth + this.config.cycleWidth / 2;
             const y = 30;
-            this.ctx.fillText(i.toString(), x, y);
+            
+            const text = new paper.PointText({
+                point: [x, y],
+                content: i.toString(),
+                fillColor: 'black',
+                fontFamily: 'Arial',
+                fontSize: 12,
+                justification: 'center'
+            });
         }
     }
     
@@ -492,10 +518,15 @@ class TimingGenApp {
         const y = this.config.headerHeight + index * this.config.rowHeight;
         
         // Draw signal name
-        this.ctx.fillStyle = '#000';
-        this.ctx.font = 'bold 14px Arial';
-        this.ctx.textAlign = 'right';
-        this.ctx.fillText(signal.name, this.config.nameColumnWidth - 10, y + this.config.rowHeight / 2 + 5);
+        const nameText = new paper.PointText({
+            point: [this.config.nameColumnWidth - 10, y + this.config.rowHeight / 2 + 5],
+            content: signal.name,
+            fillColor: 'black',
+            fontFamily: 'Arial',
+            fontSize: 14,
+            fontWeight: 'bold',
+            justification: 'right'
+        });
         
         // Draw waveform
         if (signal.type === 'clock') {
@@ -508,14 +539,12 @@ class TimingGenApp {
     }
     
     drawClockWaveform(signal, baseY) {
-        this.ctx.strokeStyle = this.config.signalColor;
-        this.ctx.lineWidth = 2;
-        
         const highY = baseY + 20;
         const lowY = baseY + this.config.rowHeight - 20;
-        const midY = baseY + this.config.rowHeight / 2;
         
-        this.ctx.beginPath();
+        const path = new paper.Path();
+        path.strokeColor = this.config.signalColor;
+        path.strokeWidth = 2;
         
         for (let i = 0; i < this.config.cycles; i++) {
             const x1 = this.config.nameColumnWidth + i * this.config.cycleWidth;
@@ -523,27 +552,26 @@ class TimingGenApp {
             const x3 = x1 + this.config.cycleWidth;
             
             // Rising edge at start of cycle
-            this.ctx.moveTo(x1, lowY);
-            this.ctx.lineTo(x1, highY);
-            this.ctx.lineTo(x2, highY);
+            if (i === 0) {
+                path.moveTo(new paper.Point(x1, lowY));
+            }
+            path.lineTo(new paper.Point(x1, highY));
+            path.lineTo(new paper.Point(x2, highY));
             
             // Falling edge at middle of cycle
-            this.ctx.lineTo(x2, lowY);
-            this.ctx.lineTo(x3, lowY);
+            path.lineTo(new paper.Point(x2, lowY));
+            path.lineTo(new paper.Point(x3, lowY));
         }
-        
-        this.ctx.stroke();
     }
     
     drawBitWaveform(signal, baseY) {
-        this.ctx.strokeStyle = this.config.signalColor;
-        this.ctx.lineWidth = 2;
-        
         const highY = baseY + 20;
         const lowY = baseY + this.config.rowHeight - 20;
         const midY = baseY + this.config.rowHeight / 2;
         
-        this.ctx.beginPath();
+        const path = new paper.Path();
+        path.strokeColor = this.config.signalColor;
+        path.strokeWidth = 2;
         
         let lastValue = this.getBitValueAtCycle(signal, 0);
         let lastY = (lastValue === 1) ? highY : (lastValue === 'Z') ? midY : lowY;
@@ -554,32 +582,27 @@ class TimingGenApp {
             const currentY = (value === 1) ? highY : (value === 'Z') ? midY : lowY;
             
             if (i === 0) {
-                this.ctx.moveTo(x, currentY);
+                path.moveTo(new paper.Point(x, currentY));
             } else {
                 // Check if value changed at this cycle
                 if (signal.values[i] !== undefined && value !== lastValue) {
                     // Draw transition
                     if (lastValue === 'X' || value === 'X') {
-                        // Draw X pattern
-                        this.ctx.stroke();
-                        this.drawXPattern(x - this.config.cycleWidth, x, baseY, highY, lowY);
-                        this.ctx.beginPath();
-                        this.ctx.moveTo(x, currentY);
+                        // Draw X pattern - we'll handle this separately
+                        path.lineTo(new paper.Point(x, lastY));
                     } else {
                         // Normal transition
-                        this.ctx.lineTo(x, lastY);
-                        this.ctx.lineTo(x, currentY);
+                        path.lineTo(new paper.Point(x, lastY));
+                        path.lineTo(new paper.Point(x, currentY));
                     }
                 } else {
-                    this.ctx.lineTo(x, currentY);
+                    path.lineTo(new paper.Point(x, currentY));
                 }
             }
             
             lastValue = value;
             lastY = currentY;
         }
-        
-        this.ctx.stroke();
         
         // Draw X patterns for cycles with X value
         for (let i = 0; i < this.config.cycles; i++) {
@@ -593,8 +616,6 @@ class TimingGenApp {
     }
     
     drawBusWaveform(signal, baseY) {
-        this.ctx.lineWidth = 2;
-        
         const topY = baseY + 20;
         const bottomY = baseY + this.config.rowHeight - 20;
         const slew = this.config.slew;
@@ -609,66 +630,74 @@ class TimingGenApp {
             
             if (value === 'Z') {
                 // High-Z state - draw middle line
-                this.ctx.strokeStyle = this.config.signalColor;
                 const midY = baseY + this.config.rowHeight / 2;
-                this.ctx.beginPath();
-                this.ctx.moveTo(x1, midY);
-                this.ctx.lineTo(x2, midY);
-                this.ctx.stroke();
+                const line = new paper.Path.Line({
+                    from: [x1, midY],
+                    to: [x2, midY],
+                    strokeColor: this.config.signalColor,
+                    strokeWidth: 2
+                });
             } else if (value === 'X') {
                 // Unknown state - draw X pattern
                 this.drawXPattern(x1, x2, baseY, topY, bottomY);
             } else {
                 // Valid value - draw bus shape
-                this.ctx.strokeStyle = this.config.signalColor;
-                this.ctx.fillStyle = '#e8f4f8';
+                const path = new paper.Path();
+                path.strokeColor = this.config.signalColor;
+                path.strokeWidth = 2;
+                path.fillColor = '#e8f4f8';
                 
-                this.ctx.beginPath();
-                this.ctx.moveTo(x1 + slew, topY);
+                path.moveTo(new paper.Point(x1 + slew, topY));
                 
                 if (valueChanged) {
                     // Transition at end
-                    this.ctx.lineTo(x2 - slew, topY);
-                    this.ctx.lineTo(x2, topY + (bottomY - topY) / 2);
-                    this.ctx.lineTo(x2 - slew, bottomY);
+                    path.lineTo(new paper.Point(x2 - slew, topY));
+                    path.lineTo(new paper.Point(x2, topY + (bottomY - topY) / 2));
+                    path.lineTo(new paper.Point(x2 - slew, bottomY));
                 } else {
-                    this.ctx.lineTo(x2, topY);
-                    this.ctx.lineTo(x2, bottomY);
+                    path.lineTo(new paper.Point(x2, topY));
+                    path.lineTo(new paper.Point(x2, bottomY));
                 }
                 
-                this.ctx.lineTo(x1 + slew, bottomY);
-                this.ctx.lineTo(x1, bottomY + (topY - bottomY) / 2);
-                this.ctx.closePath();
-                
-                this.ctx.fill();
-                this.ctx.stroke();
+                path.lineTo(new paper.Point(x1 + slew, bottomY));
+                path.lineTo(new paper.Point(x1, bottomY + (topY - bottomY) / 2));
+                path.closePath();
                 
                 // Draw value text
-                this.ctx.fillStyle = '#000';
-                this.ctx.font = '12px Arial';
-                this.ctx.textAlign = 'center';
-                this.ctx.fillText(value, (x1 + x2) / 2, baseY + this.config.rowHeight / 2 + 4);
+                const text = new paper.PointText({
+                    point: [(x1 + x2) / 2, baseY + this.config.rowHeight / 2 + 4],
+                    content: value,
+                    fillColor: 'black',
+                    fontFamily: 'Arial',
+                    fontSize: 12,
+                    justification: 'center'
+                });
             }
         }
     }
     
     drawXPattern(x1, x2, baseY, topY, bottomY) {
-        this.ctx.strokeStyle = '#999';
-        this.ctx.lineWidth = 1;
-        
         // Draw light gray background
-        this.ctx.fillStyle = '#f0f0f0';
-        this.ctx.fillRect(x1, topY, x2 - x1, bottomY - topY);
+        const rect = new paper.Path.Rectangle({
+            point: [x1, topY],
+            size: [x2 - x1, bottomY - topY],
+            fillColor: '#f0f0f0'
+        });
         
         // Draw X pattern
-        this.ctx.beginPath();
-        this.ctx.moveTo(x1, topY);
-        this.ctx.lineTo(x2, bottomY);
-        this.ctx.moveTo(x1, bottomY);
-        this.ctx.lineTo(x2, topY);
-        this.ctx.stroke();
+        const line1 = new paper.Path.Line({
+            from: [x1, topY],
+            to: [x2, bottomY],
+            strokeColor: '#999',
+            strokeWidth: 1
+        });
         
-        this.ctx.lineWidth = 2;
+        const line2 = new paper.Path.Line({
+            from: [x1, bottomY],
+            to: [x2, topY],
+            strokeColor: '#999',
+            strokeWidth: 1
+        });
     }
     
     saveToJSON() {
@@ -722,37 +751,8 @@ class TimingGenApp {
     }
     
     exportToSVG() {
-        // Create SVG string from current canvas state
-        let svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${this.canvas.width}" height="${this.canvas.height}" viewBox="0 0 ${this.canvas.width} ${this.canvas.height}">
-<rect width="100%" height="100%" fill="white"/>
-`;
-        
-        // Draw header
-        for (let i = 0; i < this.config.cycles; i++) {
-            const x = this.config.nameColumnWidth + i * this.config.cycleWidth + this.config.cycleWidth / 2;
-            const y = 30;
-            svg += `<text x="${x}" y="${y}" text-anchor="middle" font-family="Arial" font-size="12">${i}</text>\n`;
-        }
-        
-        // Draw signals
-        this.signals.forEach((signal, index) => {
-            const y = this.config.headerHeight + index * this.config.rowHeight;
-            
-            // Signal name
-            svg += `<text x="${this.config.nameColumnWidth - 10}" y="${y + this.config.rowHeight / 2 + 5}" text-anchor="end" font-family="Arial" font-size="14" font-weight="bold">${signal.name}</text>\n`;
-            
-            // Waveform
-            if (signal.type === 'clock') {
-                svg += this.getClockSVG(signal, y);
-            } else if (signal.type === 'bit') {
-                svg += this.getBitSVG(signal, y);
-            } else if (signal.type === 'bus') {
-                svg += this.getBusSVG(signal, y);
-            }
-        });
-        
-        svg += '</svg>';
+        // Export using Paper.js
+        const svg = paper.project.exportSVG({ asString: true });
         
         const blob = new Blob([svg], { type: 'image/svg+xml' });
         const url = URL.createObjectURL(blob);
@@ -763,88 +763,6 @@ class TimingGenApp {
         a.click();
         
         URL.revokeObjectURL(url);
-    }
-    
-    getClockSVG(signal, baseY) {
-        const highY = baseY + 20;
-        const lowY = baseY + this.config.rowHeight - 20;
-        let path = '';
-        
-        for (let i = 0; i < this.config.cycles; i++) {
-            const x1 = this.config.nameColumnWidth + i * this.config.cycleWidth;
-            const x2 = x1 + this.config.cycleWidth / 2;
-            const x3 = x1 + this.config.cycleWidth;
-            
-            if (i === 0) {
-                path += `M ${x1} ${lowY} `;
-            }
-            path += `L ${x1} ${highY} L ${x2} ${highY} L ${x2} ${lowY} L ${x3} ${lowY} `;
-        }
-        
-        return `<path d="${path}" stroke="black" stroke-width="2" fill="none"/>\n`;
-    }
-    
-    getBitSVG(signal, baseY) {
-        const highY = baseY + 20;
-        const lowY = baseY + this.config.rowHeight - 20;
-        const midY = baseY + this.config.rowHeight / 2;
-        let path = '';
-        
-        let lastValue = this.getBitValueAtCycle(signal, 0);
-        let lastY = (lastValue === 1) ? highY : (lastValue === 'Z') ? midY : lowY;
-        
-        for (let i = 0; i <= this.config.cycles; i++) {
-            const x = this.config.nameColumnWidth + i * this.config.cycleWidth;
-            const value = (i < this.config.cycles) ? this.getBitValueAtCycle(signal, i) : lastValue;
-            const currentY = (value === 1) ? highY : (value === 'Z') ? midY : lowY;
-            
-            if (i === 0) {
-                path += `M ${x} ${currentY} `;
-            } else {
-                if (signal.values[i] !== undefined && value !== lastValue) {
-                    path += `L ${x} ${lastY} L ${x} ${currentY} `;
-                } else {
-                    path += `L ${x} ${currentY} `;
-                }
-            }
-            
-            lastValue = value;
-            lastY = currentY;
-        }
-        
-        return `<path d="${path}" stroke="black" stroke-width="2" fill="none"/>\n`;
-    }
-    
-    getBusSVG(signal, baseY) {
-        const topY = baseY + 20;
-        const bottomY = baseY + this.config.rowHeight - 20;
-        const slew = this.config.slew;
-        let svg = '';
-        
-        for (let i = 0; i < this.config.cycles; i++) {
-            const x1 = this.config.nameColumnWidth + i * this.config.cycleWidth;
-            const x2 = x1 + this.config.cycleWidth;
-            
-            const value = this.getBusValueAtCycle(signal, i);
-            const valueChanged = (signal.values[i + 1] !== undefined);
-            
-            if (value !== 'Z' && value !== 'X') {
-                let path = `M ${x1 + slew} ${topY} `;
-                
-                if (valueChanged) {
-                    path += `L ${x2 - slew} ${topY} L ${x2} ${topY + (bottomY - topY) / 2} L ${x2 - slew} ${bottomY} `;
-                } else {
-                    path += `L ${x2} ${topY} L ${x2} ${bottomY} `;
-                }
-                
-                path += `L ${x1 + slew} ${bottomY} L ${x1} ${bottomY + (topY - bottomY) / 2} Z`;
-                
-                svg += `<path d="${path}" stroke="black" stroke-width="2" fill="#e8f4f8"/>\n`;
-                svg += `<text x="${(x1 + x2) / 2}" y="${baseY + this.config.rowHeight / 2 + 4}" text-anchor="middle" font-family="Arial" font-size="12">${value}</text>\n`;
-            }
-        }
-        
-        return svg;
     }
 }
 
