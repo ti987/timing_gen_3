@@ -28,8 +28,7 @@ class TimingGenApp {
             slew: 4, // pixels for slew transition (default: 4)
             clockPeriod: 10, // default clock period value
             clockPeriodUnit: 'ns', // default time unit
-            delay: 0, // default delay value
-            delayUnit: 'ns', // default delay time unit
+            delay: 0, // default delay value in clock period units (0 cycles = 0% of clock period)
             gridColor: '#e0e0e0',
             signalColor: '#000000',
             backgroundColor: '#ffffff'
@@ -88,9 +87,26 @@ class TimingGenApp {
         document.getElementById('global-option-ok-btn').addEventListener('click', () => TimingGenUI.saveGlobalOptions(this));
         document.getElementById('global-option-cancel-btn').addEventListener('click', () => TimingGenUI.hideGlobalOptionDialog());
         
+        // Signal options dialog
+        document.getElementById('signal-options-ok-btn').addEventListener('click', () => TimingGenUI.saveSignalOptions(this));
+        document.getElementById('signal-options-cancel-btn').addEventListener('click', () => TimingGenUI.hideSignalOptionsDialog());
+        
+        // Cycle options dialog
+        document.getElementById('cycle-options-ok-btn').addEventListener('click', () => TimingGenUI.saveCycleOptions(this));
+        document.getElementById('cycle-options-cancel-btn').addEventListener('click', () => TimingGenUI.hideCycleOptionsDialog());
+        
         // Signal context menu
         document.getElementById('edit-signal-menu').addEventListener('click', () => TimingGenUI.showEditSignalDialog(this));
+        document.getElementById('signal-options-menu').addEventListener('click', () => TimingGenUI.showSignalOptionsDialog(this));
         document.getElementById('delete-signal-menu').addEventListener('click', () => this.deleteSignal());
+        document.getElementById('cancel-signal-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Bit cycle context menu - add cycle options and cancel handlers
+        document.getElementById('bit-cycle-options-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            TimingGenUI.showCycleOptionsDialog(this);
+        });
+        document.getElementById('cancel-bit-cycle-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Canvas events using Paper.js tool
         const tool = new paper.Tool();
@@ -333,6 +349,34 @@ class TimingGenApp {
             }
         }
         return value;
+    }
+    
+    // Get effective slew value with priority: cycle > signal > global
+    getEffectiveSlew(signal, cycle) {
+        // Check cycle-level override
+        if (signal.cycleOptions && signal.cycleOptions[cycle] && signal.cycleOptions[cycle].slew !== undefined) {
+            return signal.cycleOptions[cycle].slew;
+        }
+        // Check signal-level override
+        if (signal.slew !== undefined) {
+            return signal.slew;
+        }
+        // Use global default
+        return this.config.slew;
+    }
+    
+    // Get effective delay value with priority: cycle > signal > global
+    getEffectiveDelay(signal, cycle) {
+        // Check cycle-level override
+        if (signal.cycleOptions && signal.cycleOptions[cycle] && signal.cycleOptions[cycle].delay !== undefined) {
+            return signal.cycleOptions[cycle].delay;
+        }
+        // Check signal-level override
+        if (signal.delay !== undefined) {
+            return signal.delay;
+        }
+        // Use global default
+        return this.config.delay;
     }
     
     getSignalIndexAtY(y) {

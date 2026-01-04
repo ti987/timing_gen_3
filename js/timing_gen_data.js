@@ -11,8 +11,7 @@ class TimingGenData {
                 clockPeriod: app.config.clockPeriod,
                 clockPeriodUnit: app.config.clockPeriodUnit,
                 slew: app.config.slew,
-                delay: app.config.delay,
-                delayUnit: app.config.delayUnit
+                delay: app.config.delay
             },
             signals: app.signals
         };
@@ -56,9 +55,7 @@ class TimingGenData {
                     if (data.config.delay !== undefined) {
                         app.config.delay = data.config.delay;
                     }
-                    if (data.config.delayUnit !== undefined) {
-                        app.config.delayUnit = data.config.delayUnit;
-                    }
+                    // Ignore old delayUnit field for backward compatibility
                 }
                 
                 if (data.signals) {

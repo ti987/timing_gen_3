@@ -164,15 +164,24 @@ class TimingGenRendering {
             }
         }
         
-        // Draw the line path, skipping X regions
+        // Draw the line path with slew transitions and delays
         const path = new paper.Path();
         path.strokeColor = app.config.signalColor;
         path.strokeWidth = 2;
         
         let pathStarted = false;
+        let prevX = null;
+        let prevY = null;
         
         for (let i = 0; i <= app.config.cycles; i++) {
-            const x = app.config.nameColumnWidth + i * app.config.cycleWidth;
+            // Get delay for this cycle
+            const delay = i < app.config.cycles ? app.getEffectiveDelay(signal, i) : 0;
+            const delayPixels = delay * app.config.cycleWidth;
+            
+            // Get slew for this cycle
+            const slew = i < app.config.cycles ? app.getEffectiveSlew(signal, i) : app.config.slew;
+            
+            const x = app.config.nameColumnWidth + i * app.config.cycleWidth + delayPixels;
             
             const value = (i < app.config.cycles) ? app.getBitValueAtCycle(signal, i) : app.getBitValueAtCycle(signal, app.config.cycles - 1);
             const currentY = (value === 1) ? highY : (value === 'Z') ? midY : lowY;
@@ -181,6 +190,8 @@ class TimingGenRendering {
                 // Start or restart the path
                 path.moveTo(new paper.Point(x, currentY));
                 pathStarted = true;
+                prevX = x;
+                prevY = currentY;
             } else {
                 // Continue the path
                 const prevCycle = i - 1;
@@ -192,12 +203,14 @@ class TimingGenRendering {
                 
                 if (lastNonXCycle >= 0) {
                     const prevValue = app.getBitValueAtCycle(signal, lastNonXCycle);
-                    const prevY = (prevValue === 1) ? highY : (prevValue === 'Z') ? midY : lowY;
+                    const prevValueY = (prevValue === 1) ? highY : (prevValue === 'Z') ? midY : lowY;
                     
                     // Check if value actually changed
                     if (value !== prevValue) {
-                        // Draw transition
-                        path.lineTo(new paper.Point(x, prevY));
+                        // Draw transition with slew
+                        // First, draw horizontal line to just before transition
+                        path.lineTo(new paper.Point(x - slew, prevValueY));
+                        // Then draw sloped transition
                         path.lineTo(new paper.Point(x, currentY));
                     } else {
                         // Same value, just continue
@@ -207,6 +220,9 @@ class TimingGenRendering {
                     // No previous non-X cycle, just draw to current
                     path.lineTo(new paper.Point(x, currentY));
                 }
+                
+                prevX = x;
+                prevY = currentY;
             }
         }
         
@@ -221,9 +237,9 @@ class TimingGenRendering {
     static drawBusWaveform(app, signal, baseY) {
         const topY = baseY + 20;
         const bottomY = baseY + app.config.rowHeight - 20;
-        const slew = app.config.slew;
+        const midY = baseY + app.config.rowHeight / 2;
         
-        // First pass: identify value spans
+        // First pass: identify value spans with their cycles
         let i = 0;
         while (i < app.config.cycles) {
             const value = app.getBusValueAtCycle(signal, i);
@@ -247,12 +263,19 @@ class TimingGenRendering {
                 spanEnd = app.config.cycles - 1;
             }
             
-            const x1 = app.config.nameColumnWidth + spanStart * app.config.cycleWidth;
+            // Get delay for this cycle
+            const delay = app.getEffectiveDelay(signal, spanStart);
+            const delayPixels = delay * app.config.cycleWidth;
+            
+            // Calculate start position (at grid line + delay)
+            const x1 = app.config.nameColumnWidth + spanStart * app.config.cycleWidth + delayPixels;
             const x2 = app.config.nameColumnWidth + (spanEnd + 1) * app.config.cycleWidth;
+            
+            // Get slew for transitions
+            const slew = app.getEffectiveSlew(signal, spanStart);
             
             if (value === 'Z') {
                 // High-Z state - draw middle line
-                const midY = baseY + app.config.rowHeight / 2;
                 const line = new paper.Path.Line({
                     from: [x1, midY],
                     to: [x2, midY],
@@ -263,29 +286,54 @@ class TimingGenRendering {
                 // Unknown state - draw X pattern for the entire span
                 TimingGenRendering.drawXPattern(x1, x2, baseY, topY, bottomY, app.config.signalColor);
             } else {
-                // Valid value - draw bus shape for the entire span
+                // Valid value - check if we need transition from/to X
+                const prevValue = spanStart > 0 ? app.getBusValueAtCycle(signal, spanStart - 1) : null;
+                const nextValue = spanEnd + 1 < app.config.cycles ? app.getBusValueAtCycle(signal, spanEnd + 1) : null;
+                const hasNextValue = (spanEnd + 1 < app.config.cycles && signal.values[spanEnd + 1] !== undefined);
+                
+                // Draw bus shape with X-shaped transitions
                 const path = new paper.Path();
                 path.strokeColor = app.config.signalColor;
                 path.strokeWidth = 2;
                 path.fillColor = '#e8f4f8';
                 
-                // Check if there's a transition at the end
-                const hasNextValue = (spanEnd + 1 < app.config.cycles && signal.values[spanEnd + 1] !== undefined);
+                // Start with X-shaped transition if coming from X or at beginning
+                if (prevValue === 'X' || prevValue === null || spanStart === 0) {
+                    // X-shaped start transition
+                    path.moveTo(new paper.Point(x1, midY));
+                    path.lineTo(new paper.Point(x1 + slew, topY));
+                } else {
+                    // Normal start
+                    path.moveTo(new paper.Point(x1 + slew, topY));
+                }
                 
-                path.moveTo(new paper.Point(x1 + slew, topY));
-                
+                // Top line
                 if (hasNextValue) {
-                    // Transition at end
                     path.lineTo(new paper.Point(x2 - slew, topY));
-                    path.lineTo(new paper.Point(x2, topY + (bottomY - topY) / 2));
-                    path.lineTo(new paper.Point(x2 - slew, bottomY));
+                    
+                    // End with X-shaped transition if going to X or changing value
+                    if (nextValue === 'X') {
+                        path.lineTo(new paper.Point(x2, midY));
+                        path.lineTo(new paper.Point(x2 - slew, bottomY));
+                    } else {
+                        // Normal transition
+                        path.lineTo(new paper.Point(x2, midY));
+                        path.lineTo(new paper.Point(x2 - slew, bottomY));
+                    }
                 } else {
                     path.lineTo(new paper.Point(x2, topY));
                     path.lineTo(new paper.Point(x2, bottomY));
                 }
                 
+                // Bottom line
                 path.lineTo(new paper.Point(x1 + slew, bottomY));
-                path.lineTo(new paper.Point(x1, bottomY + (topY - bottomY) / 2));
+                
+                // Close with X-shaped transition if coming from X
+                if (prevValue === 'X' || prevValue === null || spanStart === 0) {
+                    path.lineTo(new paper.Point(x1, midY));
+                } else {
+                    path.lineTo(new paper.Point(x1, midY));
+                }
                 path.closePath();
                 
                 // Draw value text in the middle of the span
