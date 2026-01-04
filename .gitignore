@@ -1,0 +1,25 @@
+# Dependencies
+paper-full.min.js
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+/tmp/
+*.tmp
