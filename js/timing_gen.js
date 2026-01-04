@@ -610,11 +610,11 @@ class TimingGenApp {
             // Check if this cycle is in an X span
             const inXSpan = xSpans.some(span => i >= span.start && i <= span.end);
             
-            if (inXSpan) {
-                // We're in an X region, skip drawing but note we need to restart path after
-                pathStarted = false;
-                continue;
-            }
+            //if (inXSpan) {
+            //    // We're in an X region, skip drawing but note we need to restart path after
+            //    pathStarted = false;
+            //    continue;
+            //}
             
             const value = (i < this.config.cycles) ? this.getBitValueAtCycle(signal, i) : this.getBitValueAtCycle(signal, this.config.cycles - 1);
             const currentY = (value === 1) ? highY : (value === 'Z') ? midY : lowY;
