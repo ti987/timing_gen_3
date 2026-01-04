@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timing Gen 3 - Interactive Digital Logic Waveform Editor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Top Menu Bar -->
+        <div id="menu-bar">
+            <button id="add-signal-btn" class="menu-btn">Add Signal</button>
+            <button id="save-btn" class="menu-btn">Save</button>
+            <button id="load-btn" class="menu-btn">Load</button>
+            <button id="export-svg-btn" class="menu-btn">Export SVG</button>
+            <input type="file" id="file-input" accept=".json" style="display: none;">
+            <label>Cycles: </label>
+            <input type="number" id="cycles-input" value="20" min="5" max="100" style="width: 60px;">
+        </div>
+
+        <!-- Drawing Area -->
+        <div id="drawing-area">
+            <canvas id="waveform-canvas"></canvas>
+        </div>
+
+        <!-- Signal Name Column (overlay) -->
+        <div id="signal-names"></div>
+    </div>
+
+    <!-- Add Signal Dialog -->
+    <div id="add-signal-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Add Signal</h3>
+            <label>Signal Name:</label>
+            <input type="text" id="signal-name-input" placeholder="Enter signal name">
+            <br><br>
+            <label>Type:</label>
+            <select id="signal-type-select">
+                <option value="clock">Clock</option>
+                <option value="bit">Bit</option>
+                <option value="bus">Bus</option>
+            </select>
+            <br><br>
+            <button id="dialog-ok-btn" class="dialog-btn">OK</button>
+            <button id="dialog-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Edit Signal Dialog -->
+    <div id="edit-signal-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Edit Signal</h3>
+            <label>Signal Name:</label>
+            <input type="text" id="edit-signal-name-input" placeholder="Enter signal name">
+            <br><br>
+            <label>Type:</label>
+            <select id="edit-signal-type-select">
+                <option value="clock">Clock</option>
+                <option value="bit">Bit</option>
+                <option value="bus">Bus</option>
+            </select>
+            <br><br>
+            <button id="edit-dialog-ok-btn" class="dialog-btn">OK</button>
+            <button id="edit-dialog-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Bus Value Dialog -->
+    <div id="bus-value-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Set Bus Value</h3>
+            <label>Radix:</label>
+            <select id="bus-radix-select">
+                <option value="hex">Hex</option>
+                <option value="dec">Dec</option>
+                <option value="string">String</option>
+                <option value="X">X (Unknown)</option>
+                <option value="Z">Z (High-Z)</option>
+            </select>
+            <br><br>
+            <label>Value:</label>
+            <input type="text" id="bus-value-input" placeholder="Enter value">
+            <br><br>
+            <button id="bus-dialog-ok-btn" class="dialog-btn">OK</button>
+            <button id="bus-dialog-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Context Menu for Signal -->
+    <div id="signal-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="edit-signal-menu">Edit</div>
+        <div class="menu-item" id="delete-signal-menu">Delete</div>
+    </div>
+
+    <!-- Context Menu for Bit Signal Cycle -->
+    <div id="bit-cycle-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" data-value="0">0 (Low)</div>
+        <div class="menu-item" data-value="1">1 (High)</div>
+        <div class="menu-item" data-value="X">X (Unknown)</div>
+        <div class="menu-item" data-value="Z">Z (High-Z)</div>
+    </div>
+
+    <script src="timing_gen.js"></script>
+</body>
+</html>
