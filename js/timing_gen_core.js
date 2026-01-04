@@ -249,6 +249,12 @@ class TimingGenApp {
     }
     
     handleCanvasClick(event) {
+        // Only handle left mouse button clicks (button 0)
+        // Right clicks are handled by handleCanvasRightClick
+        if (event.event && event.event.button !== 0) {
+            return;
+        }
+        
         const x = event.point.x;
         const y = event.point.y;
         
@@ -301,7 +307,8 @@ class TimingGenApp {
         if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
             const signal = this.signals[signalIndex];
             
-            if (signal.type === 'bit') {
+            // Show cycle context menu for both bit and bus signals
+            if (signal.type === 'bit' || signal.type === 'bus') {
                 this.currentEditingSignal = signalIndex;
                 this.currentEditingCycle = cycle;
                 TimingGenUI.showBitCycleContextMenu(this, e.clientX, e.clientY);

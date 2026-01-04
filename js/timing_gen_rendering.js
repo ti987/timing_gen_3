@@ -181,7 +181,10 @@ class TimingGenRendering {
             // Get slew for this cycle
             const slew = i < app.config.cycles ? app.getEffectiveSlew(signal, i) : app.config.slew;
             
-            const x = app.config.nameColumnWidth + i * app.config.cycleWidth + delayPixels;
+            // Base x position at grid line
+            const baseX = app.config.nameColumnWidth + i * app.config.cycleWidth;
+            // Actual transition point after delay
+            const x = baseX + delayPixels;
             
             const value = (i < app.config.cycles) ? app.getBitValueAtCycle(signal, i) : app.getBitValueAtCycle(signal, app.config.cycles - 1);
             const currentY = (value === 1) ? highY : (value === 'Z') ? midY : lowY;
@@ -208,9 +211,10 @@ class TimingGenRendering {
                     // Check if value actually changed
                     if (value !== prevValue) {
                         // Draw transition with slew
-                        // First, draw horizontal line to just before transition
+                        // The slew should start BEFORE the transition point (x)
+                        // First, draw horizontal line to slew pixels before transition
                         path.lineTo(new paper.Point(x - slew, prevValueY));
-                        // Then draw sloped transition
+                        // Then draw sloped transition to the actual transition point
                         path.lineTo(new paper.Point(x, currentY));
                     } else {
                         // Same value, just continue
@@ -267,12 +271,14 @@ class TimingGenRendering {
             const delay = app.getEffectiveDelay(signal, spanStart);
             const delayPixels = delay * app.config.cycleWidth;
             
-            // Calculate start position (at grid line + delay)
-            const x1 = app.config.nameColumnWidth + spanStart * app.config.cycleWidth + delayPixels;
-            const x2 = app.config.nameColumnWidth + (spanEnd + 1) * app.config.cycleWidth;
-            
             // Get slew for transitions
             const slew = app.getEffectiveSlew(signal, spanStart);
+            
+            // Calculate start position (at grid line + delay)
+            // The grid line is where the transition should end, so slew should start before it
+            const baseX1 = app.config.nameColumnWidth + spanStart * app.config.cycleWidth;
+            const x1 = baseX1 + delayPixels; // Actual transition point
+            const x2 = app.config.nameColumnWidth + (spanEnd + 1) * app.config.cycleWidth;
             
             if (value === 'Z') {
                 // High-Z state - draw middle line
@@ -299,12 +305,12 @@ class TimingGenRendering {
                 
                 // Start with X-shaped transition if coming from X or at beginning
                 if (prevValue === 'X' || prevValue === null || spanStart === 0) {
-                    // X-shaped start transition
-                    path.moveTo(new paper.Point(x1, midY));
-                    path.lineTo(new paper.Point(x1 + slew, topY));
+                    // X-shaped start transition - starts BEFORE the transition point
+                    path.moveTo(new paper.Point(x1 - slew, midY));
+                    path.lineTo(new paper.Point(x1, topY));
                 } else {
-                    // Normal start
-                    path.moveTo(new paper.Point(x1 + slew, topY));
+                    // Normal start - the slew has already brought us to the transition point
+                    path.moveTo(new paper.Point(x1, topY));
                 }
                 
                 // Top line
@@ -326,11 +332,11 @@ class TimingGenRendering {
                 }
                 
                 // Bottom line
-                path.lineTo(new paper.Point(x1 + slew, bottomY));
+                path.lineTo(new paper.Point(x1, bottomY));
                 
                 // Close with X-shaped transition if coming from X
                 if (prevValue === 'X' || prevValue === null || spanStart === 0) {
-                    path.lineTo(new paper.Point(x1, midY));
+                    path.lineTo(new paper.Point(x1 - slew, midY));
                 } else {
                     path.lineTo(new paper.Point(x1, midY));
                 }
