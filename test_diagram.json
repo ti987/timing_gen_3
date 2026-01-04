@@ -1,0 +1,36 @@
+{
+  "version": "3.0",
+  "config": {
+    "cycles": 20
+  },
+  "signals": [
+    {
+      "name": "clk",
+      "type": "clock",
+      "values": {}
+    },
+    {
+      "name": "cs#",
+      "type": "bit",
+      "values": {
+        "0": 0,
+        "2": 1,
+        "5": "X",
+        "8": 1,
+        "11": 0,
+        "17": 1
+      }
+    },
+    {
+      "name": "data",
+      "type": "bus",
+      "values": {
+        "0": "X",
+        "3": "0xAB",
+        "8": "Z",
+        "12": "0xCD",
+        "17": "Z"
+      }
+    }
+  ]
+}

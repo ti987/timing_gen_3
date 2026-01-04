@@ -3,15 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Timing Gen 3 - Interactive Digital Logic Waveform Editor</title>
+    <title>Timing Gen 3 - Test Demo</title>
     <link rel="stylesheet" href="css/style.css">
-    <!-- Paper.js library: Using local shim (replace with CDN in production) -->
-    <!-- For CDN: <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script> -->
     <script src="js/paper-shim.js"></script>
 </head>
 <body>
     <div id="app">
-        <!-- Top Menu Bar -->
         <div id="menu-bar">
             <button id="add-signal-btn" class="menu-btn">Add Signal</button>
             <button id="save-btn" class="menu-btn">Save</button>
@@ -21,17 +18,13 @@
             <label>Cycles: </label>
             <input type="number" id="cycles-input" value="20" min="5" max="100" style="width: 60px;">
         </div>
-
-        <!-- Drawing Area -->
         <div id="drawing-area">
             <canvas id="waveform-canvas" data-paper-resize="true"></canvas>
         </div>
-
-        <!-- Signal Name Column (overlay) -->
         <div id="signal-names"></div>
     </div>
 
-    <!-- Add Signal Dialog -->
+    <!-- Dialogs (same as index.html) -->
     <div id="add-signal-dialog" class="dialog" style="display: none;">
         <div class="dialog-content">
             <h3>Add Signal</h3>
@@ -50,7 +43,6 @@
         </div>
     </div>
 
-    <!-- Edit Signal Dialog -->
     <div id="edit-signal-dialog" class="dialog" style="display: none;">
         <div class="dialog-content">
             <h3>Edit Signal</h3>
@@ -69,7 +61,6 @@
         </div>
     </div>
 
-    <!-- Bus Value Dialog -->
     <div id="bus-value-dialog" class="dialog" style="display: none;">
         <div class="dialog-content">
             <h3>Set Bus Value</h3>
@@ -90,13 +81,11 @@
         </div>
     </div>
 
-    <!-- Context Menu for Signal -->
     <div id="signal-context-menu" class="context-menu" style="display: none;">
         <div class="menu-item" id="edit-signal-menu">Edit</div>
         <div class="menu-item" id="delete-signal-menu">Delete</div>
     </div>
 
-    <!-- Context Menu for Bit Signal Cycle -->
     <div id="bit-cycle-context-menu" class="context-menu" style="display: none;">
         <div class="menu-item" data-value="0">0 (Low)</div>
         <div class="menu-item" data-value="1">1 (High)</div>
@@ -105,5 +94,59 @@
     </div>
 
     <script src="js/timing_gen.js"></script>
+    <script>
+        // Load test data after the app initializes
+        window.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                // Find the app instance
+                const canvas = document.getElementById('waveform-canvas');
+                if (canvas && canvas.__timingGenApp) {
+                    const app = canvas.__timingGenApp;
+                    // Load test data
+                    const testData = {
+                        "version": "3.0",
+                        "config": {
+                            "cycles": 20
+                        },
+                        "signals": [
+                            {
+                                "name": "clk",
+                                "type": "clock",
+                                "values": {}
+                            },
+                            {
+                                "name": "cs#",
+                                "type": "bit",
+                                "values": {
+                                    "0": 0,
+                                    "2": 1,
+                                    "5": "X",
+                                    "8": 1,
+                                    "11": 0,
+                                    "17": 1
+                                }
+                            },
+                            {
+                                "name": "data",
+                                "type": "bus",
+                                "values": {
+                                    "0": "X",
+                                    "3": "0xAB",
+                                    "8": "Z",
+                                    "12": "0xCD",
+                                    "17": "Z"
+                                }
+                            }
+                        ]
+                    };
+                    
+                    app.signals = testData.signals;
+                    app.config.cycles = testData.config.cycles;
+                    app.initializeCanvas();
+                    app.render();
+                }
+            }, 500);
+        });
+    </script>
 </body>
 </html>

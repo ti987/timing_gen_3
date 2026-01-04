@@ -1,5 +1,6 @@
 # Dependencies
 paper-full.min.js
+js/paper-full.min.js
 node_modules/
 
 # Build outputs

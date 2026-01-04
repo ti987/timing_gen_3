@@ -663,40 +663,39 @@ class TimingGenApp {
                 path.lineTo(new paper.Point(x1, bottomY + (topY - bottomY) / 2));
                 path.closePath();
                 
-                // Draw value text
-                const text = new paper.PointText({
-                    point: [(x1 + x2) / 2, baseY + this.config.rowHeight / 2 + 4],
-                    content: value,
-                    fillColor: 'black',
-                    fontFamily: 'Arial',
-                    fontSize: 12,
-                    justification: 'center'
-                });
+                // Draw value text only when value changes (at the start of the value span)
+                if (signal.values[i] !== undefined) {
+                    // Calculate how many cycles this value spans
+                    let spanCycles = 1;
+                    for (let j = i + 1; j < this.config.cycles; j++) {
+                        if (signal.values[j] !== undefined) break;
+                        spanCycles++;
+                    }
+                    
+                    // Draw text in the middle of the span
+                    const spanWidth = spanCycles * this.config.cycleWidth;
+                    const textX = x1 + spanWidth / 2;
+                    const text = new paper.PointText({
+                        point: [textX, baseY + this.config.rowHeight / 2 + 4],
+                        content: value,
+                        fillColor: 'black',
+                        fontFamily: 'Arial',
+                        fontSize: 12,
+                        justification: 'center'
+                    });
+                }
             }
         }
     }
     
     drawXPattern(x1, x2, baseY, topY, bottomY) {
-        // Draw light gray background
+        // Draw darker solid gray rectangle bounded by high and low state lines
         const rect = new paper.Path.Rectangle({
             point: [x1, topY],
             size: [x2 - x1, bottomY - topY],
-            fillColor: '#f0f0f0'
-        });
-        
-        // Draw X pattern
-        const line1 = new paper.Path.Line({
-            from: [x1, topY],
-            to: [x2, bottomY],
-            strokeColor: '#999',
-            strokeWidth: 1
-        });
-        
-        const line2 = new paper.Path.Line({
-            from: [x1, bottomY],
-            to: [x2, topY],
-            strokeColor: '#999',
-            strokeWidth: 1
+            fillColor: '#999999',
+            strokeColor: this.config.signalColor,
+            strokeWidth: 2
         });
     }
     
@@ -768,5 +767,8 @@ class TimingGenApp {
 
 // Initialize the application when the page loads
 window.addEventListener('DOMContentLoaded', () => {
-    new TimingGenApp();
+    const app = new TimingGenApp();
+    // Store reference for debugging/testing
+    window.timingGenApp = app;
+    document.getElementById('waveform-canvas').__timingGenApp = app;
 });

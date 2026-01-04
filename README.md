@@ -24,21 +24,26 @@ An interactive web-based digital logic waveform editor for creating and editing 
 
 ### Prerequisites
 
-1. **Paper.js Library**: Download Paper.js from:
+The application uses Paper.js from CDN, so no manual download is required. However, if you need offline access:
+
+1. **Paper.js Library** (optional for offline use): Download Paper.js from:
    ```
    https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js
    ```
    
-2. Place the downloaded `paper-full.min.js` file in the same directory as `index.html`
+2. Place the downloaded `paper-full.min.js` file in the `js/` directory
+3. Update `index.html` to use local file instead of CDN
 
 ### Running the Application
 
-1. Open `index.html` in a modern web browser
+1. Open `index.html` in a modern web browser (requires internet for CDN)
 2. Or serve it using a local web server:
    ```bash
    python3 -m http.server 8000
    ```
    Then open `http://localhost:8000/index.html` in your browser
+
+**Note**: The application will automatically fallback to a minimal Paper.js implementation (`js/paper-shim.js`) if the CDN is unavailable.
 
 ## Usage
 
@@ -98,10 +103,11 @@ An interactive web-based digital logic waveform editor for creating and editing 
 ## Technical Details
 
 - Built with HTML5, CSS3, and JavaScript
-- Uses Paper.js for vector graphics rendering
+- Uses Paper.js from CDN for vector graphics rendering (with local fallback)
 - Canvas-based drawing for high-quality output
 - JSON-based data storage format
 - SVG export for documentation
+- Organized structure: `js/` for JavaScript, `css/` for styles
 
 ## Data Format
 
