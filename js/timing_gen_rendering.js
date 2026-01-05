@@ -211,11 +211,10 @@ class TimingGenRendering {
                     // Check if value actually changed
                     if (value !== prevValue) {
                         // Draw transition with slew
-                        // The slew should start BEFORE the transition point (x)
-                        // First, draw horizontal line to slew pixels before transition
-                        path.lineTo(new paper.Point(x - slew, prevValueY));
-                        // Then draw sloped transition to the actual transition point
-                        path.lineTo(new paper.Point(x, currentY));
+                        // First, draw horizontal line at transition
+                        path.lineTo(new paper.Point(x, prevValueY));
+                        // Then draw sloped to after transition
+                        path.lineTo(new paper.Point(x + slew, currentY));
                     } else {
                         // Same value, just continue
                         path.lineTo(new paper.Point(x, currentY));
@@ -232,9 +231,77 @@ class TimingGenRendering {
         
         // Draw X patterns as continuous spans
         xSpans.forEach(span => {
+        console.log("--------\n" + span.start + "---" + span.end);
+            const path = new paper.Path();
+            path.strokeColor = app.config.signalColor;
+            path.strokeWidth = 2;
+            path.fillColor = '#999999';
+
             const x1 = app.config.nameColumnWidth + span.start * app.config.cycleWidth;
             const x2 = app.config.nameColumnWidth + (span.end + 1) * app.config.cycleWidth;
-            TimingGenRendering.drawXPattern(x1, x2, baseY, highY, lowY, app.config.signalColor);
+
+            let spanStart = span.start;
+            let spanEnd = span.end;
+
+            const prevValue = spanStart > 0 ? app.getBusValueAtCycle(signal, spanStart - 1) : null;
+            const nextValue = spanEnd + 1 < app.config.cycles ? app.getBusValueAtCycle(signal, spanEnd + 1) : null;
+            const hasNextValue = (spanEnd + 1 < app.config.cycles && signal.values[spanEnd + 1] !== undefined);
+
+            const slew = i < app.config.cycles ? app.getEffectiveSlew(signal, span.start) : app.config.slew;
+
+            console.log("span.s:" + span.start + " x1:" + x1 + " x2:" + x2 + " prevValue:" + prevValue + " nextValue:" + nextValue);
+            if (prevValue === null || spanStart === 0) {
+                path.moveTo(new paper.Point(x1 , highY));
+            } else if (prevValue === 'Z') {
+                path.moveTo(new paper.Point(x1 , midY));
+                path.lineTo(new paper.Point(x1+slew/2, highY));
+            } else if (prevValue == 1) {
+                path.moveTo(new paper.Point(x1 , highY));
+            } else {
+                // prevValue == 0
+                path.moveTo(new paper.Point(x1+slew , highY));
+            }
+
+            // Top line
+            if (hasNextValue) {
+                if (nextValue == 1) {
+                    path.lineTo(new paper.Point(x2+slew , highY));
+                    path.lineTo(new paper.Point(x2 , lowY));
+                } else if (nextValue === 'Z') {
+                    path.lineTo(new paper.Point(x2 , highY));
+                    path.lineTo(new paper.Point(x2 + slew/2 , midY));
+                    path.lineTo(new paper.Point(x2 , lowY));
+                } else if (nextValue == 0) {
+                    path.lineTo(new paper.Point(x2 , highY));
+                    path.lineTo(new paper.Point(x2+slew , lowY));
+                } else if (nextValue === null) {
+                    path.lineTo(new paper.Point(x2 , highY));
+                    path.lineTo(new paper.Point(x2+slew , lowY));
+                } else {
+                    path.lineTo(new paper.Point(x2, highY));
+                }
+            } else {
+                path.lineTo(new paper.Point(x2, highY));
+            }
+                
+            // Bottom line
+            
+            // Close with X-shaped transition if coming from X
+            if (prevValue === null || spanStart === 0) {
+                path.lineTo(new paper.Point(x1 , lowY));
+            } else if (prevValue === 'Z') {
+                path.lineTo(new paper.Point(x1 + slew/2, lowY));
+                path.lineTo(new paper.Point(x1 , midY));
+                
+            } else if (nextValue == 1) {
+                path.lineTo(new paper.Point(x1 + slew, lowY));
+                path.lineTo(new paper.Point(x1 + slew/2, midY));
+            } else {
+                path.lineTo(new paper.Point(x1 , lowY));
+            }
+            path.closePath();
+                
+            //TimingGenRendering.drawXPattern(x1, x2, baseY, highY, lowY, app.config.signalColor);
         });
     }
     
@@ -283,14 +350,14 @@ class TimingGenRendering {
             if (value === 'Z') {
                 // High-Z state - draw middle line
                 const line = new paper.Path.Line({
-                    from: [x1, midY],
+                    from: [x1+slew/2, midY],
                     to: [x2, midY],
                     strokeColor: app.config.signalColor,
                     strokeWidth: 2
                 });
-            } else if (value === 'X') {
+                //            } else if (value === 'X') {
                 // Unknown state - draw X pattern for the entire span
-                TimingGenRendering.drawXPattern(x1, x2, baseY, topY, bottomY, app.config.signalColor);
+                //TimingGenRendering.drawXPattern(x1, x2, baseY, topY, bottomY, app.config.signalColor);
             } else {
                 // Valid value - check if we need transition from/to X
                 const prevValue = spanStart > 0 ? app.getBusValueAtCycle(signal, spanStart - 1) : null;
@@ -303,55 +370,66 @@ class TimingGenRendering {
                 path.strokeWidth = 2;
                 path.fillColor = '#e8f4f8';
                 
+                if (value === 'X') {
+                    path.fillColor = '#999999';
+                } else {
+                    path.fillColor = '#e8f4f8';
+                }
+                
                 // Start with X-shaped transition if coming from X or at beginning
-                if (prevValue === 'X' || prevValue === null || spanStart === 0) {
-                    // X-shaped start transition - starts BEFORE the transition point
-                    path.moveTo(new paper.Point(x1 - slew, midY));
-                    path.lineTo(new paper.Point(x1, topY));
+                if (prevValue === null || spanStart === 0) {
+                    // X-shaped start transition
+                    path.moveTo(new paper.Point(x1 , bottomY));
+                    path.lineTo(new paper.Point(x1 , topY));
+                } else if (prevValue === 'Z') {
+                    path.moveTo(new paper.Point(x1 , midY));
+                    path.lineTo(new paper.Point(x1 + slew/2, topY));
                 } else {
                     // Normal start - the slew has already brought us to the transition point
-                    path.moveTo(new paper.Point(x1, topY));
+                    path.moveTo(new paper.Point(x1 + slew/2, midY));
+                    path.lineTo(new paper.Point(x1 + slew, topY));
+                    //path.moveTo(new paper.Point(x1, topY));
                 }
                 
                 // Top line
                 if (hasNextValue) {
-                    path.lineTo(new paper.Point(x2 - slew, topY));
-                    
-                    // End with X-shaped transition if going to X or changing value
-                    if (nextValue === 'X') {
-                        path.lineTo(new paper.Point(x2, midY));
-                        path.lineTo(new paper.Point(x2 - slew, bottomY));
-                    } else {
-                        // Normal transition
-                        path.lineTo(new paper.Point(x2, midY));
-                        path.lineTo(new paper.Point(x2 - slew, bottomY));
-                    }
+                    // start at transition
+                    path.lineTo(new paper.Point(x2 , topY));
+                    path.lineTo(new paper.Point(x2 + slew/2, midY));
+                    path.lineTo(new paper.Point(x2 , bottomY));
+                
                 } else {
                     path.lineTo(new paper.Point(x2, topY));
                     path.lineTo(new paper.Point(x2, bottomY));
                 }
                 
                 // Bottom line
-                path.lineTo(new paper.Point(x1, bottomY));
                 
                 // Close with X-shaped transition if coming from X
-                if (prevValue === 'X' || prevValue === null || spanStart === 0) {
-                    path.lineTo(new paper.Point(x1 - slew, midY));
+                if (prevValue === null || spanStart === 0) {
+                    path.lineTo(new paper.Point(x1 , bottomY));
+                } else if (prevValue === 'Z') {
+                    path.lineTo(new paper.Point(x1 + slew/2, bottomY));
+                    path.lineTo(new paper.Point(x1 , midY));
+
                 } else {
-                    path.lineTo(new paper.Point(x1, midY));
+                    path.lineTo(new paper.Point(x1 + slew, bottomY));
+                    path.lineTo(new paper.Point(x1 + slew/2, midY));
                 }
                 path.closePath();
                 
-                // Draw value text in the middle of the span
-                const textX = (x1 + x2) / 2;
-                const text = new paper.PointText({
-                    point: [textX, baseY + app.config.rowHeight / 2 + 4],
-                    content: value,
-                    fillColor: 'black',
-                    fontFamily: 'Arial',
-                    fontSize: 12,
-                    justification: 'center'
-                });
+                if (value !== 'X') {
+                    // Draw value text in the middle of the span
+                    const textX = (x1 + x2) / 2;
+                    const text = new paper.PointText({
+                        point: [textX, baseY + app.config.rowHeight / 2 + 4],
+                        content: value,
+                        fillColor: 'black',
+                        fontFamily: 'Arial',
+                        fontSize: 12,
+                        justification: 'center'
+                    });
+                }
             }
             
             // Move to next span
