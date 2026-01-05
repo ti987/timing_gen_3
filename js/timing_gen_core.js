@@ -106,7 +106,20 @@ class TimingGenApp {
             this.hideAllMenus();
             TimingGenUI.showCycleOptionsDialog(this);
         });
+        document.getElementById('remove-bit-change-menu').addEventListener('click', () => this.removeBitChange());
         document.getElementById('cancel-bit-cycle-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Bus cycle context menu handlers
+        document.getElementById('set-bus-value-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            TimingGenUI.showBusValueDialog(this, this.currentEditingSignal, this.currentEditingCycle);
+        });
+        document.getElementById('bus-cycle-options-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            TimingGenUI.showCycleOptionsDialog(this);
+        });
+        document.getElementById('remove-bus-change-menu').addEventListener('click', () => this.removeBusChange());
+        document.getElementById('cancel-bus-cycle-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Canvas events using Paper.js tool
         const tool = new paper.Tool();
@@ -134,6 +147,7 @@ class TimingGenApp {
     hideAllMenus() {
         document.getElementById('signal-context-menu').style.display = 'none';
         document.getElementById('bit-cycle-context-menu').style.display = 'none';
+        document.getElementById('bus-cycle-context-menu').style.display = 'none';
     }
     
     addSignal() {
@@ -307,11 +321,15 @@ class TimingGenApp {
         if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
             const signal = this.signals[signalIndex];
             
-            // Show cycle context menu for both bit and bus signals
-            if (signal.type === 'bit' || signal.type === 'bus') {
+            // Show appropriate cycle context menu based on signal type
+            if (signal.type === 'bit') {
                 this.currentEditingSignal = signalIndex;
                 this.currentEditingCycle = cycle;
                 TimingGenUI.showBitCycleContextMenu(this, e.clientX, e.clientY);
+            } else if (signal.type === 'bus') {
+                this.currentEditingSignal = signalIndex;
+                this.currentEditingCycle = cycle;
+                TimingGenUI.showBusCycleContextMenu(this, e.clientX, e.clientY);
             }
         }
     }
@@ -336,12 +354,48 @@ class TimingGenApp {
         }
     }
     
+    removeBitChange() {
+        if (this.currentEditingSignal !== null && this.currentEditingCycle !== null) {
+            const signal = this.signals[this.currentEditingSignal];
+            delete signal.values[this.currentEditingCycle];
+            // Also remove cycle options if they exist
+            if (signal.cycleOptions && signal.cycleOptions[this.currentEditingCycle]) {
+                delete signal.cycleOptions[this.currentEditingCycle];
+                if (Object.keys(signal.cycleOptions).length === 0) {
+                    delete signal.cycleOptions;
+                }
+            }
+            this.hideAllMenus();
+            this.render();
+        }
+    }
+    
+    removeBusChange() {
+        if (this.currentEditingSignal !== null && this.currentEditingCycle !== null) {
+            const signal = this.signals[this.currentEditingSignal];
+            delete signal.values[this.currentEditingCycle];
+            // Also remove cycle options if they exist
+            if (signal.cycleOptions && signal.cycleOptions[this.currentEditingCycle]) {
+                delete signal.cycleOptions[this.currentEditingCycle];
+                if (Object.keys(signal.cycleOptions).length === 0) {
+                    delete signal.cycleOptions;
+                }
+            }
+            this.hideAllMenus();
+            this.render();
+        }
+    }
+    
     getBitValueAtCycle(signal, cycle) {
         // Find the last defined value before or at this cycle
         let value = 0; // default
         for (let c = 0; c <= cycle; c++) {
             if (signal.values[c] !== undefined) {
                 value = signal.values[c];
+                // Convert null to 0
+                if (value === null) {
+                    value = 0;
+                }
             }
         }
         return value;
@@ -353,6 +407,10 @@ class TimingGenApp {
         for (let c = 0; c <= cycle; c++) {
             if (signal.values[c] !== undefined) {
                 value = signal.values[c];
+                // Convert null to 'X' for bus signals
+                if (value === null) {
+                    value = 'X';
+                }
             }
         }
         return value;
@@ -373,17 +431,32 @@ class TimingGenApp {
     }
     
     // Get effective delay value with priority: cycle > signal > global
+    // Returns delay in pixels
     getEffectiveDelay(signal, cycle) {
+        let delayInTime = 0; // delay in same time units as clock period
+        
         // Check cycle-level override
         if (signal.cycleOptions && signal.cycleOptions[cycle] && signal.cycleOptions[cycle].delay !== undefined) {
-            return signal.cycleOptions[cycle].delay;
+            delayInTime = signal.cycleOptions[cycle].delay;
         }
         // Check signal-level override
-        if (signal.delay !== undefined) {
-            return signal.delay;
+        else if (signal.delay !== undefined) {
+            delayInTime = signal.delay;
         }
         // Use global default
-        return this.config.delay;
+        else {
+            delayInTime = this.config.delay;
+        }
+        
+        // Convert delay time to fraction of clock period, then to pixels
+        // delay is in same unit as clock period (e.g., both in ns)
+        // delayFraction = delayInTime / clockPeriod
+        // delayPixels = delayFraction * cycleWidth
+        if (this.config.clockPeriod > 0) {
+            const delayFraction = delayInTime / this.config.clockPeriod;
+            return delayFraction * this.config.cycleWidth;
+        }
+        return 0;
     }
     
     getSignalIndexAtY(y) {

@@ -22,7 +22,7 @@ class TimingGenData {
         
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'timing_diagram.json';
+        a.download = 'timing_diagram.td3';
         a.click();
         
         URL.revokeObjectURL(url);

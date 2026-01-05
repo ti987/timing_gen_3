@@ -174,9 +174,8 @@ class TimingGenRendering {
         let prevY = null;
         
         for (let i = 0; i <= app.config.cycles; i++) {
-            // Get delay for this cycle
-            const delay = i < app.config.cycles ? app.getEffectiveDelay(signal, i) : 0;
-            const delayPixels = delay * app.config.cycleWidth;
+            // Get delay in pixels for this cycle (already converted in getEffectiveDelay)
+            const delayPixels = i < app.config.cycles ? app.getEffectiveDelay(signal, i) : 0;
             
             // Get slew for this cycle
             const slew = i < app.config.cycles ? app.getEffectiveSlew(signal, i) : app.config.slew;
@@ -231,7 +230,6 @@ class TimingGenRendering {
         
         // Draw X patterns as continuous spans
         xSpans.forEach(span => {
-        console.log("--------\n" + span.start + "---" + span.end);
             const path = new paper.Path();
             path.strokeColor = app.config.signalColor;
             path.strokeWidth = 2;
@@ -249,7 +247,6 @@ class TimingGenRendering {
 
             const slew = i < app.config.cycles ? app.getEffectiveSlew(signal, span.start) : app.config.slew;
 
-            console.log("span.s:" + span.start + " x1:" + x1 + " x2:" + x2 + " prevValue:" + prevValue + " nextValue:" + nextValue);
             if (prevValue === null || spanStart === 0) {
                 path.moveTo(new paper.Point(x1 , highY));
             } else if (prevValue === 'Z') {
@@ -334,9 +331,8 @@ class TimingGenRendering {
                 spanEnd = app.config.cycles - 1;
             }
             
-            // Get delay for this cycle
-            const delay = app.getEffectiveDelay(signal, spanStart);
-            const delayPixels = delay * app.config.cycleWidth;
+            // Get delay in pixels for this cycle (already converted in getEffectiveDelay)
+            const delayPixels = app.getEffectiveDelay(signal, spanStart);
             
             // Get slew for transitions
             const slew = app.getEffectiveSlew(signal, spanStart);

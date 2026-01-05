@@ -52,6 +52,9 @@ class TimingGenUI {
         document.getElementById('slew-input').value = app.config.slew;
         document.getElementById('delay-input').value = app.config.delay;
         
+        // Update delay unit label to match clock period unit
+        document.getElementById('delay-unit-label').textContent = app.config.clockPeriodUnit;
+        
         document.getElementById('global-option-dialog').style.display = 'flex';
         document.getElementById('clock-period-input').focus();
     }
@@ -86,6 +89,10 @@ class TimingGenUI {
         app.config.slew = slew;
         app.config.delay = delay;
         
+        // Update delay unit labels in other dialogs
+        document.getElementById('signal-delay-unit-label').textContent = clockPeriodUnit;
+        document.getElementById('cycle-delay-unit-label').textContent = clockPeriodUnit;
+        
         TimingGenUI.hideGlobalOptionDialog();
         app.render();
     }
@@ -105,6 +112,9 @@ class TimingGenUI {
             // Populate with signal-specific values if they exist
             document.getElementById('signal-slew-input').value = signal.slew !== undefined ? signal.slew : '';
             document.getElementById('signal-delay-input').value = signal.delay !== undefined ? signal.delay : '';
+            
+            // Update delay unit label to match clock period unit
+            document.getElementById('signal-delay-unit-label').textContent = app.config.clockPeriodUnit;
             
             document.getElementById('signal-options-dialog').style.display = 'flex';
             document.getElementById('signal-slew-input').focus();
@@ -162,6 +172,9 @@ class TimingGenUI {
             const cycleOpts = signal.cycleOptions[cycle] || {};
             document.getElementById('cycle-slew-input').value = cycleOpts.slew !== undefined ? cycleOpts.slew : '';
             document.getElementById('cycle-delay-input').value = cycleOpts.delay !== undefined ? cycleOpts.delay : '';
+            
+            // Update delay unit label to match clock period unit
+            document.getElementById('cycle-delay-unit-label').textContent = app.config.clockPeriodUnit;
             
             document.getElementById('cycle-options-dialog').style.display = 'flex';
             document.getElementById('cycle-slew-input').focus();
@@ -237,8 +250,8 @@ class TimingGenUI {
         menu.style.left = x + 'px';
         menu.style.top = y + 'px';
         
-        // Add click handlers for menu items
-        const items = menu.querySelectorAll('.menu-item');
+        // Add click handlers for menu items with data-value
+        const items = menu.querySelectorAll('.menu-item[data-value]');
         items.forEach(item => {
             item.onclick = () => {
                 const value = item.getAttribute('data-value');
@@ -246,5 +259,12 @@ class TimingGenUI {
                 app.hideAllMenus();
             };
         });
+    }
+    
+    static showBusCycleContextMenu(app, x, y) {
+        const menu = document.getElementById('bus-cycle-context-menu');
+        menu.style.display = 'block';
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
     }
 }
