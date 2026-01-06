@@ -171,8 +171,19 @@ class TimingGenRendering {
         path.closePath();
         
         // Set the fill color with transparency
-        path.fillColor = new paper.Color(color);
-        path.fillColor.alpha = 0.3; // 30% transparency
+        // Handle both full Paper.js and the shim
+        if (typeof paper.Color === 'function') {
+            // Full Paper.js
+            path.fillColor = new paper.Color(color);
+            path.fillColor.alpha = 0.3; // 30% transparency
+        } else {
+            // Paper.js shim - use rgba directly
+            // Convert hex color to rgba
+            const r = parseInt(color.substr(1, 2), 16);
+            const g = parseInt(color.substr(3, 2), 16);
+            const b = parseInt(color.substr(5, 2), 16);
+            path.fillColor = `rgba(${r}, ${g}, ${b}, 0.3)`;
+        }
         path.strokeColor = null; // No stroke for the uncertainty region
     }
     
