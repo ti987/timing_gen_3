@@ -50,10 +50,13 @@ class TimingGenUI {
         document.getElementById('clock-period-input').value = app.config.clockPeriod;
         document.getElementById('clock-period-unit-select').value = app.config.clockPeriodUnit;
         document.getElementById('slew-input').value = app.config.slew;
-        document.getElementById('delay-input').value = app.config.delay;
+        document.getElementById('delay-min-input').value = app.config.delayMin;
+        document.getElementById('delay-max-input').value = app.config.delayMax;
+        document.getElementById('delay-color-input').value = app.config.delayColor;
         
-        // Update delay unit label to match clock period unit
-        document.getElementById('delay-unit-label').textContent = app.config.clockPeriodUnit;
+        // Update delay unit labels to match clock period unit
+        document.getElementById('delay-min-unit-label').textContent = app.config.clockPeriodUnit;
+        document.getElementById('delay-max-unit-label').textContent = app.config.clockPeriodUnit;
         
         document.getElementById('global-option-dialog').style.display = 'flex';
         document.getElementById('clock-period-input').focus();
@@ -67,7 +70,9 @@ class TimingGenUI {
         const clockPeriod = parseFloat(document.getElementById('clock-period-input').value);
         const clockPeriodUnit = document.getElementById('clock-period-unit-select').value;
         const slew = parseInt(document.getElementById('slew-input').value);
-        const delay = parseFloat(document.getElementById('delay-input').value);
+        const delayMin = parseFloat(document.getElementById('delay-min-input').value);
+        const delayMax = parseFloat(document.getElementById('delay-max-input').value);
+        const delayColor = document.getElementById('delay-color-input').value;
         
         if (isNaN(clockPeriod) || clockPeriod <= 0) {
             alert('Please enter a valid clock period');
@@ -79,19 +84,33 @@ class TimingGenUI {
             return;
         }
         
-        if (isNaN(delay) || delay < 0) {
-            alert('Please enter a valid delay value');
+        if (isNaN(delayMin) || delayMin < 0) {
+            alert('Please enter a valid delay min value');
+            return;
+        }
+        
+        if (isNaN(delayMax) || delayMax < 0) {
+            alert('Please enter a valid delay max value');
+            return;
+        }
+        
+        if (delayMax < delayMin) {
+            alert('Delay max must be greater than or equal to delay min');
             return;
         }
         
         app.config.clockPeriod = clockPeriod;
         app.config.clockPeriodUnit = clockPeriodUnit;
         app.config.slew = slew;
-        app.config.delay = delay;
+        app.config.delayMin = delayMin;
+        app.config.delayMax = delayMax;
+        app.config.delayColor = delayColor;
         
         // Update delay unit labels in other dialogs
-        document.getElementById('signal-delay-unit-label').textContent = clockPeriodUnit;
-        document.getElementById('cycle-delay-unit-label').textContent = clockPeriodUnit;
+        document.getElementById('signal-delay-min-unit-label').textContent = clockPeriodUnit;
+        document.getElementById('signal-delay-max-unit-label').textContent = clockPeriodUnit;
+        document.getElementById('cycle-delay-min-unit-label').textContent = clockPeriodUnit;
+        document.getElementById('cycle-delay-max-unit-label').textContent = clockPeriodUnit;
         
         TimingGenUI.hideGlobalOptionDialog();
         app.render();
@@ -111,10 +130,13 @@ class TimingGenUI {
             const signal = app.signals[app.currentEditingSignal];
             // Populate with signal-specific values if they exist
             document.getElementById('signal-slew-input').value = signal.slew !== undefined ? signal.slew : '';
-            document.getElementById('signal-delay-input').value = signal.delay !== undefined ? signal.delay : '';
+            document.getElementById('signal-delay-min-input').value = signal.delayMin !== undefined ? signal.delayMin : '';
+            document.getElementById('signal-delay-max-input').value = signal.delayMax !== undefined ? signal.delayMax : '';
+            document.getElementById('signal-delay-color-input').value = signal.delayColor !== undefined ? signal.delayColor : app.config.delayColor;
             
-            // Update delay unit label to match clock period unit
-            document.getElementById('signal-delay-unit-label').textContent = app.config.clockPeriodUnit;
+            // Update delay unit labels to match clock period unit
+            document.getElementById('signal-delay-min-unit-label').textContent = app.config.clockPeriodUnit;
+            document.getElementById('signal-delay-max-unit-label').textContent = app.config.clockPeriodUnit;
             
             document.getElementById('signal-options-dialog').style.display = 'flex';
             document.getElementById('signal-slew-input').focus();
@@ -129,7 +151,9 @@ class TimingGenUI {
         if (app.currentEditingSignal !== null) {
             const signal = app.signals[app.currentEditingSignal];
             const slewValue = document.getElementById('signal-slew-input').value;
-            const delayValue = document.getElementById('signal-delay-input').value;
+            const delayMinValue = document.getElementById('signal-delay-min-input').value;
+            const delayMaxValue = document.getElementById('signal-delay-max-input').value;
+            const delayColorValue = document.getElementById('signal-delay-color-input').value;
             
             // If empty, remove the override (use global)
             if (slewValue === '') {
@@ -143,15 +167,32 @@ class TimingGenUI {
                 signal.slew = slew;
             }
             
-            if (delayValue === '') {
-                delete signal.delay;
-            } else {
-                const delay = parseFloat(delayValue);
-                if (isNaN(delay) || delay < 0) {
-                    alert('Please enter a valid delay value');
+            // Handle delay min/max
+            if (delayMinValue === '' && delayMaxValue === '') {
+                delete signal.delayMin;
+                delete signal.delayMax;
+                delete signal.delayColor;
+            } else if (delayMinValue !== '' && delayMaxValue !== '') {
+                const delayMin = parseFloat(delayMinValue);
+                const delayMax = parseFloat(delayMaxValue);
+                if (isNaN(delayMin) || delayMin < 0) {
+                    alert('Please enter a valid delay min value');
                     return;
                 }
-                signal.delay = delay;
+                if (isNaN(delayMax) || delayMax < 0) {
+                    alert('Please enter a valid delay max value');
+                    return;
+                }
+                if (delayMax < delayMin) {
+                    alert('Delay max must be greater than or equal to delay min');
+                    return;
+                }
+                signal.delayMin = delayMin;
+                signal.delayMax = delayMax;
+                signal.delayColor = delayColorValue;
+            } else {
+                alert('Please enter both delay min and delay max, or leave both empty to use global values');
+                return;
             }
             
             TimingGenUI.hideSignalOptionsDialog();
@@ -171,10 +212,13 @@ class TimingGenUI {
             
             const cycleOpts = signal.cycleOptions[cycle] || {};
             document.getElementById('cycle-slew-input').value = cycleOpts.slew !== undefined ? cycleOpts.slew : '';
-            document.getElementById('cycle-delay-input').value = cycleOpts.delay !== undefined ? cycleOpts.delay : '';
+            document.getElementById('cycle-delay-min-input').value = cycleOpts.delayMin !== undefined ? cycleOpts.delayMin : '';
+            document.getElementById('cycle-delay-max-input').value = cycleOpts.delayMax !== undefined ? cycleOpts.delayMax : '';
+            document.getElementById('cycle-delay-color-input').value = cycleOpts.delayColor !== undefined ? cycleOpts.delayColor : (signal.delayColor || app.config.delayColor);
             
-            // Update delay unit label to match clock period unit
-            document.getElementById('cycle-delay-unit-label').textContent = app.config.clockPeriodUnit;
+            // Update delay unit labels to match clock period unit
+            document.getElementById('cycle-delay-min-unit-label').textContent = app.config.clockPeriodUnit;
+            document.getElementById('cycle-delay-max-unit-label').textContent = app.config.clockPeriodUnit;
             
             document.getElementById('cycle-options-dialog').style.display = 'flex';
             document.getElementById('cycle-slew-input').focus();
@@ -195,7 +239,9 @@ class TimingGenUI {
             }
             
             const slewValue = document.getElementById('cycle-slew-input').value;
-            const delayValue = document.getElementById('cycle-delay-input').value;
+            const delayMinValue = document.getElementById('cycle-delay-min-input').value;
+            const delayMaxValue = document.getElementById('cycle-delay-max-input').value;
+            const delayColorValue = document.getElementById('cycle-delay-color-input').value;
             
             if (!signal.cycleOptions[cycle]) {
                 signal.cycleOptions[cycle] = {};
@@ -213,15 +259,32 @@ class TimingGenUI {
                 signal.cycleOptions[cycle].slew = slew;
             }
             
-            if (delayValue === '') {
-                delete signal.cycleOptions[cycle].delay;
-            } else {
-                const delay = parseFloat(delayValue);
-                if (isNaN(delay) || delay < 0) {
-                    alert('Please enter a valid delay value');
+            // Handle delay min/max
+            if (delayMinValue === '' && delayMaxValue === '') {
+                delete signal.cycleOptions[cycle].delayMin;
+                delete signal.cycleOptions[cycle].delayMax;
+                delete signal.cycleOptions[cycle].delayColor;
+            } else if (delayMinValue !== '' && delayMaxValue !== '') {
+                const delayMin = parseFloat(delayMinValue);
+                const delayMax = parseFloat(delayMaxValue);
+                if (isNaN(delayMin) || delayMin < 0) {
+                    alert('Please enter a valid delay min value');
                     return;
                 }
-                signal.cycleOptions[cycle].delay = delay;
+                if (isNaN(delayMax) || delayMax < 0) {
+                    alert('Please enter a valid delay max value');
+                    return;
+                }
+                if (delayMax < delayMin) {
+                    alert('Delay max must be greater than or equal to delay min');
+                    return;
+                }
+                signal.cycleOptions[cycle].delayMin = delayMin;
+                signal.cycleOptions[cycle].delayMax = delayMax;
+                signal.cycleOptions[cycle].delayColor = delayColorValue;
+            } else {
+                alert('Please enter both delay min and delay max, or leave both empty to use signal/global values');
+                return;
             }
             
             // Clean up empty objects

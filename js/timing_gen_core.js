@@ -28,7 +28,9 @@ class TimingGenApp {
             slew: 4, // pixels for slew transition (default: 4)
             clockPeriod: 10, // default clock period value
             clockPeriodUnit: 'ns', // default time unit
-            delay: 0, // default delay value in clock period units (0 cycles = 0% of clock period)
+            delayMin: 0, // minimum delay value in clock period units
+            delayMax: 0, // maximum delay value in clock period units
+            delayColor: '#0000FF', // color for delay uncertainty region (default: blue)
             gridColor: '#e0e0e0',
             signalColor: '#000000',
             backgroundColor: '#ffffff'
@@ -431,21 +433,45 @@ class TimingGenApp {
     }
     
     // Get effective delay value with priority: cycle > signal > global
-    // Returns delay in pixels
+    // Returns object with {min, max, color} delay in pixels
     getEffectiveDelay(signal, cycle) {
-        let delayInTime = 0; // delay in same time units as clock period
+        let delayMinInTime = 0; // min delay in same time units as clock period
+        let delayMaxInTime = 0; // max delay in same time units as clock period
+        let delayColor = null; // color for delay uncertainty
         
         // Check cycle-level override
-        if (signal.cycleOptions && signal.cycleOptions[cycle] && signal.cycleOptions[cycle].delay !== undefined) {
-            delayInTime = signal.cycleOptions[cycle].delay;
+        if (signal.cycleOptions && signal.cycleOptions[cycle]) {
+            const cycleOpts = signal.cycleOptions[cycle];
+            if (cycleOpts.delayMin !== undefined && cycleOpts.delayMax !== undefined) {
+                delayMinInTime = cycleOpts.delayMin;
+                delayMaxInTime = cycleOpts.delayMax;
+                delayColor = cycleOpts.delayColor;
+            } else if (cycleOpts.delay !== undefined) {
+                // Backward compatibility: single delay value
+                delayMinInTime = cycleOpts.delay;
+                delayMaxInTime = cycleOpts.delay;
+            }
         }
         // Check signal-level override
-        else if (signal.delay !== undefined) {
-            delayInTime = signal.delay;
+        else if (signal.delayMin !== undefined && signal.delayMax !== undefined) {
+            delayMinInTime = signal.delayMin;
+            delayMaxInTime = signal.delayMax;
+            delayColor = signal.delayColor;
+        } else if (signal.delay !== undefined) {
+            // Backward compatibility: single delay value
+            delayMinInTime = signal.delay;
+            delayMaxInTime = signal.delay;
         }
         // Use global default
         else {
-            delayInTime = this.config.delay;
+            delayMinInTime = this.config.delayMin;
+            delayMaxInTime = this.config.delayMax;
+            delayColor = this.config.delayColor;
+        }
+        
+        // If no color was set at cycle or signal level, use global
+        if (!delayColor) {
+            delayColor = this.config.delayColor;
         }
         
         // Convert delay time to fraction of clock period, then to pixels
@@ -453,10 +479,15 @@ class TimingGenApp {
         // delayFraction = delayInTime / clockPeriod
         // delayPixels = delayFraction * cycleWidth
         if (this.config.clockPeriod > 0) {
-            const delayFraction = delayInTime / this.config.clockPeriod;
-            return delayFraction * this.config.cycleWidth;
+            const delayMinFraction = delayMinInTime / this.config.clockPeriod;
+            const delayMaxFraction = delayMaxInTime / this.config.clockPeriod;
+            return {
+                min: delayMinFraction * this.config.cycleWidth,
+                max: delayMaxFraction * this.config.cycleWidth,
+                color: delayColor
+            };
         }
-        return 0;
+        return { min: 0, max: 0, color: delayColor };
     }
     
     getSignalIndexAtY(y) {

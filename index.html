@@ -141,10 +141,21 @@
                 <span style="flex: 0 0 30px;">px</span>
             </div>
             
-            <label>Delay:</label>
+            <label>Delay Min:</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <input type="number" id="delay-min-input" value="0" min="0" step="0.001" style="flex: 1;">
+                <span id="delay-min-unit-label" style="flex: 0 0 60px;">ns</span>
+            </div>
+            
+            <label>Delay Max:</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <input type="number" id="delay-max-input" value="0" min="0" step="0.001" style="flex: 1;">
+                <span id="delay-max-unit-label" style="flex: 0 0 60px;">ns</span>
+            </div>
+            
+            <label>Delay Uncertainty Color:</label>
             <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                <input type="number" id="delay-input" value="0" min="0" step="0.001" style="flex: 1;">
-                <span id="delay-unit-label" style="flex: 0 0 60px;">ns</span>
+                <input type="color" id="delay-color-input" value="#0000FF" style="flex: 1;">
             </div>
             
             <button id="global-option-ok-btn" class="dialog-btn">OK</button>
@@ -163,10 +174,21 @@
                 <span style="flex: 0 0 30px;">px</span>
             </div>
             
-            <label>Delay:</label>
+            <label>Delay Min:</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                <input type="number" id="signal-delay-min-input" min="0" step="0.001" placeholder="Use global" style="flex: 1;">
+                <span id="signal-delay-min-unit-label" style="flex: 0 0 60px;">ns</span>
+            </div>
+            
+            <label>Delay Max:</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                <input type="number" id="signal-delay-max-input" min="0" step="0.001" placeholder="Use global" style="flex: 1;">
+                <span id="signal-delay-max-unit-label" style="flex: 0 0 60px;">ns</span>
+            </div>
+            
+            <label>Delay Uncertainty Color:</label>
             <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
-                <input type="number" id="signal-delay-input" min="0" step="0.001" placeholder="Use global" style="flex: 1;">
-                <span id="signal-delay-unit-label" style="flex: 0 0 60px;">ns</span>
+                <input type="color" id="signal-delay-color-input" placeholder="Use global" style="flex: 1;">
             </div>
             
             <button id="signal-options-ok-btn" class="dialog-btn">OK</button>
@@ -185,10 +207,21 @@
                 <span style="flex: 0 0 30px;">px</span>
             </div>
             
-            <label>Delay:</label>
+            <label>Delay Min:</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                <input type="number" id="cycle-delay-min-input" min="0" step="0.001" placeholder="Use signal/global" style="flex: 1;">
+                <span id="cycle-delay-min-unit-label" style="flex: 0 0 60px;">ns</span>
+            </div>
+            
+            <label>Delay Max:</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                <input type="number" id="cycle-delay-max-input" min="0" step="0.001" placeholder="Use signal/global" style="flex: 1;">
+                <span id="cycle-delay-max-unit-label" style="flex: 0 0 60px;">ns</span>
+            </div>
+            
+            <label>Delay Uncertainty Color:</label>
             <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
-                <input type="number" id="cycle-delay-input" min="0" step="0.001" placeholder="Use signal/global" style="flex: 1;">
-                <span id="cycle-delay-unit-label" style="flex: 0 0 60px;">ns</span>
+                <input type="color" id="cycle-delay-color-input" placeholder="Use signal/global" style="flex: 1;">
             </div>
             
             <button id="cycle-options-ok-btn" class="dialog-btn">OK</button>

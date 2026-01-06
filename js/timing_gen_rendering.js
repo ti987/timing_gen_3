@@ -133,6 +133,49 @@ class TimingGenRendering {
         }
     }
     
+    // Helper function to draw delay uncertainty parallelogram
+    static drawDelayUncertainty(baseX, delayInfo, fromY, toY, slew) {
+        const delayMin = delayInfo.min;
+        const delayMax = delayInfo.max;
+        const color = delayInfo.color;
+        
+        // Only draw if there's uncertainty (min != max)
+        if (delayMin >= delayMax) {
+            return; // No uncertainty to draw
+        }
+        
+        // Create a parallelogram shape
+        const path = new paper.Path();
+        
+        // Starting from the previous state at delayMin
+        const x1 = baseX + delayMin;
+        const x2 = baseX + delayMax;
+        
+        // For a transition from fromY to toY:
+        // The parallelogram extends the previous state (fromY) for delayMin,
+        // then slopes down to the new state (toY)
+        
+        // Bottom-left: end of previous state at delayMin
+        path.moveTo(new paper.Point(x1, fromY));
+        
+        // Bottom-right: slope starts at delayMax
+        path.lineTo(new paper.Point(x2, fromY));
+        
+        // Top-right: slope ends at delayMax + slew
+        path.lineTo(new paper.Point(x2 + slew, toY));
+        
+        // Top-left: slope ends at delayMin + slew
+        path.lineTo(new paper.Point(x1 + slew, toY));
+        
+        // Close the path
+        path.closePath();
+        
+        // Set the fill color with transparency
+        path.fillColor = new paper.Color(color);
+        path.fillColor.alpha = 0.3; // 30% transparency
+        path.strokeColor = null; // No stroke for the uncertainty region
+    }
+    
     static drawBitWaveform(app, signal, baseY) {
         const highY = baseY + 20;
         const lowY = baseY + app.config.rowHeight - 20;
@@ -174,16 +217,16 @@ class TimingGenRendering {
         let prevY = null;
         
         for (let i = 0; i <= app.config.cycles; i++) {
-            // Get delay in pixels for this cycle (already converted in getEffectiveDelay)
-            const delayPixels = i < app.config.cycles ? app.getEffectiveDelay(signal, i) : 0;
+            // Get delay info object for this cycle (contains min, max, color)
+            const delayInfo = i < app.config.cycles ? app.getEffectiveDelay(signal, i) : { min: 0, max: 0, color: app.config.delayColor };
             
             // Get slew for this cycle
             const slew = i < app.config.cycles ? app.getEffectiveSlew(signal, i) : app.config.slew;
             
             // Base x position at grid line
             const baseX = app.config.nameColumnWidth + i * app.config.cycleWidth;
-            // Actual transition point after delay
-            const x = baseX + delayPixels;
+            // Actual transition point after minimum delay
+            const x = baseX + delayInfo.min;
             
             const value = (i < app.config.cycles) ? app.getBitValueAtCycle(signal, i) : app.getBitValueAtCycle(signal, app.config.cycles - 1);
             const currentY = (value === 1) ? highY : (value === 'Z') ? midY : lowY;
@@ -209,6 +252,11 @@ class TimingGenRendering {
                     
                     // Check if value actually changed
                     if (value !== prevValue) {
+                        // Draw delay uncertainty parallelogram if there's uncertainty
+                        if (delayInfo.max > delayInfo.min) {
+                            TimingGenRendering.drawDelayUncertainty(baseX, delayInfo, prevValueY, currentY, slew);
+                        }
+                        
                         // Draw transition with slew
                         // First, draw horizontal line at transition
                         path.lineTo(new paper.Point(x, prevValueY));
@@ -331,8 +379,8 @@ class TimingGenRendering {
                 spanEnd = app.config.cycles - 1;
             }
             
-            // Get delay in pixels for this cycle (already converted in getEffectiveDelay)
-            const delayPixels = app.getEffectiveDelay(signal, spanStart);
+            // Get delay info object for this cycle (contains min, max, color)
+            const delayInfo = app.getEffectiveDelay(signal, spanStart);
             
             // Get slew for transitions
             const slew = app.getEffectiveSlew(signal, spanStart);
@@ -340,7 +388,7 @@ class TimingGenRendering {
             // Calculate start position (at grid line + delay)
             // The grid line is where the transition should end, so slew should start before it
             const baseX1 = app.config.nameColumnWidth + spanStart * app.config.cycleWidth;
-            const x1 = baseX1 + delayPixels; // Actual transition point
+            const x1 = baseX1 + delayInfo.min; // Actual transition point (minimum delay)
             const x2 = app.config.nameColumnWidth + (spanEnd + 1) * app.config.cycleWidth;
             
             if (value === 'Z') {
@@ -359,6 +407,12 @@ class TimingGenRendering {
                 const prevValue = spanStart > 0 ? app.getBusValueAtCycle(signal, spanStart - 1) : null;
                 const nextValue = spanEnd + 1 < app.config.cycles ? app.getBusValueAtCycle(signal, spanEnd + 1) : null;
                 const hasNextValue = (spanEnd + 1 < app.config.cycles && signal.values[spanEnd + 1] !== undefined);
+                
+                // Draw delay uncertainty if transitioning and there's uncertainty
+                if (prevValue !== null && prevValue !== value && delayInfo.max > delayInfo.min) {
+                    // For bus signals, draw uncertainty from bottom to top
+                    TimingGenRendering.drawDelayUncertainty(baseX1, delayInfo, bottomY, topY, slew);
+                }
                 
                 // Draw bus shape with X-shaped transitions
                 const path = new paper.Path();

@@ -11,7 +11,9 @@ class TimingGenData {
                 clockPeriod: app.config.clockPeriod,
                 clockPeriodUnit: app.config.clockPeriodUnit,
                 slew: app.config.slew,
-                delay: app.config.delay
+                delayMin: app.config.delayMin,
+                delayMax: app.config.delayMax,
+                delayColor: app.config.delayColor
             },
             signals: app.signals
         };
@@ -52,8 +54,20 @@ class TimingGenData {
                     if (data.config.slew !== undefined) {
                         app.config.slew = data.config.slew;
                     }
+                    // Backward compatibility: support old single delay format
                     if (data.config.delay !== undefined) {
-                        app.config.delay = data.config.delay;
+                        app.config.delayMin = data.config.delay;
+                        app.config.delayMax = data.config.delay;
+                    }
+                    // New format: support min/max delay
+                    if (data.config.delayMin !== undefined) {
+                        app.config.delayMin = data.config.delayMin;
+                    }
+                    if (data.config.delayMax !== undefined) {
+                        app.config.delayMax = data.config.delayMax;
+                    }
+                    if (data.config.delayColor !== undefined) {
+                        app.config.delayColor = data.config.delayColor;
                     }
                     // Ignore old delayUnit field for backward compatibility
                 }
