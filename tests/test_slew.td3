@@ -1,0 +1,58 @@
+{
+  "version": "3.0.1",
+  "config": {
+    "cycles": 20,
+    "clockPeriod": 10,
+    "clockPeriodUnit": "ns",
+    "slew": 14,
+    "delay": 0
+  },
+  "signals": [
+    {
+      "name": "clk",
+      "type": "clock",
+      "values": {}
+    },
+    {
+      "name": "cs#",
+      "type": "bit",
+      "base_clock": "clk",
+      "values": {
+        "0": "X",
+        "1": 0,
+        "3": 1,
+        "6": 0,
+        "8": 1,
+        "9": 0,
+        "10": "X",
+        "11": 0,
+        "13": "Z",
+        "14": "X",
+        "15": "Z",
+        "17": 1
+      },
+      "cycleOptions": {
+        "3": {
+          "slew": 12
+        }
+      },
+      "delay": 0
+    },
+    {
+      "name": "data",
+      "type": "bus",
+      "base_clock": "clk",
+      "values": {
+        "0": "X",
+        "3": "0xAB",
+        "6": "00",
+        "8": "Z",
+        "9": "X",
+        "10": "Z",
+        "12": "0xCD",
+        "17": "X"
+      },
+      "delay": 0
+    }
+  ]
+}
