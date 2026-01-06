@@ -133,8 +133,8 @@ class TimingGenRendering {
         }
     }
     
-    // Helper function to draw delay uncertainty parallelogram
-    static drawDelayUncertainty(baseX, delayInfo, fromY, toY, slew) {
+    // Helper function to draw delay uncertainty parallelogram for bit signals
+    static drawBitDelayUncertainty(baseX, delayInfo, fromY, toY, slew) {
         const delayMin = delayInfo.min;
         const delayMax = delayInfo.max;
         const color = delayInfo.color;
@@ -184,7 +184,66 @@ class TimingGenRendering {
             const b = parseInt(color.substring(5, 7), 16);
             path.fillColor = `rgba(${r}, ${g}, ${b}, 0.3)`;
         }
-        path.strokeColor = null; // No stroke for the uncertainty region
+        // Add black stroke on all edges for bit signals
+        path.strokeColor = '#000000';
+        path.strokeWidth = 1;
+    }
+    
+    // Helper function to draw delay uncertainty hexagon for bus signals
+    static drawBusDelayUncertainty(baseX, delayInfo, fromY, toY, slew) {
+        const delayMin = delayInfo.min;
+        const delayMax = delayInfo.max;
+        const color = delayInfo.color;
+        
+        // Only draw if there's uncertainty (min != max)
+        if (delayMin >= delayMax) {
+            return; // No uncertainty to draw
+        }
+        
+        // Create a hexagon shape (concaved on right side)
+        const path = new paper.Path();
+        
+        // Starting positions
+        const x1 = baseX + delayMin;
+        const x2 = baseX + delayMax;
+        const midY = (fromY + toY) / 2;
+        
+        // For bus signals: extend previous value to min delay,
+        // then add "<<" shape to max delay
+        
+        // Bottom-left: extend previous value
+        path.moveTo(new paper.Point(x1, fromY));
+        
+        // Bottom-middle: end of extension at max delay
+        path.lineTo(new paper.Point(x2, fromY));
+        
+        // Right-middle: concave point (creates the "<<" shape)
+        path.lineTo(new paper.Point(x2 + slew/2, midY));
+        
+        // Top-middle: other side of concave
+        path.lineTo(new paper.Point(x2, toY));
+        
+        // Top-left: end at min delay
+        path.lineTo(new paper.Point(x1, toY));
+        
+        // Close the path back to start
+        path.closePath();
+        
+        // Set the fill color with transparency
+        // Handle both full Paper.js and the shim
+        if (typeof paper.Color === 'function') {
+            // Full Paper.js
+            path.fillColor = new paper.Color(color);
+            path.fillColor.alpha = 0.3; // 30% transparency
+        } else {
+            // Paper.js shim - use rgba directly
+            // Convert hex color to rgba
+            const r = parseInt(color.substring(1, 3), 16);
+            const g = parseInt(color.substring(3, 5), 16);
+            const b = parseInt(color.substring(5, 7), 16);
+            path.fillColor = `rgba(${r}, ${g}, ${b}, 0.3)`;
+        }
+        path.strokeColor = null; // No stroke for bus signals
     }
     
     static drawBitWaveform(app, signal, baseY) {
@@ -265,7 +324,7 @@ class TimingGenRendering {
                     if (value !== prevValue) {
                         // Draw delay uncertainty parallelogram if there's uncertainty
                         if (delayInfo.max > delayInfo.min) {
-                            TimingGenRendering.drawDelayUncertainty(baseX, delayInfo, prevValueY, currentY, slew);
+                            TimingGenRendering.drawBitDelayUncertainty(baseX, delayInfo, prevValueY, currentY, slew);
                         }
                         
                         // Draw transition with slew
@@ -421,8 +480,8 @@ class TimingGenRendering {
                 
                 // Draw delay uncertainty if transitioning and there's uncertainty
                 if (prevValue !== null && prevValue !== value && delayInfo.max > delayInfo.min) {
-                    // For bus signals, draw uncertainty from bottom to top
-                    TimingGenRendering.drawDelayUncertainty(baseX1, delayInfo, bottomY, topY, slew);
+                    // For bus signals, draw hexagon uncertainty from bottom to top
+                    TimingGenRendering.drawBusDelayUncertainty(baseX1, delayInfo, bottomY, topY, slew);
                 }
                 
                 // Draw bus shape with X-shaped transitions
