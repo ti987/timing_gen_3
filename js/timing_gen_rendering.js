@@ -179,9 +179,9 @@ class TimingGenRendering {
         } else {
             // Paper.js shim - use rgba directly
             // Convert hex color to rgba
-            const r = parseInt(color.substr(1, 2), 16);
-            const g = parseInt(color.substr(3, 2), 16);
-            const b = parseInt(color.substr(5, 2), 16);
+            const r = parseInt(color.substring(1, 3), 16);
+            const g = parseInt(color.substring(3, 5), 16);
+            const b = parseInt(color.substring(5, 7), 16);
             path.fillColor = `rgba(${r}, ${g}, ${b}, 0.3)`;
         }
         path.strokeColor = null; // No stroke for the uncertainty region

@@ -191,7 +191,7 @@ class TimingGenUI {
                 signal.delayMax = delayMax;
                 signal.delayColor = delayColorValue;
             } else {
-                alert('Please enter both delay min and delay max, or leave both empty to use global values');
+                alert('Please enter both delay min and delay max, or leave both empty to use signal/global values');
                 return;
             }
             
