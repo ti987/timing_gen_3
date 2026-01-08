@@ -5,7 +5,9 @@
     "clockPeriod": 10,
     "clockPeriodUnit": "ns",
     "slew": 14,
-    "delay": 0
+    "delayMin": 2,
+    "delayMax": 5,
+    "delayColor": "#0000ff"
   },
   "signals": [
     {
@@ -18,7 +20,7 @@
       "type": "bit",
       "base_clock": "clk",
       "values": {
-        "0": "X",
+        "0": 1,
         "1": 0,
         "3": 1,
         "6": 0,
@@ -36,7 +38,10 @@
           "slew": 12
         }
       },
-      "delay": 0
+      "delay": 0,
+      "delayMin": 2,
+      "delayMax": 3,
+      "delayColor": "#0000ff"
     },
     {
       "name": "data",
@@ -52,7 +57,10 @@
         "12": "0xCD",
         "17": "X"
       },
-      "delay": 0
+      "delay": 0,
+      "delayMin": 3,
+      "delayMax": 5,
+      "delayColor": "#0000ff"
     }
   ]
 }

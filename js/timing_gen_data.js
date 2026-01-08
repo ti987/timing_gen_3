@@ -36,7 +36,7 @@ class TimingGenData {
         
         const reader = new FileReader();
         reader.onload = (event) => {
-            try {
+            //try {
                 const data = JSON.parse(event.target.result);
                 
                 if (data.config) {
@@ -85,9 +85,9 @@ class TimingGenData {
                 
                 app.initializeCanvas();
                 app.render();
-            } catch (err) {
-                alert('Error loading file: ' + err.message);
-            }
+                //            } catch (err) {
+                //alert('Error loading file: ' + err.message);
+                //}
         };
         
         reader.readAsText(file);
@@ -108,4 +108,7 @@ class TimingGenData {
         
         URL.revokeObjectURL(url);
     }
+
+
 }
+

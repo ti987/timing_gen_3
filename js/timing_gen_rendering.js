@@ -150,25 +150,59 @@ class TimingGenRendering {
         // Starting from the previous state at delayMin
         const x1 = baseX + delayMin;
         const x2 = baseX + delayMax;
+
+        if (fromY !== 'X') {
+            // For a transition from fromY to toY:
+            // The parallelogram extends the previous state (fromY) for delayMin,
+            // then slopes down to the new state (toY)
+            
+            // Bottom-left: end of previous state at delayMin
+            path.moveTo(new paper.Point(x1, fromY));
+            
+            // Bottom-right: slope starts at delayMax
+            path.lineTo(new paper.Point(x2, fromY));
+            
+            // Top-right: slope ends at delayMax + slew
+            path.lineTo(new paper.Point(x2 + slew, toY));
         
-        // For a transition from fromY to toY:
-        // The parallelogram extends the previous state (fromY) for delayMin,
-        // then slopes down to the new state (toY)
+            // Top-left: slope ends at delayMin + slew
+            path.lineTo(new paper.Point(x1 + slew, toY));
         
-        // Bottom-left: end of previous state at delayMin
-        path.moveTo(new paper.Point(x1, fromY));
-        
-        // Bottom-right: slope starts at delayMax
-        path.lineTo(new paper.Point(x2, fromY));
-        
-        // Top-right: slope ends at delayMax + slew
-        path.lineTo(new paper.Point(x2 + slew, toY));
-        
-        // Top-left: slope ends at delayMin + slew
-        path.lineTo(new paper.Point(x1 + slew, toY));
-        
-        // Close the path
-        path.closePath();
+            // Close the path
+            path.closePath();
+
+        } else {
+            // fromY is X.
+            // If toY is 1, draw a parallelogram
+            // elsif toY is 0, draw a parallelogram
+            // else draw a hexagon.
+            if (toY[2] == toY[0]) {
+                // current (toY[2]) is high (toY[0])
+                // left to right right to left
+                path.moveTo(new paper.Point(x1, toY[1]));
+                path.lineTo(new paper.Point(x2, toY[1]));
+                path.lineTo(new paper.Point(x2 + slew, toY[2]));
+                path.lineTo(new paper.Point(x1 + slew, toY[2]));
+                path.closePath();
+            } else if(toY[2] == toY[1]) {
+                // current (toY[2]) is low (toY[1])
+                // left to right right to left
+                path.moveTo(new paper.Point(x1, toY[0]));
+                path.lineTo(new paper.Point(x2, toY[0]));
+                path.lineTo(new paper.Point(x2 + slew, toY[2]));
+                path.lineTo(new paper.Point(x1 + slew, toY[2]));
+                path.closePath();
+            } else {
+                // current is middle
+                path.moveTo(new paper.Point(x1, toY[0]));
+                path.lineTo(new paper.Point(x2, toY[0]));
+                path.lineTo(new paper.Point(x2 + slew/2, toY[2]));
+                path.lineTo(new paper.Point(x2, toY[1]));
+                path.lineTo(new paper.Point(x1, toY[1]));
+                path.lineTo(new paper.Point(x1 + slew/2, toY[2]));
+                path.closePath();
+            }
+        }
         
         // Set the fill color with transparency
         // Handle both full Paper.js and the shim
@@ -288,7 +322,8 @@ class TimingGenRendering {
         
         for (let i = 0; i <= app.config.cycles; i++) {
             // Get delay info object for this cycle (contains min, max, color)
-            const delayInfo = i < app.config.cycles ? app.getEffectiveDelay(signal, i) : { min: 0, max: 0, color: app.config.delayColor };
+            const delayInfo = i < app.config.cycles && i > 0 ?
+                app.getEffectiveDelay(signal, i) : { min: 0, max: 0, color: app.config.delayColor };
             
             // Get slew for this cycle
             const slew = i < app.config.cycles ? app.getEffectiveSlew(signal, i) : app.config.slew;
@@ -332,6 +367,18 @@ class TimingGenRendering {
                         path.lineTo(new paper.Point(x, prevValueY));
                         // Then draw sloped to after transition
                         path.lineTo(new paper.Point(x + slew, currentY));
+                    } else if (app.getBitValueAtCycle(signal,i-1) === 'X') {
+                        // Draw delay uncertainty parallelogram if there's uncertainty
+                        if (delayInfo.max > delayInfo.min) {
+                            TimingGenRendering.drawBitDelayUncertainty(baseX, delayInfo, 'X', [highY, lowY, currentY], slew);
+                        }
+                        // Draw transition with slew
+                        // First, draw horizontal line at transition
+                        path.lineTo(new paper.Point(x, prevValueY));
+                        // Then draw sloped to after transition
+                        path.lineTo(new paper.Point(x + slew, currentY));
+                        
+
                     } else {
                         // Same value, just continue
                         path.lineTo(new paper.Point(x, currentY));
@@ -353,9 +400,16 @@ class TimingGenRendering {
             path.strokeWidth = 2;
             path.fillColor = '#999999';
 
-            const x1 = app.config.nameColumnWidth + span.start * app.config.cycleWidth;
-            const x2 = app.config.nameColumnWidth + (span.end + 1) * app.config.cycleWidth;
+            var  x1 = app.config.nameColumnWidth + span.start * app.config.cycleWidth;
+            var  x2 = app.config.nameColumnWidth + (span.end + 1) * app.config.cycleWidth;
 
+            const delay1 = span.start < app.config.cycles && span.start > 0 ?
+                app.getEffectiveDelay(signal, span.start) : { min: 0, max: 0, color: app.config.delayColor };
+            const delay2 = span.end < app.config.cycles && span.end > 0 ?
+                app.getEffectiveDelay(signal, span.end) : { min: 0, max: 0, color: app.config.delayColor };
+            x1 = x1 + delay1.min;
+            x2 = x2 + delay2.min;
+            
             let spanStart = span.start;
             let spanEnd = span.end;
 
@@ -415,7 +469,7 @@ class TimingGenRendering {
                 path.lineTo(new paper.Point(x1 , lowY));
             }
             path.closePath();
-                
+
             //TimingGenRendering.drawXPattern(x1, x2, baseY, highY, lowY, app.config.signalColor);
         });
     }
@@ -458,8 +512,12 @@ class TimingGenRendering {
             // Calculate start position (at grid line + delay)
             // The grid line is where the transition should end, so slew should start before it
             const baseX1 = app.config.nameColumnWidth + spanStart * app.config.cycleWidth;
-            const x1 = baseX1 + delayInfo.min; // Actual transition point (minimum delay)
-            const x2 = app.config.nameColumnWidth + (spanEnd + 1) * app.config.cycleWidth;
+            const x1 = baseX1; // + delayInfo.min; // Actual transition point (minimum delay)
+
+            // obtain how far in next cycle has been drawn here
+            const nextDelay = spanEnd + 1 < app.config.cycles ? app.getEffectiveDelay(signal, spanEnd + 1) : {min:0,max:0, color:"black"};
+            const x2 = app.config.nameColumnWidth + (spanEnd + 1) * app.config.cycleWidth + nextDelay.min;
+
             
             if (value === 'Z') {
                 // High-Z state - draw middle line
@@ -477,11 +535,26 @@ class TimingGenRendering {
                 const prevValue = spanStart > 0 ? app.getBusValueAtCycle(signal, spanStart - 1) : null;
                 const nextValue = spanEnd + 1 < app.config.cycles ? app.getBusValueAtCycle(signal, spanEnd + 1) : null;
                 const hasNextValue = (spanEnd + 1 < app.config.cycles && signal.values[spanEnd + 1] !== undefined);
+
+
+                // draw uncertainty between min and max delay.
+                
                 
                 // Draw delay uncertainty if transitioning and there's uncertainty
                 if (prevValue !== null && prevValue !== value && delayInfo.max > delayInfo.min) {
                     // For bus signals, draw hexagon uncertainty from bottom to top
-                    TimingGenRendering.drawBusDelayUncertainty(baseX1, delayInfo, bottomY, topY, slew);
+                    const path = new paper.Path();
+                    path.strokeColor = app.config.signalColor;
+                    path.strokeWidth = 2;
+                    path.fillColor = delayInfo.color;
+                    path.moveTo(new paper.Point(x1 + delayInfo.min + slew, topY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.max + slew, topY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.max + slew/2, midY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.max + slew, bottomY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.min + slew,bottomY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.min + slew/2, midY));
+                    path.closePath();
+                    //TimingGenRendering.drawBusDelayUncertainty(baseX1, delayInfo, bottomY, topY, slew);
                 }
                 
                 // Draw bus shape with X-shaped transitions
@@ -499,21 +572,22 @@ class TimingGenRendering {
                 // Start with X-shaped transition if coming from X or at beginning
                 if (prevValue === null || spanStart === 0) {
                     // X-shaped start transition
-                    path.moveTo(new paper.Point(x1 , bottomY));
-                    path.lineTo(new paper.Point(x1 , topY));
+                    path.moveTo(new paper.Point(x1 + delayInfo.max , bottomY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.max , topY));
                 } else if (prevValue === 'Z') {
-                    path.moveTo(new paper.Point(x1 , midY));
-                    path.lineTo(new paper.Point(x1 + slew/2, topY));
+                    path.moveTo(new paper.Point(x1 + delayInfo.max , midY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.max + slew/2, topY));
                 } else {
                     // Normal start - the slew has already brought us to the transition point
-                    path.moveTo(new paper.Point(x1 + slew/2, midY));
-                    path.lineTo(new paper.Point(x1 + slew, topY));
+                    path.moveTo(new paper.Point(x1 + delayInfo.max + slew/2, midY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.max + slew, topY));
                     //path.moveTo(new paper.Point(x1, topY));
                 }
                 
                 // Top line
                 if (hasNextValue) {
                     // start at transition
+                    
                     path.lineTo(new paper.Point(x2 , topY));
                     path.lineTo(new paper.Point(x2 + slew/2, midY));
                     path.lineTo(new paper.Point(x2 , bottomY));
@@ -527,17 +601,18 @@ class TimingGenRendering {
                 
                 // Close with X-shaped transition if coming from X
                 if (prevValue === null || spanStart === 0) {
-                    path.lineTo(new paper.Point(x1 , bottomY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.max , bottomY));
                 } else if (prevValue === 'Z') {
-                    path.lineTo(new paper.Point(x1 + slew/2, bottomY));
-                    path.lineTo(new paper.Point(x1 , midY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.max + slew/2, bottomY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.max , midY));
 
                 } else {
-                    path.lineTo(new paper.Point(x1 + slew, bottomY));
-                    path.lineTo(new paper.Point(x1 + slew/2, midY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.max + slew, bottomY));
+                    path.lineTo(new paper.Point(x1 + delayInfo.max + slew/2, midY));
                 }
                 path.closePath();
-                
+
+                    
                 if (value !== 'X') {
                     // Draw value text in the middle of the span
                     const textX = (x1 + x2) / 2;

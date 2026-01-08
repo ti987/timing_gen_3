@@ -566,3 +566,21 @@ window.addEventListener('DOMContentLoaded', () => {
     window.timingGenApp = app;
     document.getElementById('waveform-canvas').__timingGenApp = app;
 });
+
+    printData = function() {
+        const app = window.timingGenApp;
+        const data = {
+            version: '3.0.1',
+            config: {
+                cycles: app.config.cycles,
+                clockPeriod: app.config.clockPeriod,
+                clockPeriodUnit: app.config.clockPeriodUnit,
+                slew: app.config.slew,
+                delayMin: app.config.delayMin,
+                delayMax: app.config.delayMax,
+                delayColor: app.config.delayColor
+            },
+            signals: app.signals
+        };
+        console.log(data);
+    }
