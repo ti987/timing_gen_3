@@ -1,0 +1,64 @@
+{
+  "version": "3.0.1",
+  "config": {
+    "cycles": 10,
+    "clockPeriod": 10,
+    "clockPeriodUnit": "ns",
+    "slew": 14,
+    "delayMin": 1,
+    "delayMax": 3,
+    "delayColor": "#FF0000"
+  },
+  "signals": [
+    {
+      "name": "clk",
+      "type": "clock",
+      "values": {}
+    },
+    {
+      "name": "sig1",
+      "type": "bit",
+      "base_clock": "clk",
+      "values": {
+        "0": 0,
+        "2": 1,
+        "5": 0,
+        "8": 1
+      },
+      "delayMax": 5
+    },
+    {
+      "name": "sig2",
+      "type": "bit",
+      "base_clock": "clk",
+      "values": {
+        "0": 0,
+        "2": 1,
+        "5": 0,
+        "8": 1
+      },
+      "delayMin": 2,
+      "delayColor": "#00FF00"
+    },
+    {
+      "name": "bus1",
+      "type": "bus",
+      "base_clock": "clk",
+      "values": {
+        "0": "X",
+        "2": "0xAA",
+        "5": "0xBB",
+        "8": "Z"
+      },
+      "cycleOptions": {
+        "2": {
+          "delayMax": 4
+        },
+        "5": {
+          "delayMin": 1.5,
+          "delayColor": "#0000FF"
+        }
+      }
+    }
+  ]
+}

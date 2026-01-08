@@ -432,46 +432,68 @@ class TimingGenApp {
         return this.config.slew;
     }
     
-    // Get effective delay value with priority: cycle > signal > global
+    // Get effective delay value with cascading priority: cycle > signal > global
+    // Each attribute (delayMin, delayMax, delayColor) is resolved independently
     // Returns object with {min, max, color} delay in pixels
     getEffectiveDelay(signal, cycle) {
-        let delayMinInTime = 0; // min delay in same time units as clock period
-        let delayMaxInTime = 0; // max delay in same time units as clock period
-        let delayColor = null; // color for delay uncertainty
+        // Start with defaults from code (0 for delays, config color for color)
+        let delayMinInTime = 0;
+        let delayMaxInTime = 0;
+        let delayColor = this.config.delayColor;
         
-        // Check cycle-level override
-        if (signal.cycleOptions && signal.cycleOptions[cycle]) {
-            const cycleOpts = signal.cycleOptions[cycle];
-            if (cycleOpts.delayMin !== undefined && cycleOpts.delayMax !== undefined) {
-                delayMinInTime = cycleOpts.delayMin;
-                delayMaxInTime = cycleOpts.delayMax;
-                delayColor = cycleOpts.delayColor;
-            } else if (cycleOpts.delay !== undefined) {
-                // Backward compatibility: single delay value
-                delayMinInTime = cycleOpts.delay;
-                delayMaxInTime = cycleOpts.delay;
-            }
+        // Apply global level overrides (if defined)
+        if (this.config.delayMin !== undefined) {
+            delayMinInTime = this.config.delayMin;
         }
-        // Check signal-level override
-        else if (signal.delayMin !== undefined && signal.delayMax !== undefined) {
+        if (this.config.delayMax !== undefined) {
+            delayMaxInTime = this.config.delayMax;
+        }
+        if (this.config.delayColor !== undefined) {
+            delayColor = this.config.delayColor;
+        }
+        
+        // Backward compatibility: handle old single delay field at global level
+        if (this.config.delay !== undefined) {
+            delayMinInTime = this.config.delay;
+            delayMaxInTime = this.config.delay;
+        }
+        
+        // Apply signal level overrides (if defined)
+        if (signal.delayMin !== undefined) {
             delayMinInTime = signal.delayMin;
+        }
+        if (signal.delayMax !== undefined) {
             delayMaxInTime = signal.delayMax;
+        }
+        if (signal.delayColor !== undefined) {
             delayColor = signal.delayColor;
-        } else if (signal.delay !== undefined) {
-            // Backward compatibility: single delay value
+        }
+        
+        // Backward compatibility: handle old single delay field at signal level
+        if (signal.delay !== undefined) {
             delayMinInTime = signal.delay;
             delayMaxInTime = signal.delay;
         }
-        // Use global default
-        else {
-            delayMinInTime = this.config.delayMin;
-            delayMaxInTime = this.config.delayMax;
-            delayColor = this.config.delayColor;
-        }
         
-        // If no color was set at cycle or signal level, use global
-        if (!delayColor) {
-            delayColor = this.config.delayColor;
+        // Apply cycle level overrides (if defined)
+        if (signal.cycleOptions && signal.cycleOptions[cycle]) {
+            const cycleOpts = signal.cycleOptions[cycle];
+            
+            if (cycleOpts.delayMin !== undefined) {
+                delayMinInTime = cycleOpts.delayMin;
+            }
+            if (cycleOpts.delayMax !== undefined) {
+                delayMaxInTime = cycleOpts.delayMax;
+            }
+            if (cycleOpts.delayColor !== undefined) {
+                delayColor = cycleOpts.delayColor;
+            }
+            
+            // Backward compatibility: handle old single delay field at cycle level
+            if (cycleOpts.delay !== undefined) {
+                delayMinInTime = cycleOpts.delay;
+                delayMaxInTime = cycleOpts.delay;
+            }
         }
         
         // Convert delay time to fraction of clock period, then to pixels
