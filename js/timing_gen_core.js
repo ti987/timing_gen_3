@@ -441,6 +441,12 @@ class TimingGenApp {
         let delayMaxInTime = 0;
         let delayColor = this.config.delayColor || '#0000FF'; // Ensure we always have a color
         
+        // Backward compatibility: handle old single delay field at global level (only if new fields not set)
+        if (this.config.delay !== undefined && this.config.delayMin === undefined && this.config.delayMax === undefined) {
+            delayMinInTime = this.config.delay;
+            delayMaxInTime = this.config.delay;
+        }
+        
         // Apply global level overrides (if defined)
         if (this.config.delayMin !== undefined) {
             delayMinInTime = this.config.delayMin;
@@ -452,10 +458,10 @@ class TimingGenApp {
             delayColor = this.config.delayColor;
         }
         
-        // Backward compatibility: handle old single delay field at global level
-        if (this.config.delay !== undefined) {
-            delayMinInTime = this.config.delay;
-            delayMaxInTime = this.config.delay;
+        // Backward compatibility: handle old single delay field at signal level (only if new fields not set)
+        if (signal.delay !== undefined && signal.delayMin === undefined && signal.delayMax === undefined) {
+            delayMinInTime = signal.delay;
+            delayMaxInTime = signal.delay;
         }
         
         // Apply signal level overrides (if defined)
@@ -469,15 +475,15 @@ class TimingGenApp {
             delayColor = signal.delayColor;
         }
         
-        // Backward compatibility: handle old single delay field at signal level
-        if (signal.delay !== undefined) {
-            delayMinInTime = signal.delay;
-            delayMaxInTime = signal.delay;
-        }
-        
         // Apply cycle level overrides (if defined)
         if (signal.cycleOptions && signal.cycleOptions[cycle]) {
             const cycleOpts = signal.cycleOptions[cycle];
+            
+            // Backward compatibility: handle old single delay field at cycle level (only if new fields not set)
+            if (cycleOpts.delay !== undefined && cycleOpts.delayMin === undefined && cycleOpts.delayMax === undefined) {
+                delayMinInTime = cycleOpts.delay;
+                delayMaxInTime = cycleOpts.delay;
+            }
             
             if (cycleOpts.delayMin !== undefined) {
                 delayMinInTime = cycleOpts.delayMin;
@@ -487,12 +493,6 @@ class TimingGenApp {
             }
             if (cycleOpts.delayColor !== undefined) {
                 delayColor = cycleOpts.delayColor;
-            }
-            
-            // Backward compatibility: handle old single delay field at cycle level
-            if (cycleOpts.delay !== undefined) {
-                delayMinInTime = cycleOpts.delay;
-                delayMaxInTime = cycleOpts.delay;
             }
         }
         
