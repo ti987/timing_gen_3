@@ -439,7 +439,7 @@ class TimingGenApp {
         // Start with defaults from code (0 for delays, config color for color)
         let delayMinInTime = 0;
         let delayMaxInTime = 0;
-        let delayColor = this.config.delayColor;
+        let delayColor = this.config.delayColor || '#0000FF'; // Ensure we always have a color
         
         // Apply global level overrides (if defined)
         if (this.config.delayMin !== undefined) {
