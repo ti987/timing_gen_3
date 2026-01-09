@@ -115,14 +115,6 @@ class TimingGenApp {
         document.getElementById('delete-signal-menu').addEventListener('click', () => this.deleteSignal());
         document.getElementById('cancel-signal-menu').addEventListener('click', () => this.hideAllMenus());
         
-        // Bit cycle context menu - add cycle options and cancel handlers
-        document.getElementById('bit-cycle-options-menu').addEventListener('click', () => {
-            this.hideAllMenus();
-            TimingGenUI.showCycleOptionsDialog(this);
-        });
-        document.getElementById('remove-bit-change-menu').addEventListener('click', () => this.removeBitChange());
-        document.getElementById('cancel-bit-cycle-menu').addEventListener('click', () => this.hideAllMenus());
-        
         // Bus cycle context menu handlers
         document.getElementById('set-bus-value-menu').addEventListener('click', () => {
             this.hideAllMenus();
@@ -659,8 +651,8 @@ class TimingGenApp {
             this.deleteCyclesForSignal(signal, startCycle, numCycles);
         });
         
-        // Update cycle count - keep it the same by deleting
-        // No need to change config.cycles as we're just removing existing cycles
+        // Keep cycle count unchanged - the deleted cycles are replaced with steady cycles at the end
+        // (steady cycles extend the last state automatically without explicit values)
         this.render();
     }
     
