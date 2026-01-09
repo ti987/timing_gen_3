@@ -1,5 +1,5 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Version 3.0.1
+// Version 3.0.2
 // Main JavaScript Application using Paper.js
 //
 // Key Features:

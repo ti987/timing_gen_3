@@ -1,11 +1,11 @@
 // Timing Gen 3 - Data Management Module
-// Version 3.0.1
+// Version 3.0.2
 // Handles save/load functionality and data import/export
 
 class TimingGenData {
     static saveToJSON(app) {
         const data = {
-            version: '3.0.1',
+            version: '3.0.2',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,

@@ -1,5 +1,5 @@
 // Minimal Paper.js shim for testing purposes
-// Version 3.0.1
+// Version 3.0.2
 // This provides just enough Paper.js API to make the timing_gen_3 app work
 // For production, use the real Paper.js library from: https://paperjs.org/
 
