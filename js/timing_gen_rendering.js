@@ -37,22 +37,22 @@ class TimingGenRendering {
         const maxHeight = app.config.headerHeight + app.signals.length * app.config.rowHeight;
         
         // Vertical lines (cycle dividers) - draw to max height based on signals
-        for (let i = 0; i <= app.config.cycles; i++) {
-            const x = app.config.nameColumnWidth + i * app.config.cycleWidth;
+        for (let idx = 0; idx <= app.config.cycles; idx++) {
+            const xPos = app.config.nameColumnWidth + idx * app.config.cycleWidth;
             const line = new paper.Path.Line({
-                from: [x, 0],
-                to: [x, maxHeight],
+                from: [xPos, 0],
+                to: [xPos, maxHeight],
                 strokeColor: app.config.gridColor,
                 strokeWidth: 1
             });
         }
         
         // Horizontal lines (signal dividers)
-        for (let i = 0; i <= app.signals.length; i++) {
-            const y = app.config.headerHeight + i * app.config.rowHeight;
+        for (let idx = 0; idx <= app.signals.length; idx++) {
+            const yPos = app.config.headerHeight + idx * app.config.rowHeight;
             const line = new paper.Path.Line({
-                from: [0, y],
-                to: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, y],
+                from: [0, yPos],
+                to: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, yPos],
                 strokeColor: app.config.gridColor,
                 strokeWidth: 1
             });
@@ -68,13 +68,13 @@ class TimingGenRendering {
     }
     
     static drawHeader(app) {
-        for (let i = 0; i < app.config.cycles; i++) {
-            const x = app.config.nameColumnWidth + i * app.config.cycleWidth + app.config.cycleWidth / 2;
-            const y = 30;
+        for (let idx = 0; idx < app.config.cycles; idx++) {
+            const xPos = app.config.nameColumnWidth + idx * app.config.cycleWidth + app.config.cycleWidth / 2;
+            const yPos = 30;
             
             const text = new paper.PointText({
-                point: [x, y],
-                content: i.toString(),
+                point: [xPos, yPos],
+                content: idx.toString(),
                 fillColor: 'black',
                 fontFamily: 'Arial',
                 fontSize: 12,
@@ -84,11 +84,11 @@ class TimingGenRendering {
     }
     
     static drawSignal(app, signal, index) {
-        const y = app.config.headerHeight + index * app.config.rowHeight;
+        const yPos = app.config.headerHeight + index * app.config.rowHeight;
         
         // Draw signal name
         const nameText = new paper.PointText({
-            point: [app.config.nameColumnWidth - 10, y + app.config.rowHeight / 2 + 5],
+            point: [app.config.nameColumnWidth - 10, yPos + app.config.rowHeight / 2 + 5],
             content: signal.name,
             fillColor: 'black',
             fontFamily: 'Arial',
@@ -99,11 +99,11 @@ class TimingGenRendering {
         
         // Draw waveform
         if (signal.type === 'clock') {
-            TimingGenRendering.drawClockWaveform(app, signal, y);
+            TimingGenRendering.drawClockWaveform(app, signal, yPos);
         } else if (signal.type === 'bit') {
-            TimingGenRendering.drawBitWaveform(app, signal, y);
+            TimingGenRendering.drawBitWaveform(app, signal, yPos);
         } else if (signal.type === 'bus') {
-            TimingGenRendering.drawBusWaveform(app, signal, y);
+            TimingGenRendering.drawBusWaveform(app, signal, yPos);
         }
     }
     
@@ -115,13 +115,13 @@ class TimingGenRendering {
         path.strokeColor = app.config.signalColor;
         path.strokeWidth = 2;
         
-        for (let i = 0; i < app.config.cycles; i++) {
-            const x1 = app.config.nameColumnWidth + i * app.config.cycleWidth;
+        for (let idx = 0; idx < app.config.cycles; idx++) {
+            const x1 = app.config.nameColumnWidth + idx * app.config.cycleWidth;
             const x2 = x1 + app.config.cycleWidth / 2;
             const x3 = x1 + app.config.cycleWidth;
             
             // Rising edge at start of cycle
-            if (i === 0) {
+            if (idx === 0) {
                 path.moveTo(new paper.Point(x1, lowY));
             }
             path.lineTo(new paper.Point(x1, highY));
@@ -213,10 +213,10 @@ class TimingGenRendering {
         } else {
             // Paper.js shim - use rgba directly
             // Convert hex color to rgba
-            const r = parseInt(color.substring(1, 3), 16);
-            const g = parseInt(color.substring(3, 5), 16);
-            const b = parseInt(color.substring(5, 7), 16);
-            path.fillColor = `rgba(${r}, ${g}, ${b}, 0.3)`;
+            const red = parseInt(color.substring(1, 3), 16);
+            const green = parseInt(color.substring(3, 5), 16);
+            const blue = parseInt(color.substring(5, 7), 16);
+            path.fillColor = `rgba(${red}, ${green}, ${blue}, 0.3)`;
         }
         // Add black stroke on all edges for bit signals
         path.strokeColor = '#000000';
@@ -272,10 +272,10 @@ class TimingGenRendering {
         } else {
             // Paper.js shim - use rgba directly
             // Convert hex color to rgba
-            const r = parseInt(color.substring(1, 3), 16);
-            const g = parseInt(color.substring(3, 5), 16);
-            const b = parseInt(color.substring(5, 7), 16);
-            path.fillColor = `rgba(${r}, ${g}, ${b}, 0.3)`;
+            const red = parseInt(color.substring(1, 3), 16);
+            const green = parseInt(color.substring(3, 5), 16);
+            const blue = parseInt(color.substring(5, 7), 16);
+            path.fillColor = `rgba(${red}, ${green}, ${blue}, 0.3)`;
         }
         path.strokeColor = null; // No stroke for bus signals
     }
@@ -287,27 +287,27 @@ class TimingGenRendering {
         
         // First, identify all X spans
         const xSpans = [];
-        let i = 0;
-        while (i < app.config.cycles) {
-            const value = app.getBitValueAtCycle(signal, i);
+        let idx = 0;
+        while (idx < app.config.cycles) {
+            const value = app.getBitValueAtCycle(signal, idx);
             if (value === 'X') {
-                const spanStart = i;
-                let spanEnd = i;
+                const spanStart = idx;
+                let spanEnd = idx;
                 // Find the end of this X span
-                for (let j = i + 1; j < app.config.cycles; j++) {
-                    const nextValue = app.getBitValueAtCycle(signal, j);
+                for (let jdx = idx + 1; jdx < app.config.cycles; jdx++) {
+                    const nextValue = app.getBitValueAtCycle(signal, jdx);
                     if (nextValue !== 'X') {
-                        spanEnd = j - 1;
+                        spanEnd = jdx - 1;
                         break;
                     }
-                    if (j === app.config.cycles - 1) {
-                        spanEnd = j;
+                    if (jdx === app.config.cycles - 1) {
+                        spanEnd = jdx;
                     }
                 }
                 xSpans.push({ start: spanStart, end: spanEnd });
-                i = spanEnd + 1;
+                idx = spanEnd + 1;
             } else {
-                i++;
+                idx++;
             }
         }
         
@@ -320,31 +320,31 @@ class TimingGenRendering {
         let prevX = null;
         let prevY = null;
         
-        for (let i = 0; i <= app.config.cycles; i++) {
+        for (let idx = 0; idx <= app.config.cycles; idx++) {
             // Get delay info object for this cycle (contains min, max, color)
-            const delayInfo = i < app.config.cycles && i > 0 ?
-                app.getEffectiveDelay(signal, i) : { min: 0, max: 0, color: app.config.delayColor };
+            const delayInfo = idx < app.config.cycles && idx > 0 ?
+                app.getEffectiveDelay(signal, idx) : { min: 0, max: 0, color: app.config.delayColor };
             
             // Get slew for this cycle
-            const slew = i < app.config.cycles ? app.getEffectiveSlew(signal, i) : app.config.slew;
+            const slew = idx < app.config.cycles ? app.getEffectiveSlew(signal, idx) : app.config.slew;
             
             // Base x position at grid line
-            const baseX = app.config.nameColumnWidth + i * app.config.cycleWidth;
+            const baseX = app.config.nameColumnWidth + idx * app.config.cycleWidth;
             // Actual transition point after minimum delay
-            const x = baseX + delayInfo.min;
+            const xPos = baseX + delayInfo.min;
             
-            const value = (i < app.config.cycles) ? app.getBitValueAtCycle(signal, i) : app.getBitValueAtCycle(signal, app.config.cycles - 1);
+            const value = (idx < app.config.cycles) ? app.getBitValueAtCycle(signal, idx) : app.getBitValueAtCycle(signal, app.config.cycles - 1);
             const currentY = (value === 1) ? highY : (value === 'Z') ? midY : lowY;
             
             if (!pathStarted) {
                 // Start or restart the path
-                path.moveTo(new paper.Point(x, currentY));
+                path.moveTo(new paper.Point(xPos, currentY));
                 pathStarted = true;
-                prevX = x;
+                prevX = xPos;
                 prevY = currentY;
             } else {
                 // Continue the path
-                const prevCycle = i - 1;
+                const prevCycle = idx - 1;
                 // Skip back over any X spans to find the last non-X cycle
                 let lastNonXCycle = prevCycle;
                 while (lastNonXCycle >= 0 && xSpans.some(span => lastNonXCycle >= span.start && lastNonXCycle <= span.end)) {
@@ -364,31 +364,31 @@ class TimingGenRendering {
                         
                         // Draw transition with slew
                         // First, draw horizontal line at transition
-                        path.lineTo(new paper.Point(x, prevValueY));
+                        path.lineTo(new paper.Point(xPos, prevValueY));
                         // Then draw sloped to after transition
-                        path.lineTo(new paper.Point(x + slew, currentY));
-                    } else if (app.getBitValueAtCycle(signal,i-1) === 'X') {
+                        path.lineTo(new paper.Point(xPos + slew, currentY));
+                    } else if (app.getBitValueAtCycle(signal,idx - 1) === 'X') {
                         // Draw delay uncertainty parallelogram if there's uncertainty
                         if (delayInfo.max > delayInfo.min) {
                             TimingGenRendering.drawBitDelayUncertainty(baseX, delayInfo, 'X', [highY, lowY, currentY], slew);
                         }
                         // Draw transition with slew
                         // First, draw horizontal line at transition
-                        path.lineTo(new paper.Point(x, prevValueY));
+                        path.lineTo(new paper.Point(xPos, prevValueY));
                         // Then draw sloped to after transition
-                        path.lineTo(new paper.Point(x + slew, currentY));
+                        path.lineTo(new paper.Point(xPos + slew, currentY));
                         
 
                     } else {
                         // Same value, just continue
-                        path.lineTo(new paper.Point(x, currentY));
+                        path.lineTo(new paper.Point(xPos, currentY));
                     }
                 } else {
                     // No previous non-X cycle, just draw to current
-                    path.lineTo(new paper.Point(x, currentY));
+                    path.lineTo(new paper.Point(xPos, currentY));
                 }
                 
-                prevX = x;
+                prevX = xPos;
                 prevY = currentY;
             }
         }
@@ -480,26 +480,26 @@ class TimingGenRendering {
         const midY = baseY + app.config.rowHeight / 2;
         
         // First pass: identify value spans with their cycles
-        let i = 0;
-        while (i < app.config.cycles) {
-            const value = app.getBusValueAtCycle(signal, i);
+        let idx = 0;
+        while (idx < app.config.cycles) {
+            const value = app.getBusValueAtCycle(signal, idx);
             
             // Find where this value span starts and ends
-            let spanStart = i;
-            let spanEnd = i;
+            let spanStart = idx;
+            let spanEnd = idx;
             
             // Find the end of this value span
-            for (let j = i + 1; j < app.config.cycles; j++) {
-                if (signal.values[j] !== undefined) {
-                    spanEnd = j - 1;
+            for (let jdx = idx + 1; jdx < app.config.cycles; jdx++) {
+                if (signal.values[jdx] !== undefined) {
+                    spanEnd = jdx - 1;
                     break;
                 }
-                if (j === app.config.cycles - 1) {
-                    spanEnd = j;
+                if (jdx === app.config.cycles - 1) {
+                    spanEnd = jdx;
                 }
             }
             
-            if (spanEnd === i && i < app.config.cycles - 1 && signal.values[i + 1] === undefined) {
+            if (spanEnd === idx && idx < app.config.cycles - 1 && signal.values[idx + 1] === undefined) {
                 spanEnd = app.config.cycles - 1;
             }
             
@@ -628,7 +628,7 @@ class TimingGenRendering {
             }
             
             // Move to next span
-            i = spanEnd + 1;
+            idx = spanEnd + 1;
         }
     }
     

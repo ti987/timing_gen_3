@@ -22,16 +22,16 @@ class TimingGenData {
         const blob = new Blob([jsonStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'timing_diagram.td3';
-        a.click();
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'timing_diagram.td3';
+        anchor.click();
         
         URL.revokeObjectURL(url);
     }
     
-    static loadFromJSON(app, e) {
-        const file = e.target.files[0];
+    static loadFromJSON(app, ev) {
+        const file = ev.target.files[0];
         if (!file) return;
         
         const reader = new FileReader();
@@ -77,7 +77,7 @@ class TimingGenData {
                     // Ensure all bit and bus signals have base_clock
                     app.signals.forEach(signal => {
                         if ((signal.type === 'bit' || signal.type === 'bus') && !signal.base_clock) {
-                            const clockSignal = app.signals.find(s => s.type === 'clock');
+                            const clockSignal = app.signals.find(sg => sg.type === 'clock');
                             signal.base_clock = clockSignal ? clockSignal.name : 'clk';
                         }
                     });
@@ -91,7 +91,7 @@ class TimingGenData {
         };
         
         reader.readAsText(file);
-        e.target.value = ''; // Reset file input
+        ev.target.value = ''; // Reset file input
     }
     
     static exportToSVG(app) {
@@ -101,10 +101,10 @@ class TimingGenData {
         const blob = new Blob([svg], { type: 'image/svg+xml' });
         const url = URL.createObjectURL(blob);
         
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'timing_diagram.svg';
-        a.click();
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'timing_diagram.svg';
+        anchor.click();
         
         URL.revokeObjectURL(url);
     }

@@ -300,18 +300,18 @@ class TimingGenUI {
         }
     }
     
-    static showContextMenu(menuId, x, y) {
+    static showContextMenu(menuId, xPos, yPos) {
         const menu = document.getElementById(menuId);
         menu.style.display = 'block';
-        menu.style.left = x + 'px';
-        menu.style.top = y + 'px';
+        menu.style.left = xPos + 'px';
+        menu.style.top = yPos + 'px';
     }
     
-    static showBitCycleContextMenu(app, x, y) {
+    static showBitCycleContextMenu(app, xPos, yPos) {
         const menu = document.getElementById('bit-cycle-context-menu');
         menu.style.display = 'block';
-        menu.style.left = x + 'px';
-        menu.style.top = y + 'px';
+        menu.style.left = xPos + 'px';
+        menu.style.top = yPos + 'px';
         
         // Add click handlers for menu items with data-value
         const items = menu.querySelectorAll('.menu-item[data-value]');
@@ -324,10 +324,10 @@ class TimingGenUI {
         });
     }
     
-    static showBusCycleContextMenu(app, x, y) {
+    static showBusCycleContextMenu(app, xPos, yPos) {
         const menu = document.getElementById('bus-cycle-context-menu');
         menu.style.display = 'block';
-        menu.style.left = x + 'px';
-        menu.style.top = y + 'px';
+        menu.style.left = xPos + 'px';
+        menu.style.top = yPos + 'px';
     }
 }

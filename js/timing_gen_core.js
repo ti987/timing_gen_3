@@ -70,8 +70,8 @@ class TimingGenApp {
         document.getElementById('save-btn').addEventListener('click', () => TimingGenData.saveToJSON(this));
         document.getElementById('load-btn').addEventListener('click', () => document.getElementById('file-input').click());
         document.getElementById('export-svg-btn').addEventListener('click', () => TimingGenData.exportToSVG(this));
-        document.getElementById('file-input').addEventListener('change', (e) => TimingGenData.loadFromJSON(this, e));
-        document.getElementById('cycles-input').addEventListener('change', (e) => this.updateCycles(e.target.value));
+        document.getElementById('file-input').addEventListener('change', (ev) => TimingGenData.loadFromJSON(this, ev));
+        document.getElementById('cycles-input').addEventListener('change', (ev) => this.updateCycles(ev.target.value));
         
         // Add signal dialog
         document.getElementById('dialog-ok-btn').addEventListener('click', () => this.addSignal());
@@ -128,18 +128,18 @@ class TimingGenApp {
         tool.onMouseDown = (event) => this.handleCanvasClick(event);
         
         // Context menu
-        this.canvas.addEventListener('contextmenu', (e) => this.handleCanvasRightClick(e));
+        this.canvas.addEventListener('contextmenu', (ev) => this.handleCanvasRightClick(ev));
         
         // Close dialogs and menus on outside click
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.context-menu') && !e.target.closest('canvas')) {
+        document.addEventListener('click', (ev) => {
+            if (!ev.target.closest('.context-menu') && !ev.target.closest('canvas')) {
                 this.hideAllMenus();
             }
         });
         
         // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
+        document.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape') {
                 TimingGenUI.hideAllDialogs(this);
                 this.hideAllMenus();
             }
@@ -170,7 +170,7 @@ class TimingGenApp {
         // Add base_clock for bit and bus signals
         if (type === 'bit' || type === 'bus') {
             // Find the first clock signal, or use 'clk' as default
-            const clockSignal = this.signals.find(s => s.type === 'clock');
+            const clockSignal = this.signals.find(sg => sg.type === 'clock');
             signal.base_clock = clockSignal ? clockSignal.name : 'clk';
         }
         
@@ -211,12 +211,12 @@ class TimingGenApp {
                 if (type === 'bit') {
                     signal.values[0] = 0;
                     // Add base_clock for bit signals
-                    const clockSignal = this.signals.find(s => s.type === 'clock');
+                    const clockSignal = this.signals.find(sg => sg.type === 'clock');
                     signal.base_clock = clockSignal ? clockSignal.name : 'clk';
                 } else if (type === 'bus') {
                     signal.values[0] = 'X';
                     // Add base_clock for bus signals
-                    const clockSignal = this.signals.find(s => s.type === 'clock');
+                    const clockSignal = this.signals.find(sg => sg.type === 'clock');
                     signal.base_clock = clockSignal ? clockSignal.name : 'clk';
                 } else if (type === 'clock') {
                     // Remove base_clock for clock signals
@@ -271,12 +271,12 @@ class TimingGenApp {
             return;
         }
         
-        const x = event.point.x;
-        const y = event.point.y;
+        const xPos = event.point.x;
+        const yPos = event.point.y;
         
         // Check if click is in signal name area
-        if (x < this.config.nameColumnWidth) {
-            const signalIndex = this.getSignalIndexAtY(y);
+        if (xPos < this.config.nameColumnWidth) {
+            const signalIndex = this.getSignalIndexAtY(yPos);
             if (signalIndex !== -1) {
                 this.startDragSignal(signalIndex, event);
             }
@@ -284,8 +284,8 @@ class TimingGenApp {
         }
         
         // Check if click is in waveform area
-        const cycle = Math.floor((x - this.config.nameColumnWidth) / this.config.cycleWidth);
-        const signalIndex = this.getSignalIndexAtY(y);
+        const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
+        const signalIndex = this.getSignalIndexAtY(yPos);
         
         if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
             const signal = this.signals[signalIndex];
@@ -298,27 +298,27 @@ class TimingGenApp {
         }
     }
     
-    handleCanvasRightClick(e) {
-        e.preventDefault();
+    handleCanvasRightClick(ev) {
+        ev.preventDefault();
         const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const xPos = ev.clientX - rect.left;
+        const yPos = ev.clientY - rect.top;
         
         this.hideAllMenus();
         
         // Check if right-click is in signal name area
-        if (x < this.config.nameColumnWidth) {
-            const signalIndex = this.getSignalIndexAtY(y);
+        if (xPos < this.config.nameColumnWidth) {
+            const signalIndex = this.getSignalIndexAtY(yPos);
             if (signalIndex !== -1) {
                 this.currentEditingSignal = signalIndex;
-                TimingGenUI.showContextMenu('signal-context-menu', e.clientX, e.clientY);
+                TimingGenUI.showContextMenu('signal-context-menu', ev.clientX, ev.clientY);
             }
             return;
         }
         
         // Check if right-click is in waveform area
-        const cycle = Math.floor((x - this.config.nameColumnWidth) / this.config.cycleWidth);
-        const signalIndex = this.getSignalIndexAtY(y);
+        const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
+        const signalIndex = this.getSignalIndexAtY(yPos);
         
         if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
             const signal = this.signals[signalIndex];
@@ -327,11 +327,11 @@ class TimingGenApp {
             if (signal.type === 'bit') {
                 this.currentEditingSignal = signalIndex;
                 this.currentEditingCycle = cycle;
-                TimingGenUI.showBitCycleContextMenu(this, e.clientX, e.clientY);
+                TimingGenUI.showBitCycleContextMenu(this, ev.clientX, ev.clientY);
             } else if (signal.type === 'bus') {
                 this.currentEditingSignal = signalIndex;
                 this.currentEditingCycle = cycle;
-                TimingGenUI.showBusCycleContextMenu(this, e.clientX, e.clientY);
+                TimingGenUI.showBusCycleContextMenu(this, ev.clientX, ev.clientY);
             }
         }
     }
@@ -391,9 +391,9 @@ class TimingGenApp {
     getBitValueAtCycle(signal, cycle) {
         // Find the last defined value before or at this cycle
         let value = 0; // default
-        for (let c = 0; c <= cycle; c++) {
-            if (signal.values[c] !== undefined) {
-                value = signal.values[c];
+        for (let cy = 0; cy <= cycle; cy++) {
+            if (signal.values[cy] !== undefined) {
+                value = signal.values[cy];
                 // Convert null to 0
                 if (value === null) {
                     value = 0;
@@ -406,9 +406,9 @@ class TimingGenApp {
     getBusValueAtCycle(signal, cycle) {
         // Find the last defined value before or at this cycle
         let value = 'X'; // default
-        for (let c = 0; c <= cycle; c++) {
-            if (signal.values[c] !== undefined) {
-                value = signal.values[c];
+        for (let cy = 0; cy <= cycle; cy++) {
+            if (signal.values[cy] !== undefined) {
+                value = signal.values[cy];
                 // Convert null to 'X' for bus signals
                 if (value === null) {
                     value = 'X';
@@ -512,8 +512,8 @@ class TimingGenApp {
         return { min: 0, max: 0, color: delayColor };
     }
     
-    getSignalIndexAtY(y) {
-        const relY = y - this.config.headerHeight;
+    getSignalIndexAtY(yPos) {
+        const relY = yPos - this.config.headerHeight;
         if (relY < 0) return -1;
         
         const index = Math.floor(relY / this.config.rowHeight);
@@ -526,13 +526,13 @@ class TimingGenApp {
         const rect = this.canvas.getBoundingClientRect();
         
         const onMouseMove = (moveEvent) => {
-            const y = moveEvent.clientY - rect.top;
-            this.updateDragIndicator(y);
+            const yPos = moveEvent.clientY - rect.top;
+            this.updateDragIndicator(yPos);
         };
         
         const onMouseUp = (upEvent) => {
-            const y = upEvent.clientY - rect.top;
-            this.dropSignal(y);
+            const yPos = upEvent.clientY - rect.top;
+            this.dropSignal(yPos);
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
             this.draggedSignal = null;
@@ -543,8 +543,8 @@ class TimingGenApp {
         document.addEventListener('mouseup', onMouseUp);
     }
     
-    updateDragIndicator(y) {
-        const targetIndex = this.getSignalIndexAtY(y);
+    updateDragIndicator(yPos) {
+        const targetIndex = this.getSignalIndexAtY(yPos);
         if (targetIndex !== -1 && targetIndex !== this.draggedSignal) {
             // Show indicator line
             const indicatorY = this.config.headerHeight + targetIndex * this.config.rowHeight;
@@ -566,8 +566,8 @@ class TimingGenApp {
         }
     }
     
-    dropSignal(y) {
-        const targetIndex = this.getSignalIndexAtY(y);
+    dropSignal(yPos) {
+        const targetIndex = this.getSignalIndexAtY(yPos);
         if (targetIndex !== -1 && targetIndex !== this.draggedSignal) {
             // Move signal
             const signal = this.signals.splice(this.draggedSignal, 1)[0];
