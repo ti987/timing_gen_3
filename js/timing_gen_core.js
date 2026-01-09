@@ -676,27 +676,27 @@ class TimingGenApp {
         const newCycleOptions = {};
         
         // Copy values, shifting those after startCycle
-        Object.keys(signal.values).forEach(cycleStr => {
-            const cycle = parseInt(cycleStr);
+        for (const [cycleStr, value] of Object.entries(signal.values)) {
+            const cycle = parseInt(cycleStr, 10);
             if (cycle <= startCycle) {
-                newValues[cycle] = signal.values[cycle];
+                newValues[cycle] = value;
             } else {
                 // Shift right by numCycles
-                newValues[cycle + numCycles] = signal.values[cycle];
+                newValues[cycle + numCycles] = value;
             }
-        });
+        }
         
         // Copy cycleOptions, shifting those after startCycle
         if (signal.cycleOptions) {
-            Object.keys(signal.cycleOptions).forEach(cycleStr => {
-                const cycle = parseInt(cycleStr);
+            for (const [cycleStr, options] of Object.entries(signal.cycleOptions)) {
+                const cycle = parseInt(cycleStr, 10);
                 if (cycle <= startCycle) {
-                    newCycleOptions[cycle] = signal.cycleOptions[cycle];
+                    newCycleOptions[cycle] = options;
                 } else {
                     // Shift right by numCycles
-                    newCycleOptions[cycle + numCycles] = signal.cycleOptions[cycle];
+                    newCycleOptions[cycle + numCycles] = options;
                 }
-            });
+            }
             signal.cycleOptions = newCycleOptions;
         }
         
@@ -710,31 +710,31 @@ class TimingGenApp {
         const newCycleOptions = {};
         
         // Copy values, skipping deleted cycles and shifting remaining ones
-        Object.keys(signal.values).forEach(cycleStr => {
-            const cycle = parseInt(cycleStr);
+        for (const [cycleStr, value] of Object.entries(signal.values)) {
+            const cycle = parseInt(cycleStr, 10);
             if (cycle < startCycle) {
                 // Keep as-is
-                newValues[cycle] = signal.values[cycle];
+                newValues[cycle] = value;
             } else if (cycle >= startCycle + numCycles) {
                 // Shift left by numCycles
-                newValues[cycle - numCycles] = signal.values[cycle];
+                newValues[cycle - numCycles] = value;
             }
             // Skip cycles in [startCycle, startCycle + numCycles)
-        });
+        }
         
         // Copy cycleOptions, skipping deleted cycles and shifting remaining ones
         if (signal.cycleOptions) {
-            Object.keys(signal.cycleOptions).forEach(cycleStr => {
-                const cycle = parseInt(cycleStr);
+            for (const [cycleStr, options] of Object.entries(signal.cycleOptions)) {
+                const cycle = parseInt(cycleStr, 10);
                 if (cycle < startCycle) {
                     // Keep as-is
-                    newCycleOptions[cycle] = signal.cycleOptions[cycle];
+                    newCycleOptions[cycle] = options;
                 } else if (cycle >= startCycle + numCycles) {
                     // Shift left by numCycles
-                    newCycleOptions[cycle - numCycles] = signal.cycleOptions[cycle];
+                    newCycleOptions[cycle - numCycles] = options;
                 }
                 // Skip cycles in [startCycle, startCycle + numCycles)
-            });
+            }
             signal.cycleOptions = newCycleOptions;
         }
         
