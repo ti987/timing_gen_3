@@ -745,8 +745,7 @@ class TimingGenApp {
     handleInsertCycles() {
         const numCycles = parseInt(document.getElementById('insert-cycles-input').value);
         
-        if (isNaN(numCycles) || numCycles < 1) {
-            alert('Please enter a valid number of cycles');
+        if (!this.validateCycleCount(numCycles)) {
             return;
         }
         
@@ -766,8 +765,7 @@ class TimingGenApp {
     handleDeleteCycles() {
         const numCycles = parseInt(document.getElementById('delete-cycles-input').value);
         
-        if (isNaN(numCycles) || numCycles < 1) {
-            alert('Please enter a valid number of cycles');
+        if (!this.validateCycleCount(numCycles)) {
             return;
         }
         
@@ -782,6 +780,14 @@ class TimingGenApp {
                 this.deleteCyclesSignal(this.currentEditingSignal, this.currentEditingCycle, numCycles);
             }
         }
+    }
+    
+    validateCycleCount(numCycles) {
+        if (isNaN(numCycles) || numCycles < 1 || numCycles > 50) {
+            alert('Please enter a valid number of cycles (1-50)');
+            return false;
+        }
+        return true;
     }
     
     render() {
