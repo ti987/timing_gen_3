@@ -123,6 +123,8 @@ class TimingGenUI {
         TimingGenUI.hideGlobalOptionDialog();
         TimingGenUI.hideSignalOptionsDialog();
         TimingGenUI.hideCycleOptionsDialog();
+        TimingGenUI.hideInsertCyclesDialog();
+        TimingGenUI.hideDeleteCyclesDialog();
     }
     
     static showSignalOptionsDialog(app) {
@@ -329,5 +331,25 @@ class TimingGenUI {
         menu.style.display = 'block';
         menu.style.left = xPos + 'px';
         menu.style.top = yPos + 'px';
+    }
+    
+    static showInsertCyclesDialog(app) {
+        document.getElementById('insert-cycles-input').value = '1';
+        document.getElementById('insert-cycles-dialog').style.display = 'flex';
+        document.getElementById('insert-cycles-input').focus();
+    }
+    
+    static hideInsertCyclesDialog() {
+        document.getElementById('insert-cycles-dialog').style.display = 'none';
+    }
+    
+    static showDeleteCyclesDialog(app) {
+        document.getElementById('delete-cycles-input').value = '1';
+        document.getElementById('delete-cycles-dialog').style.display = 'flex';
+        document.getElementById('delete-cycles-input').focus();
+    }
+    
+    static hideDeleteCyclesDialog() {
+        document.getElementById('delete-cycles-dialog').style.display = 'none';
     }
 }

@@ -41,6 +41,10 @@ class TimingGenApp {
         this.currentEditingSignal = null;
         this.currentEditingCycle = null;
         
+        // Insert/Delete cycle mode tracking
+        this.insertCycleMode = null; // 'global' or 'signal'
+        this.deleteCycleMode = null; // 'global' or 'signal'
+        
         // Drag and drop state
         this.draggedSignal = null;
         this.dragIndicator = null;
@@ -97,6 +101,14 @@ class TimingGenApp {
         document.getElementById('cycle-options-ok-btn').addEventListener('click', () => TimingGenUI.saveCycleOptions(this));
         document.getElementById('cycle-options-cancel-btn').addEventListener('click', () => TimingGenUI.hideCycleOptionsDialog());
         
+        // Insert cycles dialog
+        document.getElementById('insert-cycles-ok-btn').addEventListener('click', () => this.handleInsertCycles());
+        document.getElementById('insert-cycles-cancel-btn').addEventListener('click', () => TimingGenUI.hideInsertCyclesDialog());
+        
+        // Delete cycles dialog
+        document.getElementById('delete-cycles-ok-btn').addEventListener('click', () => this.handleDeleteCycles());
+        document.getElementById('delete-cycles-cancel-btn').addEventListener('click', () => TimingGenUI.hideDeleteCyclesDialog());
+        
         // Signal context menu
         document.getElementById('edit-signal-menu').addEventListener('click', () => TimingGenUI.showEditSignalDialog(this));
         document.getElementById('signal-options-menu').addEventListener('click', () => TimingGenUI.showSignalOptionsDialog(this));
@@ -121,7 +133,48 @@ class TimingGenApp {
             TimingGenUI.showCycleOptionsDialog(this);
         });
         document.getElementById('remove-bus-change-menu').addEventListener('click', () => this.removeBusChange());
+        document.getElementById('insert-cycles-bus-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            this.insertCycleMode = 'signal';
+            TimingGenUI.showInsertCyclesDialog(this);
+        });
+        document.getElementById('delete-cycles-bus-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            this.deleteCycleMode = 'signal';
+            TimingGenUI.showDeleteCyclesDialog(this);
+        });
         document.getElementById('cancel-bus-cycle-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Bit cycle context menu - add cycle options and cancel handlers
+        document.getElementById('bit-cycle-options-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            TimingGenUI.showCycleOptionsDialog(this);
+        });
+        document.getElementById('remove-bit-change-menu').addEventListener('click', () => this.removeBitChange());
+        document.getElementById('insert-cycles-bit-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            this.insertCycleMode = 'signal';
+            TimingGenUI.showInsertCyclesDialog(this);
+        });
+        document.getElementById('delete-cycles-bit-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            this.deleteCycleMode = 'signal';
+            TimingGenUI.showDeleteCyclesDialog(this);
+        });
+        document.getElementById('cancel-bit-cycle-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Cycle context menu handlers (for cycle header)
+        document.getElementById('insert-cycles-global-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            this.insertCycleMode = 'global';
+            TimingGenUI.showInsertCyclesDialog(this);
+        });
+        document.getElementById('delete-cycles-global-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            this.deleteCycleMode = 'global';
+            TimingGenUI.showDeleteCyclesDialog(this);
+        });
+        document.getElementById('cancel-cycle-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Canvas events using Paper.js tool
         const tool = new paper.Tool();
@@ -150,6 +203,7 @@ class TimingGenApp {
         document.getElementById('signal-context-menu').style.display = 'none';
         document.getElementById('bit-cycle-context-menu').style.display = 'none';
         document.getElementById('bus-cycle-context-menu').style.display = 'none';
+        document.getElementById('cycle-context-menu').style.display = 'none';
     }
     
     addSignal() {
@@ -305,6 +359,16 @@ class TimingGenApp {
         const yPos = ev.clientY - rect.top;
         
         this.hideAllMenus();
+        
+        // Check if right-click is in cycle header area (top row with cycle numbers)
+        if (yPos < this.config.headerHeight && xPos >= this.config.nameColumnWidth) {
+            const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
+            if (cycle >= 0 && cycle < this.config.cycles) {
+                this.currentEditingCycle = cycle;
+                TimingGenUI.showContextMenu('cycle-context-menu', ev.clientX, ev.clientY);
+            }
+            return;
+        }
         
         // Check if right-click is in signal name area
         if (xPos < this.config.nameColumnWidth) {
@@ -573,6 +637,158 @@ class TimingGenApp {
             const signal = this.signals.splice(this.draggedSignal, 1)[0];
             this.signals.splice(targetIndex, 0, signal);
             this.render();
+        }
+    }
+    
+    insertCyclesGlobal(startCycle, numCycles) {
+        // Insert cycles for all signals after startCycle
+        this.signals.forEach(signal => {
+            this.insertCyclesForSignal(signal, startCycle, numCycles);
+        });
+        
+        // Update cycle count
+        this.config.cycles += numCycles;
+        document.getElementById('cycles-input').value = this.config.cycles;
+        this.initializeCanvas();
+        this.render();
+    }
+    
+    deleteCyclesGlobal(startCycle, numCycles) {
+        // Delete cycles for all signals starting from startCycle
+        this.signals.forEach(signal => {
+            this.deleteCyclesForSignal(signal, startCycle, numCycles);
+        });
+        
+        // Update cycle count - keep it the same by deleting
+        // No need to change config.cycles as we're just removing existing cycles
+        this.render();
+    }
+    
+    insertCyclesSignal(signalIndex, startCycle, numCycles) {
+        // Insert cycles for a specific signal only
+        const signal = this.signals[signalIndex];
+        this.insertCyclesForSignal(signal, startCycle, numCycles);
+        this.render();
+    }
+    
+    deleteCyclesSignal(signalIndex, startCycle, numCycles) {
+        // Delete cycles for a specific signal only
+        const signal = this.signals[signalIndex];
+        this.deleteCyclesForSignal(signal, startCycle, numCycles);
+        this.render();
+    }
+    
+    insertCyclesForSignal(signal, startCycle, numCycles) {
+        // Shift all values and cycleOptions that are at or after startCycle+1
+        const newValues = {};
+        const newCycleOptions = {};
+        
+        // Copy values, shifting those after startCycle
+        Object.keys(signal.values).forEach(cycleStr => {
+            const cycle = parseInt(cycleStr);
+            if (cycle <= startCycle) {
+                newValues[cycle] = signal.values[cycle];
+            } else {
+                // Shift right by numCycles
+                newValues[cycle + numCycles] = signal.values[cycle];
+            }
+        });
+        
+        // Copy cycleOptions, shifting those after startCycle
+        if (signal.cycleOptions) {
+            Object.keys(signal.cycleOptions).forEach(cycleStr => {
+                const cycle = parseInt(cycleStr);
+                if (cycle <= startCycle) {
+                    newCycleOptions[cycle] = signal.cycleOptions[cycle];
+                } else {
+                    // Shift right by numCycles
+                    newCycleOptions[cycle + numCycles] = signal.cycleOptions[cycle];
+                }
+            });
+            signal.cycleOptions = newCycleOptions;
+        }
+        
+        signal.values = newValues;
+        // The inserted cycles will "extend" the current state (no explicit value needed)
+    }
+    
+    deleteCyclesForSignal(signal, startCycle, numCycles) {
+        // Delete cycles and shift remaining ones left
+        const newValues = {};
+        const newCycleOptions = {};
+        
+        // Copy values, skipping deleted cycles and shifting remaining ones
+        Object.keys(signal.values).forEach(cycleStr => {
+            const cycle = parseInt(cycleStr);
+            if (cycle < startCycle) {
+                // Keep as-is
+                newValues[cycle] = signal.values[cycle];
+            } else if (cycle >= startCycle + numCycles) {
+                // Shift left by numCycles
+                newValues[cycle - numCycles] = signal.values[cycle];
+            }
+            // Skip cycles in [startCycle, startCycle + numCycles)
+        });
+        
+        // Copy cycleOptions, skipping deleted cycles and shifting remaining ones
+        if (signal.cycleOptions) {
+            Object.keys(signal.cycleOptions).forEach(cycleStr => {
+                const cycle = parseInt(cycleStr);
+                if (cycle < startCycle) {
+                    // Keep as-is
+                    newCycleOptions[cycle] = signal.cycleOptions[cycle];
+                } else if (cycle >= startCycle + numCycles) {
+                    // Shift left by numCycles
+                    newCycleOptions[cycle - numCycles] = signal.cycleOptions[cycle];
+                }
+                // Skip cycles in [startCycle, startCycle + numCycles)
+            });
+            signal.cycleOptions = newCycleOptions;
+        }
+        
+        signal.values = newValues;
+        // Add steady cycles at the end if needed (they extend the last state automatically)
+    }
+    
+    handleInsertCycles() {
+        const numCycles = parseInt(document.getElementById('insert-cycles-input').value);
+        
+        if (isNaN(numCycles) || numCycles < 1) {
+            alert('Please enter a valid number of cycles');
+            return;
+        }
+        
+        TimingGenUI.hideInsertCyclesDialog();
+        
+        if (this.insertCycleMode === 'global') {
+            // Insert cycles for all signals after the current cycle
+            this.insertCyclesGlobal(this.currentEditingCycle, numCycles);
+        } else if (this.insertCycleMode === 'signal') {
+            // Insert cycles for the current signal only
+            if (this.currentEditingSignal !== null) {
+                this.insertCyclesSignal(this.currentEditingSignal, this.currentEditingCycle, numCycles);
+            }
+        }
+    }
+    
+    handleDeleteCycles() {
+        const numCycles = parseInt(document.getElementById('delete-cycles-input').value);
+        
+        if (isNaN(numCycles) || numCycles < 1) {
+            alert('Please enter a valid number of cycles');
+            return;
+        }
+        
+        TimingGenUI.hideDeleteCyclesDialog();
+        
+        if (this.deleteCycleMode === 'global') {
+            // Delete cycles for all signals starting from the current cycle
+            this.deleteCyclesGlobal(this.currentEditingCycle, numCycles);
+        } else if (this.deleteCycleMode === 'signal') {
+            // Delete cycles for the current signal only
+            if (this.currentEditingSignal !== null) {
+                this.deleteCyclesSignal(this.currentEditingSignal, this.currentEditingCycle, numCycles);
+            }
         }
     }
     

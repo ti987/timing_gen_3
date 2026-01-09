@@ -108,6 +108,8 @@
         <div class="menu-item" data-value="Z">Z (High-Z)</div>
         <div class="menu-item" id="bit-cycle-options-menu">Cycle Options</div>
         <div class="menu-item" id="remove-bit-change-menu">Remove Change</div>
+        <div class="menu-item" id="insert-cycles-bit-menu">Insert Cycles</div>
+        <div class="menu-item" id="delete-cycles-bit-menu">Delete Cycles</div>
         <div class="menu-item" id="cancel-bit-cycle-menu">Cancel</div>
     </div>
 
@@ -116,7 +118,16 @@
         <div class="menu-item" id="set-bus-value-menu">Set Value</div>
         <div class="menu-item" id="bus-cycle-options-menu">Cycle Options</div>
         <div class="menu-item" id="remove-bus-change-menu">Remove Change</div>
+        <div class="menu-item" id="insert-cycles-bus-menu">Insert Cycles</div>
+        <div class="menu-item" id="delete-cycles-bus-menu">Delete Cycles</div>
         <div class="menu-item" id="cancel-bus-cycle-menu">Cancel</div>
+    </div>
+
+    <!-- Context Menu for Cycle Header -->
+    <div id="cycle-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="insert-cycles-global-menu">Insert Cycles</div>
+        <div class="menu-item" id="delete-cycles-global-menu">Delete Cycles</div>
+        <div class="menu-item" id="cancel-cycle-menu">Cancel</div>
     </div>
 
     <!-- Global Option Dialog -->
@@ -226,6 +237,30 @@
             
             <button id="cycle-options-ok-btn" class="dialog-btn">OK</button>
             <button id="cycle-options-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Insert Cycles Dialog -->
+    <div id="insert-cycles-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Insert Cycles</h3>
+            <label>Number of Cycles:</label>
+            <input type="number" id="insert-cycles-input" value="1" min="1" max="50" style="width: 100px;">
+            <br><br>
+            <button id="insert-cycles-ok-btn" class="dialog-btn">OK</button>
+            <button id="insert-cycles-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Delete Cycles Dialog -->
+    <div id="delete-cycles-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Delete Cycles</h3>
+            <label>Number of Cycles:</label>
+            <input type="number" id="delete-cycles-input" value="1" min="1" max="50" style="width: 100px;">
+            <br><br>
+            <button id="delete-cycles-ok-btn" class="dialog-btn">OK</button>
+            <button id="delete-cycles-cancel-btn" class="dialog-btn">Cancel</button>
         </div>
     </div>
 
