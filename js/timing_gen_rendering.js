@@ -505,7 +505,14 @@ class TimingGenRendering {
             
             // Get delay info object for this cycle (contains min, max, color)
             const delayInfo = app.getEffectiveDelay(signal, spanStart);
-            
+            console.log("spanstart " + spanStart);
+            if (spanStart == 0) {
+                // avoid space at the very beginning of the waveform 
+                delayInfo.min = 0; 
+                delayInfo.max = 0; 
+            }
+            console.log("delayInfo " + delayInfo.min);
+                
             // Get slew for transitions
             const slew = app.getEffectiveSlew(signal, spanStart);
             
@@ -522,8 +529,8 @@ class TimingGenRendering {
             if (value === 'Z') {
                 // High-Z state - draw middle line
                 const line = new paper.Path.Line({
-                    from: [x1+slew/2, midY],
-                    to: [x2, midY],
+                    from: [x1+delayInfo.min+slew/2, midY],
+                    to: [x2+nextDelay.min, midY],
                     strokeColor: app.config.signalColor,
                     strokeWidth: 2
                 });
