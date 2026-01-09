@@ -417,7 +417,7 @@ class TimingGenRendering {
             const nextValue = spanEnd + 1 < app.config.cycles ? app.getBusValueAtCycle(signal, spanEnd + 1) : null;
             const hasNextValue = (spanEnd + 1 < app.config.cycles && signal.values[spanEnd + 1] !== undefined);
 
-            const slew = i < app.config.cycles ? app.getEffectiveSlew(signal, span.start) : app.config.slew;
+            const slew = span.start < app.config.cycles ? app.getEffectiveSlew(signal, span.start) : app.config.slew;
 
             if (prevValue === null || spanStart === 0) {
                 path.moveTo(new paper.Point(x1 , highY));
