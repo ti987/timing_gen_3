@@ -658,94 +658,155 @@ class TimingGenRendering {
     }
     
     static drawMeasure(app, measure, index) {
-        // Draw vertical bars
-        const bar1 = new paper.Path.Line({
-            from: [measure.point1.x, 0],
-            to: [measure.point1.x, app.config.headerHeight + app.signals.length * app.config.rowHeight],
+        // Draw vertical lines from first point row to second point row
+        const rowHeight = app.config.rowHeight;
+        const headerHeight = app.config.headerHeight;
+        
+        // Calculate row boundaries
+        const row1Top = Math.floor((measure.point1.y - headerHeight) / rowHeight) * rowHeight + headerHeight;
+        const row1Bottom = row1Top + rowHeight;
+        const row2Top = Math.floor((measure.point2.y - headerHeight) / rowHeight) * rowHeight + headerHeight;
+        const row2Bottom = row2Top + rowHeight;
+        
+        // Determine the extent of vertical lines
+        const lineStart = Math.min(row1Top, row2Top);
+        const lineEnd = Math.max(row1Bottom, row2Bottom);
+        
+        // Draw first vertical line
+        const line1 = new paper.Path.Line({
+            from: [measure.point1.x, lineStart],
+            to: [measure.point1.x, lineEnd],
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
         
-        const bar2 = new paper.Path.Line({
-            from: [measure.point2.x, 0],
-            to: [measure.point2.x, app.config.headerHeight + app.signals.length * app.config.rowHeight],
+        // Draw small cross at first point
+        const cross1 = TimingGenRendering.drawSmallCross(measure.point1.x, measure.point1.y);
+        
+        // Draw second vertical line
+        const line2 = new paper.Path.Line({
+            from: [measure.point2.x, lineStart],
+            to: [measure.point2.x, lineEnd],
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
+        
+        // Draw small cross at second point
+        const cross2 = TimingGenRendering.drawSmallCross(measure.point2.x, measure.point2.y);
         
         // Calculate arrow Y position based on row
-        const arrowY = app.config.headerHeight + (measure.row + 0.5) * app.config.rowHeight;
+        const arrowY = headerHeight + (measure.row + 0.5) * rowHeight;
         
-        // Draw horizontal line and arrows
+        // Draw double-headed arrows
         const x1 = measure.point1.x;
         const x2 = measure.point2.x;
         const arrowSize = 8;
-        const isInward = Math.abs(x2 - x1) > 60;
+        const spacing = Math.abs(x2 - x1);
+        const isInward = spacing > 60;  // If wide enough, point inward; otherwise point outward
         
-        // Horizontal line
-        const line = new paper.Path.Line({
+        // Horizontal line connecting the arrows
+        const hLine = new paper.Path.Line({
             from: [Math.min(x1, x2), arrowY],
             to: [Math.max(x1, x2), arrowY],
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
         
-        // Arrows at both ends
+        // Draw arrow heads using the helper function
         if (isInward) {
-            // Inward pointing arrows
-            const leftArrow = new paper.Path([
-                [Math.min(x1, x2), arrowY],
-                [Math.min(x1, x2) + arrowSize, arrowY - arrowSize/2],
-                [Math.min(x1, x2) + arrowSize, arrowY + arrowSize/2]
-            ]);
-            leftArrow.closed = true;
-            leftArrow.fillColor = '#FF0000';
-            
-            const rightArrow = new paper.Path([
-                [Math.max(x1, x2), arrowY],
-                [Math.max(x1, x2) - arrowSize, arrowY - arrowSize/2],
-                [Math.max(x1, x2) - arrowSize, arrowY + arrowSize/2]
-            ]);
-            rightArrow.closed = true;
-            rightArrow.fillColor = '#FF0000';
+            // Arrows pointing inward (towards each other)
+            TimingGenRendering.drawArrowHead(Math.min(x1, x2), arrowY, 'right', arrowSize);
+            TimingGenRendering.drawArrowHead(Math.max(x1, x2), arrowY, 'left', arrowSize);
         } else {
-            // Outward pointing arrows
-            const leftArrow = new paper.Path([
-                [Math.min(x1, x2), arrowY],
-                [Math.min(x1, x2) - arrowSize, arrowY - arrowSize/2],
-                [Math.min(x1, x2) - arrowSize, arrowY + arrowSize/2]
-            ]);
-            leftArrow.closed = true;
-            leftArrow.fillColor = '#FF0000';
-            
-            const rightArrow = new paper.Path([
-                [Math.max(x1, x2), arrowY],
-                [Math.max(x1, x2) + arrowSize, arrowY - arrowSize/2],
-                [Math.max(x1, x2) + arrowSize, arrowY + arrowSize/2]
-            ]);
-            rightArrow.closed = true;
-            rightArrow.fillColor = '#FF0000';
+            // Arrows pointing outward (away from each other)
+            TimingGenRendering.drawArrowHead(Math.min(x1, x2), arrowY, 'left', arrowSize);
+            TimingGenRendering.drawArrowHead(Math.max(x1, x2), arrowY, 'right', arrowSize);
         }
         
-        // Draw text label
-        const textX = Math.max(x1, x2) + 10; // Position to the right of the rightmost bar
-        const text = new paper.PointText({
-            point: [textX, arrowY + 5],
-            content: measure.text,
-            fillColor: '#FF0000',
-            fontFamily: 'Arial',
-            fontSize: 12,
-            fontWeight: 'bold'
+        // Draw text label if it exists
+        if (measure.text) {
+            const textX = Math.max(x1, x2) + 10;
+            const text = new paper.PointText({
+                point: [textX, arrowY + 5],
+                content: measure.text,
+                fillColor: '#FF0000',
+                fontFamily: 'Arial',
+                fontSize: 12,
+                fontWeight: 'bold'
+            });
+            
+            // Store measure index in text for right-click handling
+            text.data = { measureIndex: index };
+            
+            // Make text interactive for right-click
+            text.onMouseDown = function(event) {
+                if (event.event.button === 2) {
+                    app.currentEditingMeasure = this.data.measureIndex;
+                }
+            };
+        }
+    }
+    
+    static drawSmallCross(xPos, yPos) {
+        const crossSize = 6;
+        
+        // Horizontal line of cross
+        const hLine = new paper.Path.Line({
+            from: [xPos - crossSize, yPos],
+            to: [xPos + crossSize, yPos],
+            strokeColor: '#FF0000',
+            strokeWidth: 2
         });
         
-        // Store measure index in text for right-click handling
-        text.data = { measureIndex: index };
+        // Vertical line of cross
+        const vLine = new paper.Path.Line({
+            from: [xPos, yPos - crossSize],
+            to: [xPos, yPos + crossSize],
+            strokeColor: '#FF0000',
+            strokeWidth: 2
+        });
         
-        // Make text interactive for right-click
-        text.onMouseDown = function(event) {
-            if (event.event.button === 2) { // Right click
-                app.currentEditingMeasure = this.data.measureIndex;
-            }
-        };
+        return new paper.Group([hLine, vLine]);
+    }
+    
+    static drawArrowHead(x, y, direction, size = 8) {
+        // direction: 'left', 'right', 'up', 'down'
+        let path;
+        
+        switch(direction) {
+            case 'left':
+                path = new paper.Path([
+                    [x, y],
+                    [x + size, y - size/2],
+                    [x + size, y + size/2]
+                ]);
+                break;
+            case 'right':
+                path = new paper.Path([
+                    [x, y],
+                    [x - size, y - size/2],
+                    [x - size, y + size/2]
+                ]);
+                break;
+            case 'up':
+                path = new paper.Path([
+                    [x, y],
+                    [x - size/2, y + size],
+                    [x + size/2, y + size]
+                ]);
+                break;
+            case 'down':
+                path = new paper.Path([
+                    [x, y],
+                    [x - size/2, y - size],
+                    [x + size/2, y - size]
+                ]);
+                break;
+        }
+        
+        path.closed = true;
+        path.fillColor = '#FF0000';
+        
+        return path;
     }
 }
