@@ -39,6 +39,7 @@ class TimingGenApp {
         // Data model
         this.signals = [];
         this.measures = []; // Array of measure objects
+        this.blankRows = []; // Array of blank row indices for measures
         this.currentEditingSignal = null;
         this.currentEditingCycle = null;
         
@@ -368,32 +369,38 @@ class TimingGenApp {
         // Handle measure mode clicks
         if (this.measureMode) {
             if (this.measureState === 'first-point') {
-                // First click: select first point and draw small cross
+                // First click: select first point and draw vertical line immediately
                 const transitionX = this.findNearestTransition(xPos, yPos);
                 if (transitionX !== null) {
                     this.currentMeasure.point1 = { x: transitionX, y: yPos };
                     this.measureState = 'second-point';
                     this.hideInstruction();
                     this.showInstruction("Click the second point");
+                    
+                    // Draw first vertical line immediately
+                    this.drawFirstPointVisuals();
                 }
                 return;
             } else if (this.measureState === 'second-point') {
-                // Second click: select second point
+                // Second click: select second point and draw both lines + arrow immediately
                 const transitionX = this.findNearestTransition(xPos, yPos);
                 if (transitionX !== null) {
                     this.currentMeasure.point2 = { x: transitionX, y: yPos };
                     this.measureState = 'placing-row';
                     this.hideInstruction();
                     this.showInstruction("Pick a row for the measure");
+                    
+                    // Draw second point visuals immediately (both lines + arrow)
+                    this.drawSecondPointVisuals();
                 }
                 return;
             } else if (this.measureState === 'placing-row') {
-                // Third click: finalize row and create measure
+                // Third click: finalize row and create measure with blank row insertion
                 const rowIndex = this.getRowIndexAtY(yPos);
                 this.currentMeasure.row = rowIndex;
                 
-                // Finalize measure without text input for now
-                this.finalizeMeasureWithoutText();
+                // Finalize measure with actual blank row insertion
+                this.finalizeMeasureWithBlankRow();
                 return;
             }
         }
@@ -1025,17 +1032,31 @@ class TimingGenApp {
         
         // Clear temporary graphics
         if (this.tempMeasureGraphics) {
-            this.tempMeasureGraphics.remove();
+            if (Array.isArray(this.tempMeasureGraphics)) {
+                this.tempMeasureGraphics.forEach(item => {
+                    if (item && item.remove) item.remove();
+                });
+            } else if (this.tempMeasureGraphics.remove) {
+                this.tempMeasureGraphics.remove();
+            }
             this.tempMeasureGraphics = null;
         }
         
         this.measureLayer.activate();
-        this.tempMeasureGraphics = new paper.Group();
+        this.tempMeasureGraphics = [];
         
         if (this.measureState === 'second-point' && this.currentMeasure.point1) {
-            // Draw small cross at first point
+            // After first click: show first line + cross, and dynamic line to mouse
             const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
-            this.tempMeasureGraphics.addChild(cross1);
+            this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
+            
+            // Draw first vertical line
+            const line1 = this.drawFullVerticalLine(
+                this.currentMeasure.point1.x,
+                this.currentMeasure.point1.y,
+                this.currentMeasure.point1.y
+            );
+            this.tempMeasureGraphics.push(line1);
             
             // Draw dynamic vertical line from first point to current mouse position
             const dynamicLine = this.drawDynamicVerticalLine(
@@ -1043,11 +1064,11 @@ class TimingGenApp {
                 this.currentMeasure.point1.y,
                 yPos
             );
-            this.tempMeasureGraphics.addChild(dynamicLine);
+            this.tempMeasureGraphics.push(dynamicLine);
         } else if (this.measureState === 'placing-row' && this.currentMeasure.point1 && this.currentMeasure.point2) {
-            // Draw small cross at first point
+            // After second click: show both lines + crosses, and drag arrow to mouse position
             const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
-            this.tempMeasureGraphics.addChild(cross1);
+            this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
             
             // Draw full vertical line at first point
             const line1 = this.drawFullVerticalLine(
@@ -1055,11 +1076,11 @@ class TimingGenApp {
                 this.currentMeasure.point1.y,
                 this.currentMeasure.point2.y
             );
-            this.tempMeasureGraphics.addChild(line1);
+            this.tempMeasureGraphics.push(line1);
             
             // Draw small cross at second point
             const cross2 = this.drawSmallCross(this.currentMeasure.point2.x, this.currentMeasure.point2.y);
-            this.tempMeasureGraphics.addChild(cross2);
+            this.tempMeasureGraphics.push(cross2.hLine, cross2.vLine);
             
             // Draw full vertical line at second point
             const line2 = this.drawFullVerticalLine(
@@ -1067,12 +1088,24 @@ class TimingGenApp {
                 this.currentMeasure.point1.y,
                 this.currentMeasure.point2.y
             );
-            this.tempMeasureGraphics.addChild(line2);
+            this.tempMeasureGraphics.push(line2);
             
-            // Determine row from mouse position (show horizontal grid line)
+            // Determine row from mouse position and draw arrow at that position
             const rowIndex = this.getRowIndexAtY(yPos);
+            const arrowY = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
+            
+            // Draw the double-headed arrow at the current mouse row
+            const arrows = this.drawMeasureArrows(
+                this.currentMeasure.point1.x,
+                this.currentMeasure.point2.x,
+                arrowY
+            );
+            this.tempMeasureGraphics.push(arrows);
+            
+            // Draw dashed row indicator
             this.drawRowIndicator(rowIndex);
         }
+        
         
         paper.view.draw();
     }
@@ -1161,7 +1194,6 @@ class TimingGenApp {
     
     // New drawing helper methods for measure feature
     drawSmallCross(xPos, yPos) {
-        const group = new paper.Group();
         const crossSize = 6;
         
         // Horizontal line of cross
@@ -1171,7 +1203,6 @@ class TimingGenApp {
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
-        group.addChild(hLine);
         
         // Vertical line of cross
         const vLine = new paper.Path.Line({
@@ -1180,9 +1211,9 @@ class TimingGenApp {
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
-        group.addChild(vLine);
         
-        return group;
+        // Return object with both lines so they can be added to the array
+        return { hLine, vLine };
     }
     
     drawDynamicVerticalLine(xPos, startY, currentY) {
@@ -1249,8 +1280,8 @@ class TimingGenApp {
             dashArray: [5, 3]
         });
         
-        if (this.tempMeasureGraphics) {
-            this.tempMeasureGraphics.addChild(indicator);
+        if (this.tempMeasureGraphics && Array.isArray(this.tempMeasureGraphics)) {
+            this.tempMeasureGraphics.push(indicator);
         }
     }
     
@@ -1315,6 +1346,150 @@ class TimingGenApp {
         
         const transitionX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
         return transitionX;
+    }
+    
+    // Draw visuals immediately after first click
+    drawFirstPointVisuals() {
+        // Clear any existing temp graphics
+        if (this.tempMeasureGraphics) {
+            if (Array.isArray(this.tempMeasureGraphics)) {
+                this.tempMeasureGraphics.forEach(item => item.remove());
+            } else {
+                this.tempMeasureGraphics.remove();
+            }
+            this.tempMeasureGraphics = null;
+        }
+        
+        this.measureLayer.activate();
+        this.tempMeasureGraphics = [];
+        
+        // Draw small cross at first point
+        const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
+        this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
+        
+        // Draw first vertical line
+        const line1 = this.drawFullVerticalLine(
+            this.currentMeasure.point1.x,
+            this.currentMeasure.point1.y,
+            this.currentMeasure.point1.y
+        );
+        this.tempMeasureGraphics.push(line1);
+        
+        paper.view.draw();
+    }
+    
+    // Draw visuals immediately after second click
+    drawSecondPointVisuals() {
+        // Clear any existing temp graphics
+        if (this.tempMeasureGraphics) {
+            if (Array.isArray(this.tempMeasureGraphics)) {
+                this.tempMeasureGraphics.forEach(item => item.remove());
+            } else {
+                this.tempMeasureGraphics.remove();
+            }
+            this.tempMeasureGraphics = null;
+        }
+        
+        this.measureLayer.activate();
+        this.tempMeasureGraphics = [];
+        
+        // Draw small cross at first point
+        const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
+        this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
+        
+        // Draw full vertical line at first point
+        const line1 = this.drawFullVerticalLine(
+            this.currentMeasure.point1.x,
+            this.currentMeasure.point1.y,
+            this.currentMeasure.point2.y
+        );
+        this.tempMeasureGraphics.push(line1);
+        
+        // Draw small cross at second point
+        const cross2 = this.drawSmallCross(this.currentMeasure.point2.x, this.currentMeasure.point2.y);
+        this.tempMeasureGraphics.push(cross2.hLine, cross2.vLine);
+        
+        // Draw full vertical line at second point
+        const line2 = this.drawFullVerticalLine(
+            this.currentMeasure.point2.x,
+            this.currentMeasure.point1.y,
+            this.currentMeasure.point2.y
+        );
+        this.tempMeasureGraphics.push(line2);
+        
+        // Draw double-headed arrow at a default position (middle row between the two points)
+        const defaultRow = Math.floor(this.getRowIndexAtY(this.currentMeasure.point1.y) + 
+                                     (this.getRowIndexAtY(this.currentMeasure.point2.y) - this.getRowIndexAtY(this.currentMeasure.point1.y)) / 2);
+        const arrowY = this.config.headerHeight + (defaultRow + 0.5) * this.config.rowHeight;
+        const arrows = this.drawMeasureArrows(
+            this.currentMeasure.point1.x,
+            this.currentMeasure.point2.x,
+            arrowY
+        );
+        this.tempMeasureGraphics.push(arrows);
+        
+        paper.view.draw();
+    }
+    
+    finalizeMeasureWithBlankRow() {
+        // Finalize measure with actual blank row insertion
+        this.currentMeasure.text = ''; // No text for now
+        
+        // Insert blank row at the selected position
+        this.insertBlankRowAtPosition(this.currentMeasure.row);
+        
+        // Add measure to list
+        this.measures.push(this.currentMeasure);
+        
+        // Clean up
+        this.hideInstruction();
+        this.measureMode = false;
+        this.measureState = null;
+        this.currentMeasure = null;
+        this.canvas.style.cursor = 'crosshair';
+        
+        if (this.tempMeasureGraphics) {
+            if (Array.isArray(this.tempMeasureGraphics)) {
+                this.tempMeasureGraphics.forEach(item => {
+                    if (item && item.remove) item.remove();
+                });
+            } else if (this.tempMeasureGraphics.remove) {
+                this.tempMeasureGraphics.remove();
+            }
+            this.tempMeasureGraphics = null;
+        }
+        
+        // Restore original onMouseMove
+        this.tool.onMouseMove = this.originalOnMouseMove;
+        
+        this.render();
+    }
+    
+    insertBlankRowAtPosition(rowIndex) {
+        // Insert a blank row by shifting signals down
+        // rowIndex can be negative (above all signals), between signals, or after all signals
+        
+        if (rowIndex < 0) {
+            // Insert above all signals - no signal moving needed
+            return;
+        }
+        
+        if (rowIndex >= this.signals.length) {
+            // Insert below all signals - no signal moving needed
+            return;
+        }
+        
+        // Insert between signals - shift signals at rowIndex and below down by one row
+        // We do this by adjusting the rendering, not by actually moving signal data
+        // The measure will be drawn in the blank space
+        
+        // For now, we'll mark that a blank row exists at this position
+        // The rendering will handle spacing appropriately
+        if (!this.blankRows) {
+            this.blankRows = [];
+        }
+        this.blankRows.push(rowIndex);
+        this.blankRows.sort((a, b) => a - b);
     }
     
     finalizeMeasureWithoutText() {

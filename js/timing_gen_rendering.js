@@ -41,7 +41,10 @@ class TimingGenRendering {
     }
     
     static drawGrid(app) {
-        const maxHeight = app.config.headerHeight + app.signals.length * app.config.rowHeight;
+        // Calculate total rows including blank rows
+        const blankRowCount = app.blankRows ? app.blankRows.length : 0;
+        const totalRows = app.signals.length + blankRowCount;
+        const maxHeight = app.config.headerHeight + totalRows * app.config.rowHeight;
         
         // Vertical lines (cycle dividers) - draw to max height based on signals
         for (let idx = 0; idx <= app.config.cycles; idx++) {
@@ -54,9 +57,9 @@ class TimingGenRendering {
             });
         }
         
-        // Horizontal lines (signal dividers)
+        // Horizontal lines (signal dividers) - accounting for blank rows
         for (let idx = 0; idx <= app.signals.length; idx++) {
-            const yPos = app.config.headerHeight + idx * app.config.rowHeight;
+            const yPos = TimingGenRendering.getSignalYPosition(app, idx);
             const line = new paper.Path.Line({
                 from: [0, yPos],
                 to: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, yPos],
@@ -91,7 +94,8 @@ class TimingGenRendering {
     }
     
     static drawSignal(app, signal, index) {
-        const yPos = app.config.headerHeight + index * app.config.rowHeight;
+        // Calculate Y position accounting for blank rows
+        const yPos = TimingGenRendering.getSignalYPosition(app, index);
         
         // Draw selection highlight background if signal is selected
         if (app.selectedSignals.has(index)) {
@@ -819,5 +823,14 @@ class TimingGenRendering {
         path.fillColor = '#FF0000';
         
         return path;
+    }
+    
+    static getSignalYPosition(app, signalIndex) {
+        // Calculate Y position accounting for blank rows inserted for measures
+        let blankRowsAbove = 0;
+        if (app.blankRows) {
+            blankRowsAbove = app.blankRows.filter(rowIndex => rowIndex <= signalIndex).length;
+        }
+        return app.config.headerHeight + (signalIndex + blankRowsAbove) * app.config.rowHeight;
     }
 }
