@@ -1131,7 +1131,6 @@ class TimingGenApp {
     
     drawArrowHead(x, y, direction, size = 8) {
         // direction: 'left', 'right', 'up', 'down'
-        const arrow = new paper.Group();
         let path;
         
         switch(direction) {
@@ -1167,9 +1166,8 @@ class TimingGenApp {
         
         path.closed = true;
         path.fillColor = '#FF0000';
-        arrow.addChild(path);
         
-        return arrow;
+        return path;
     }
     
     findNearestTransition(xPos, yPos) {

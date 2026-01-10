@@ -766,7 +766,8 @@ class TimingGenRendering {
             strokeWidth: 2
         });
         
-        return new paper.Group([hLine, vLine]);
+        // Return both lines (no Group needed for rendering)
+        return { hLine, vLine };
     }
     
     static drawArrowHead(x, y, direction, size = 8) {
