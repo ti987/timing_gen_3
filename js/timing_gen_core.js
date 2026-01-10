@@ -38,8 +38,16 @@ class TimingGenApp {
         
         // Data model
         this.signals = [];
+        this.measures = []; // Array of measure objects
         this.currentEditingSignal = null;
         this.currentEditingCycle = null;
+        
+        // Measure mode state
+        this.measureMode = false;
+        this.measureState = null; // null, 'first-point', 'second-point', 'placing-text'
+        this.currentMeasure = null; // Current measure being created
+        this.currentEditingMeasure = null; // Index of measure being edited
+        this.tempMeasureGraphics = null; // Temporary graphics for measure creation
         
         // Insert/Delete cycle mode tracking
         this.insertCycleMode = null; // 'global' or 'signal'
@@ -53,6 +61,7 @@ class TimingGenApp {
         this.backgroundLayer = new paper.Layer();
         this.gridLayer = new paper.Layer();
         this.signalLayer = new paper.Layer();
+        this.measureLayer = new paper.Layer(); // Layer for measures
         
         this.initializeCanvas();
         this.setupEventListeners();
@@ -76,6 +85,34 @@ class TimingGenApp {
         document.getElementById('export-svg-btn').addEventListener('click', () => TimingGenData.exportToSVG(this));
         document.getElementById('file-input').addEventListener('change', (ev) => TimingGenData.loadFromJSON(this, ev));
         document.getElementById('cycles-input').addEventListener('change', (ev) => this.updateCycles(ev.target.value));
+        
+        // Add menu and submenu
+        document.getElementById('add-menu-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const submenu = document.getElementById('add-submenu');
+            submenu.style.display = submenu.style.display === 'none' ? 'block' : 'none';
+        });
+        document.getElementById('add-measure-menu').addEventListener('click', () => {
+            document.getElementById('add-submenu').style.display = 'none';
+            this.startMeasureMode();
+        });
+        
+        // Close submenu when clicking outside
+        document.addEventListener('click', (e) => {
+            const submenu = document.getElementById('add-submenu');
+            const addBtn = document.getElementById('add-menu-btn');
+            if (!addBtn.contains(e.target) && !submenu.contains(e.target)) {
+                submenu.style.display = 'none';
+            }
+        });
+        
+        // Measure text dialog
+        document.getElementById('measure-text-ok-btn').addEventListener('click', () => this.finalizeMeasure());
+        document.getElementById('measure-text-cancel-btn').addEventListener('click', () => this.cancelMeasure());
+        
+        // Measure context menu
+        document.getElementById('delete-measure-menu').addEventListener('click', () => this.deleteMeasure());
+        document.getElementById('cancel-measure-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Add signal dialog
         document.getElementById('dialog-ok-btn').addEventListener('click', () => this.addSignal());
@@ -196,6 +233,7 @@ class TimingGenApp {
         document.getElementById('bit-cycle-context-menu').style.display = 'none';
         document.getElementById('bus-cycle-context-menu').style.display = 'none';
         document.getElementById('cycle-context-menu').style.display = 'none';
+        document.getElementById('measure-context-menu').style.display = 'none';
     }
     
     addSignal() {
@@ -319,6 +357,37 @@ class TimingGenApp {
         
         const xPos = event.point.x;
         const yPos = event.point.y;
+        
+        // Handle measure mode clicks
+        if (this.measureMode) {
+            if (this.measureState === 'first-point') {
+                // First click: select first transition point
+                const transitionX = this.findNearestTransition(xPos, yPos);
+                if (transitionX !== null) {
+                    this.currentMeasure.point1 = { x: transitionX, y: yPos };
+                    this.measureState = 'second-point';
+                }
+                return;
+            } else if (this.measureState === 'second-point') {
+                // Second click: select second transition point
+                const transitionX = this.findNearestTransition(xPos, yPos);
+                if (transitionX !== null) {
+                    this.currentMeasure.point2 = { x: transitionX, y: yPos };
+                    this.measureState = 'placing-text';
+                }
+                return;
+            } else if (this.measureState === 'placing-text') {
+                // Third click: select row for text placement
+                const rowIndex = this.getRowIndexAtY(yPos);
+                this.currentMeasure.row = rowIndex;
+                
+                // Show text input dialog
+                document.getElementById('measure-text-input').value = '';
+                document.getElementById('measure-text-dialog').style.display = 'flex';
+                document.getElementById('measure-text-input').focus();
+                return;
+            }
+        }
         
         // Check if click is in signal name area
         if (xPos < this.config.nameColumnWidth) {
@@ -788,6 +857,230 @@ class TimingGenApp {
             return false;
         }
         return true;
+    }
+    
+    // Measure-related methods
+    startMeasureMode() {
+        this.measureMode = true;
+        this.measureState = 'first-point';
+        this.currentMeasure = {
+            point1: null,
+            point2: null,
+            row: null,
+            text: ''
+        };
+        this.canvas.style.cursor = 'crosshair';
+        // Add onMouseMove handler for visual feedback
+        const tool = paper.tools[0]; // Get the existing tool
+        this.originalOnMouseMove = tool.onMouseMove;
+        tool.onMouseMove = (event) => this.handleMeasureMouseMove(event);
+    }
+    
+    handleMeasureMouseMove(event) {
+        if (!this.measureMode) return;
+        
+        const xPos = event.point.x;
+        const yPos = event.point.y;
+        
+        // Clear temporary graphics
+        if (this.tempMeasureGraphics) {
+            this.tempMeasureGraphics.remove();
+            this.tempMeasureGraphics = null;
+        }
+        
+        this.measureLayer.activate();
+        this.tempMeasureGraphics = new paper.Group();
+        
+        if (this.measureState === 'second-point' && this.currentMeasure.point1) {
+            // Draw first bar
+            const bar1 = this.drawMeasureBar(this.currentMeasure.point1.x, '#FF0000');
+            this.tempMeasureGraphics.addChild(bar1);
+            
+            // Draw second bar following mouse
+            const bar2 = this.drawMeasureBar(xPos, '#FF0000');
+            this.tempMeasureGraphics.addChild(bar2);
+            
+            // Draw arrows
+            const arrows = this.drawMeasureArrows(this.currentMeasure.point1.x, xPos, this.config.headerHeight + this.config.rowHeight / 2);
+            this.tempMeasureGraphics.addChild(arrows);
+        } else if (this.measureState === 'placing-text' && this.currentMeasure.point1 && this.currentMeasure.point2) {
+            // Draw both bars
+            const bar1 = this.drawMeasureBar(this.currentMeasure.point1.x, '#FF0000');
+            this.tempMeasureGraphics.addChild(bar1);
+            const bar2 = this.drawMeasureBar(this.currentMeasure.point2.x, '#FF0000');
+            this.tempMeasureGraphics.addChild(bar2);
+            
+            // Determine row from mouse position
+            const rowIndex = this.getRowIndexAtY(yPos);
+            const arrowY = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
+            
+            // Draw arrows at the row position
+            const arrows = this.drawMeasureArrows(this.currentMeasure.point1.x, this.currentMeasure.point2.x, arrowY);
+            this.tempMeasureGraphics.addChild(arrows);
+        }
+        
+        paper.view.draw();
+    }
+    
+    drawMeasureBar(xPos, color) {
+        const bar = new paper.Path.Line({
+            from: [xPos, 0],
+            to: [xPos, this.config.headerHeight + this.signals.length * this.config.rowHeight],
+            strokeColor: color,
+            strokeWidth: 2
+        });
+        return bar;
+    }
+    
+    drawMeasureArrows(x1, x2, yPos) {
+        const group = new paper.Group();
+        const arrowSize = 8;
+        const isInward = Math.abs(x2 - x1) > 60;
+        
+        // Horizontal line between bars
+        const line = new paper.Path.Line({
+            from: [Math.min(x1, x2), yPos],
+            to: [Math.max(x1, x2), yPos],
+            strokeColor: '#FF0000',
+            strokeWidth: 2
+        });
+        group.addChild(line);
+        
+        // Arrows at both ends
+        if (isInward) {
+            // Inward pointing arrows
+            // Left arrow (pointing right)
+            const leftArrow = new paper.Path([
+                [Math.min(x1, x2), yPos],
+                [Math.min(x1, x2) + arrowSize, yPos - arrowSize/2],
+                [Math.min(x1, x2) + arrowSize, yPos + arrowSize/2]
+            ]);
+            leftArrow.closed = true;
+            leftArrow.fillColor = '#FF0000';
+            group.addChild(leftArrow);
+            
+            // Right arrow (pointing left)
+            const rightArrow = new paper.Path([
+                [Math.max(x1, x2), yPos],
+                [Math.max(x1, x2) - arrowSize, yPos - arrowSize/2],
+                [Math.max(x1, x2) - arrowSize, yPos + arrowSize/2]
+            ]);
+            rightArrow.closed = true;
+            rightArrow.fillColor = '#FF0000';
+            group.addChild(rightArrow);
+        } else {
+            // Outward pointing arrows
+            // Left arrow (pointing left)
+            const leftArrow = new paper.Path([
+                [Math.min(x1, x2), yPos],
+                [Math.min(x1, x2) - arrowSize, yPos - arrowSize/2],
+                [Math.min(x1, x2) - arrowSize, yPos + arrowSize/2]
+            ]);
+            leftArrow.closed = true;
+            leftArrow.fillColor = '#FF0000';
+            group.addChild(leftArrow);
+            
+            // Right arrow (pointing right)
+            const rightArrow = new paper.Path([
+                [Math.max(x1, x2), yPos],
+                [Math.max(x1, x2) + arrowSize, yPos - arrowSize/2],
+                [Math.max(x1, x2) + arrowSize, yPos + arrowSize/2]
+            ]);
+            rightArrow.closed = true;
+            rightArrow.fillColor = '#FF0000';
+            group.addChild(rightArrow);
+        }
+        
+        return group;
+    }
+    
+    getRowIndexAtY(yPos) {
+        // Returns row index, including -1 for above first signal and signals.length for below last signal
+        if (yPos < this.config.headerHeight) {
+            return -1; // Above signals
+        }
+        const relativeY = yPos - this.config.headerHeight;
+        const rowIndex = Math.floor(relativeY / this.config.rowHeight);
+        return rowIndex;
+    }
+    
+    findNearestTransition(xPos, yPos) {
+        // Find the nearest transition point (cycle boundary) to the click position
+        // This snaps to cycle boundaries where signals transition
+        const signalIndex = this.getSignalIndexAtY(yPos);
+        
+        // Allow clicking anywhere in waveform area
+        if (xPos < this.config.nameColumnWidth) {
+            return null;
+        }
+        
+        // Find nearest cycle boundary
+        const relativeX = xPos - this.config.nameColumnWidth;
+        const cycle = Math.round(relativeX / this.config.cycleWidth);
+        
+        if (cycle < 0 || cycle > this.config.cycles) {
+            return null;
+        }
+        
+        const transitionX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+        return transitionX;
+    }
+    
+    finalizeMeasure() {
+        const text = document.getElementById('measure-text-input').value.trim();
+        if (!text) {
+            alert('Please enter a label for the measure');
+            return;
+        }
+        
+        this.currentMeasure.text = text;
+        this.measures.push(this.currentMeasure);
+        
+        document.getElementById('measure-text-dialog').style.display = 'none';
+        this.measureMode = false;
+        this.measureState = null;
+        this.currentMeasure = null;
+        this.canvas.style.cursor = 'crosshair';
+        
+        if (this.tempMeasureGraphics) {
+            this.tempMeasureGraphics.remove();
+            this.tempMeasureGraphics = null;
+        }
+        
+        // Restore original onMouseMove
+        const tool = paper.tools[0];
+        tool.onMouseMove = this.originalOnMouseMove;
+        
+        this.render();
+    }
+    
+    cancelMeasure() {
+        document.getElementById('measure-text-dialog').style.display = 'none';
+        this.measureMode = false;
+        this.measureState = null;
+        this.currentMeasure = null;
+        this.canvas.style.cursor = 'crosshair';
+        
+        if (this.tempMeasureGraphics) {
+            this.tempMeasureGraphics.remove();
+            this.tempMeasureGraphics = null;
+        }
+        
+        // Restore original onMouseMove
+        const tool = paper.tools[0];
+        tool.onMouseMove = this.originalOnMouseMove;
+        
+        this.render();
+    }
+    
+    deleteMeasure() {
+        // Delete measure based on currentEditingMeasure
+        if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < this.measures.length) {
+            this.measures.splice(this.currentEditingMeasure, 1);
+            this.currentEditingMeasure = null;
+            this.hideAllMenus();
+            this.render();
+        }
     }
     
     render() {

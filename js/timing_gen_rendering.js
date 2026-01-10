@@ -8,6 +8,7 @@ class TimingGenRendering {
         app.backgroundLayer.removeChildren();
         app.gridLayer.removeChildren();
         app.signalLayer.removeChildren();
+        app.measureLayer.removeChildren();
         
         // Activate background layer and draw
         app.backgroundLayer.activate();
@@ -28,6 +29,12 @@ class TimingGenRendering {
         app.signalLayer.activate();
         app.signals.forEach((signal, index) => {
             TimingGenRendering.drawSignal(app, signal, index);
+        });
+        
+        // Draw measures
+        app.measureLayer.activate();
+        app.measures.forEach((measure, index) => {
+            TimingGenRendering.drawMeasure(app, measure, index);
         });
         
         paper.view.draw();
@@ -648,5 +655,97 @@ class TimingGenRendering {
             strokeColor: signalColor,
             strokeWidth: 2
         });
+    }
+    
+    static drawMeasure(app, measure, index) {
+        // Draw vertical bars
+        const bar1 = new paper.Path.Line({
+            from: [measure.point1.x, 0],
+            to: [measure.point1.x, app.config.headerHeight + app.signals.length * app.config.rowHeight],
+            strokeColor: '#FF0000',
+            strokeWidth: 2
+        });
+        
+        const bar2 = new paper.Path.Line({
+            from: [measure.point2.x, 0],
+            to: [measure.point2.x, app.config.headerHeight + app.signals.length * app.config.rowHeight],
+            strokeColor: '#FF0000',
+            strokeWidth: 2
+        });
+        
+        // Calculate arrow Y position based on row
+        const arrowY = app.config.headerHeight + (measure.row + 0.5) * app.config.rowHeight;
+        
+        // Draw horizontal line and arrows
+        const x1 = measure.point1.x;
+        const x2 = measure.point2.x;
+        const arrowSize = 8;
+        const isInward = Math.abs(x2 - x1) > 60;
+        
+        // Horizontal line
+        const line = new paper.Path.Line({
+            from: [Math.min(x1, x2), arrowY],
+            to: [Math.max(x1, x2), arrowY],
+            strokeColor: '#FF0000',
+            strokeWidth: 2
+        });
+        
+        // Arrows at both ends
+        if (isInward) {
+            // Inward pointing arrows
+            const leftArrow = new paper.Path([
+                [Math.min(x1, x2), arrowY],
+                [Math.min(x1, x2) + arrowSize, arrowY - arrowSize/2],
+                [Math.min(x1, x2) + arrowSize, arrowY + arrowSize/2]
+            ]);
+            leftArrow.closed = true;
+            leftArrow.fillColor = '#FF0000';
+            
+            const rightArrow = new paper.Path([
+                [Math.max(x1, x2), arrowY],
+                [Math.max(x1, x2) - arrowSize, arrowY - arrowSize/2],
+                [Math.max(x1, x2) - arrowSize, arrowY + arrowSize/2]
+            ]);
+            rightArrow.closed = true;
+            rightArrow.fillColor = '#FF0000';
+        } else {
+            // Outward pointing arrows
+            const leftArrow = new paper.Path([
+                [Math.min(x1, x2), arrowY],
+                [Math.min(x1, x2) - arrowSize, arrowY - arrowSize/2],
+                [Math.min(x1, x2) - arrowSize, arrowY + arrowSize/2]
+            ]);
+            leftArrow.closed = true;
+            leftArrow.fillColor = '#FF0000';
+            
+            const rightArrow = new paper.Path([
+                [Math.max(x1, x2), arrowY],
+                [Math.max(x1, x2) + arrowSize, arrowY - arrowSize/2],
+                [Math.max(x1, x2) + arrowSize, arrowY + arrowSize/2]
+            ]);
+            rightArrow.closed = true;
+            rightArrow.fillColor = '#FF0000';
+        }
+        
+        // Draw text label
+        const textX = Math.max(x1, x2) + 10; // Position to the right of the rightmost bar
+        const text = new paper.PointText({
+            point: [textX, arrowY + 5],
+            content: measure.text,
+            fillColor: '#FF0000',
+            fontFamily: 'Arial',
+            fontSize: 12,
+            fontWeight: 'bold'
+        });
+        
+        // Store measure index in text for right-click handling
+        text.data = { measureIndex: index };
+        
+        // Make text interactive for right-click
+        text.onMouseDown = function(event) {
+            if (event.event.button === 2) { // Right click
+                app.currentEditingMeasure = this.data.measureIndex;
+            }
+        };
     }
 }

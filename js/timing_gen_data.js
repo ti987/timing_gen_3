@@ -15,7 +15,8 @@ class TimingGenData {
                 delayMax: app.config.delayMax,
                 delayColor: app.config.delayColor
             },
-            signals: app.signals
+            signals: app.signals,
+            measures: app.measures
         };
         
         const jsonStr = JSON.stringify(data, null, 2);
@@ -81,6 +82,12 @@ class TimingGenData {
                             signal.base_clock = clockSignal ? clockSignal.name : 'clk';
                         }
                     });
+                }
+                
+                if (data.measures) {
+                    app.measures = data.measures;
+                } else {
+                    app.measures = [];
                 }
                 
                 app.initializeCanvas();

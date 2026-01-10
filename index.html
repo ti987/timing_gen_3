@@ -14,6 +14,12 @@
     <div id="app">
         <!-- Top Menu Bar -->
         <div id="menu-bar">
+            <div class="menu-dropdown">
+                <button id="add-menu-btn" class="menu-btn">Add</button>
+                <div id="add-submenu" class="submenu" style="display: none;">
+                    <div class="menu-item" id="add-measure-menu">Measure</div>
+                </div>
+            </div>
             <button id="add-signal-btn" class="menu-btn">Add Signal</button>
             <button id="global-option-btn" class="menu-btn">Global Option</button>
             <button id="save-btn" class="menu-btn">Save</button>
@@ -262,6 +268,24 @@
             <button id="delete-cycles-ok-btn" class="dialog-btn">OK</button>
             <button id="delete-cycles-cancel-btn" class="dialog-btn">Cancel</button>
         </div>
+    </div>
+
+    <!-- Measure Text Dialog -->
+    <div id="measure-text-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Enter Measure Text</h3>
+            <label>Label:</label>
+            <input type="text" id="measure-text-input" placeholder="Enter label text">
+            <br><br>
+            <button id="measure-text-ok-btn" class="dialog-btn">OK</button>
+            <button id="measure-text-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Context Menu for Measure -->
+    <div id="measure-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="delete-measure-menu">Delete</div>
+        <div class="menu-item" id="cancel-measure-menu">Cancel</div>
     </div>
 
     <!-- Load JavaScript modules in correct order -->
