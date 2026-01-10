@@ -49,6 +49,10 @@ class TimingGenApp {
         this.draggedSignal = null;
         this.dragIndicator = null;
         
+        // Selection state
+        this.selectedSignals = new Set(); // Set of signal indices
+        this.isDragging = false;
+        
         // Paper.js layers
         this.backgroundLayer = new paper.Layer();
         this.gridLayer = new paper.Layer();
@@ -187,6 +191,8 @@ class TimingGenApp {
             if (ev.key === 'Escape') {
                 TimingGenUI.hideAllDialogs(this);
                 this.hideAllMenus();
+                // Cancel selection and dragging
+                this.cancelSelection();
             }
         });
     }
@@ -319,17 +325,40 @@ class TimingGenApp {
         
         const xPos = event.point.x;
         const yPos = event.point.y;
+        const nativeEvent = event.event;
         
         // Check if click is in signal name area
         if (xPos < this.config.nameColumnWidth) {
             const signalIndex = this.getSignalIndexAtY(yPos);
             if (signalIndex !== -1) {
-                this.startDragSignal(signalIndex, event);
+                // Handle selection with modifier keys
+                if (nativeEvent.ctrlKey || nativeEvent.metaKey) {
+                    // Ctrl-click: toggle selection
+                    this.toggleSignalSelection(signalIndex);
+                    this.render();
+                } else if (nativeEvent.shiftKey) {
+                    // Shift-click: select range
+                    this.selectSignalRange(signalIndex);
+                    this.render();
+                } else if (nativeEvent.altKey) {
+                    // Alt-click: deselect
+                    this.deselectSignal(signalIndex);
+                    this.render();
+                } else {
+                    // Regular click: select and start drag
+                    if (!this.selectedSignals.has(signalIndex)) {
+                        // If not already selected, make it the only selection
+                        this.selectedSignals.clear();
+                        this.selectedSignals.add(signalIndex);
+                        this.render();
+                    }
+                    this.startDragSignal(signalIndex, event);
+                }
             }
             return;
         }
         
-        // Check if click is in waveform area
+        // Check if click is in waveform area - clear selection if clicking waveform
         const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
         const signalIndex = this.getSignalIndexAtY(yPos);
         
@@ -576,8 +605,52 @@ class TimingGenApp {
         return (index >= 0 && index < this.signals.length) ? index : -1;
     }
     
+    toggleSignalSelection(signalIndex) {
+        if (this.selectedSignals.has(signalIndex)) {
+            this.selectedSignals.delete(signalIndex);
+        } else {
+            this.selectedSignals.add(signalIndex);
+        }
+    }
+    
+    selectSignalRange(signalIndex) {
+        // Find the last selected signal to determine range
+        if (this.selectedSignals.size === 0) {
+            this.selectedSignals.add(signalIndex);
+            return;
+        }
+        
+        // Get the min and max of currently selected signals
+        const selectedArray = Array.from(this.selectedSignals);
+        const minSelected = Math.min(...selectedArray);
+        const maxSelected = Math.max(...selectedArray);
+        
+        // Select all signals between minSelected and signalIndex or maxSelected and signalIndex
+        const start = Math.min(minSelected, signalIndex);
+        const end = Math.max(maxSelected, signalIndex);
+        
+        for (let i = start; i <= end; i++) {
+            if (i < this.signals.length) {
+                this.selectedSignals.add(i);
+            }
+        }
+    }
+    
+    deselectSignal(signalIndex) {
+        this.selectedSignals.delete(signalIndex);
+    }
+    
+    cancelSelection() {
+        this.selectedSignals.clear();
+        this.isDragging = false;
+        this.draggedSignal = null;
+        this.removeDragIndicator();
+        this.render();
+    }
+    
     startDragSignal(signalIndex, event) {
         this.draggedSignal = signalIndex;
+        this.isDragging = true;
         
         const rect = this.canvas.getBoundingClientRect();
         
@@ -592,6 +665,7 @@ class TimingGenApp {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
             this.draggedSignal = null;
+            this.isDragging = false;
             this.removeDragIndicator();
         };
         
@@ -601,9 +675,24 @@ class TimingGenApp {
     
     updateDragIndicator(yPos) {
         const targetIndex = this.getSignalIndexAtY(yPos);
-        if (targetIndex !== -1 && targetIndex !== this.draggedSignal) {
-            // Show indicator line
-            const indicatorY = this.config.headerHeight + targetIndex * this.config.rowHeight;
+        
+        // Check if target is valid and not one of the selected signals being dragged
+        if (targetIndex !== -1 && !this.selectedSignals.has(targetIndex)) {
+            // Calculate valid drop positions (between signals or at edges)
+            // The indicator shows where the selected signals will be inserted
+            let indicatorY;
+            
+            // Determine if we should show indicator above or below the target
+            const targetYStart = this.config.headerHeight + targetIndex * this.config.rowHeight;
+            const targetYMid = targetYStart + this.config.rowHeight / 2;
+            
+            if (yPos < targetYMid) {
+                // Drop above target
+                indicatorY = targetYStart;
+            } else {
+                // Drop below target
+                indicatorY = targetYStart + this.config.rowHeight;
+            }
             
             if (!this.dragIndicator) {
                 this.dragIndicator = document.createElement('div');
@@ -612,6 +701,9 @@ class TimingGenApp {
             }
             
             this.dragIndicator.style.top = indicatorY + 'px';
+            this.dragIndicator.style.display = 'block';
+        } else if (this.dragIndicator) {
+            this.dragIndicator.style.display = 'none';
         }
     }
     
@@ -624,12 +716,45 @@ class TimingGenApp {
     
     dropSignal(yPos) {
         const targetIndex = this.getSignalIndexAtY(yPos);
-        if (targetIndex !== -1 && targetIndex !== this.draggedSignal) {
-            // Move signal
-            const signal = this.signals.splice(this.draggedSignal, 1)[0];
-            this.signals.splice(targetIndex, 0, signal);
-            this.render();
+        
+        if (targetIndex === -1 || this.selectedSignals.has(targetIndex)) {
+            return; // Invalid drop location
         }
+        
+        // Get all selected signals (sorted by their current index)
+        const selectedIndices = Array.from(this.selectedSignals).sort((a, b) => a - b);
+        
+        if (selectedIndices.length === 0) {
+            return;
+        }
+        
+        // Extract selected signals
+        const selectedSignalsData = selectedIndices.map(idx => this.signals[idx]);
+        
+        // Determine insertion point
+        const targetYStart = this.config.headerHeight + targetIndex * this.config.rowHeight;
+        const targetYMid = targetYStart + this.config.rowHeight / 2;
+        let insertIndex = (yPos < targetYMid) ? targetIndex : targetIndex + 1;
+        
+        // Remove selected signals from the array (in reverse order to preserve indices)
+        for (let i = selectedIndices.length - 1; i >= 0; i--) {
+            this.signals.splice(selectedIndices[i], 1);
+            // Adjust insertIndex if we removed signals before it
+            if (selectedIndices[i] < insertIndex) {
+                insertIndex--;
+            }
+        }
+        
+        // Insert all selected signals at the new position
+        this.signals.splice(insertIndex, 0, ...selectedSignalsData);
+        
+        // Update selection indices to reflect new positions
+        this.selectedSignals.clear();
+        for (let i = 0; i < selectedSignalsData.length; i++) {
+            this.selectedSignals.add(insertIndex + i);
+        }
+        
+        this.render();
     }
     
     insertCyclesGlobal(startCycle, numCycles) {
