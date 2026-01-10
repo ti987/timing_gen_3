@@ -64,8 +64,18 @@ The application uses Paper.js from CDN, so no manual download is required. Howev
 
 ### Signal Reordering
 
-- Click and drag a signal name up or down to reorder signals
-- A red indicator line shows where the signal will be placed
+**Selection:**
+- **Left-click** on signal name: Select signal (clears previous selection)
+- **Ctrl/Cmd-click**: Toggle selection (add or remove from selection)
+- **Shift-click**: Select range from last selected to clicked signal
+- **Alt-click**: Deselect a specific signal
+- **Escape key**: Clear all selections and cancel dragging
+
+**Reordering:**
+- Click and drag any selected signal name up or down to reorder
+- All selected signals move together maintaining their relative order
+- A red indicator line shows where the signals will be placed
+- Selected signals are highlighted with blue background and white text
 
 ### Saving and Loading
 
