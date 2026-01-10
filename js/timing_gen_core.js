@@ -206,8 +206,8 @@ class TimingGenApp {
         document.getElementById('cancel-cycle-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Canvas events using Paper.js tool
-        const tool = new paper.Tool();
-        tool.onMouseDown = (event) => this.handleCanvasClick(event);
+        this.tool = new paper.Tool();
+        this.tool.onMouseDown = (event) => this.handleCanvasClick(event);
         
         // Context menu
         this.canvas.addEventListener('contextmenu', (ev) => this.handleCanvasRightClick(ev));
@@ -871,9 +871,8 @@ class TimingGenApp {
         };
         this.canvas.style.cursor = 'crosshair';
         // Add onMouseMove handler for visual feedback
-        const tool = paper.tools[0]; // Get the existing tool
-        this.originalOnMouseMove = tool.onMouseMove;
-        tool.onMouseMove = (event) => this.handleMeasureMouseMove(event);
+        this.originalOnMouseMove = this.tool.onMouseMove;
+        this.tool.onMouseMove = (event) => this.handleMeasureMouseMove(event);
     }
     
     handleMeasureMouseMove(event) {
@@ -1048,8 +1047,7 @@ class TimingGenApp {
         }
         
         // Restore original onMouseMove
-        const tool = paper.tools[0];
-        tool.onMouseMove = this.originalOnMouseMove;
+        this.tool.onMouseMove = this.originalOnMouseMove;
         
         this.render();
     }
@@ -1067,8 +1065,7 @@ class TimingGenApp {
         }
         
         // Restore original onMouseMove
-        const tool = paper.tools[0];
-        tool.onMouseMove = this.originalOnMouseMove;
+        this.tool.onMouseMove = this.originalOnMouseMove;
         
         this.render();
     }
