@@ -368,30 +368,32 @@ class TimingGenApp {
         // Handle measure mode clicks
         if (this.measureMode) {
             if (this.measureState === 'first-point') {
-                // First click: select first transition point
+                // First click: select first point and draw small cross
                 const transitionX = this.findNearestTransition(xPos, yPos);
                 if (transitionX !== null) {
                     this.currentMeasure.point1 = { x: transitionX, y: yPos };
                     this.measureState = 'second-point';
+                    this.hideInstruction();
+                    this.showInstruction("Click the second point");
                 }
                 return;
             } else if (this.measureState === 'second-point') {
-                // Second click: select second transition point
+                // Second click: select second point
                 const transitionX = this.findNearestTransition(xPos, yPos);
                 if (transitionX !== null) {
                     this.currentMeasure.point2 = { x: transitionX, y: yPos };
-                    this.measureState = 'placing-text';
+                    this.measureState = 'placing-row';
+                    this.hideInstruction();
+                    this.showInstruction("Pick a row for the measure");
                 }
                 return;
-            } else if (this.measureState === 'placing-text') {
-                // Third click: select row for text placement
+            } else if (this.measureState === 'placing-row') {
+                // Third click: finalize row and create measure
                 const rowIndex = this.getRowIndexAtY(yPos);
                 this.currentMeasure.row = rowIndex;
                 
-                // Show text input dialog
-                document.getElementById('measure-text-input').value = '';
-                document.getElementById('measure-text-dialog').style.display = 'flex';
-                document.getElementById('measure-text-input').focus();
+                // Finalize measure without text input for now
+                this.finalizeMeasureWithoutText();
                 return;
             }
         }
@@ -995,9 +997,24 @@ class TimingGenApp {
             text: ''
         };
         this.canvas.style.cursor = 'crosshair';
+        
+        // Show instruction
+        this.showInstruction("Click at the first point");
+        
         // Add onMouseMove handler for visual feedback
         this.originalOnMouseMove = this.tool.onMouseMove;
         this.tool.onMouseMove = (event) => this.handleMeasureMouseMove(event);
+    }
+    
+    showInstruction(text) {
+        const instructionBox = document.getElementById('instruction-box');
+        const instructionText = document.getElementById('instruction-text');
+        instructionText.textContent = text;
+        instructionBox.style.display = 'block';
+    }
+    
+    hideInstruction() {
+        document.getElementById('instruction-box').style.display = 'none';
     }
     
     handleMeasureMouseMove(event) {
@@ -1016,31 +1033,45 @@ class TimingGenApp {
         this.tempMeasureGraphics = new paper.Group();
         
         if (this.measureState === 'second-point' && this.currentMeasure.point1) {
-            // Draw first bar
-            const bar1 = this.drawMeasureBar(this.currentMeasure.point1.x, '#FF0000');
-            this.tempMeasureGraphics.addChild(bar1);
+            // Draw small cross at first point
+            const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
+            this.tempMeasureGraphics.addChild(cross1);
             
-            // Draw second bar following mouse
-            const bar2 = this.drawMeasureBar(xPos, '#FF0000');
-            this.tempMeasureGraphics.addChild(bar2);
+            // Draw dynamic vertical line from first point to current mouse position
+            const dynamicLine = this.drawDynamicVerticalLine(
+                this.currentMeasure.point1.x,
+                this.currentMeasure.point1.y,
+                yPos
+            );
+            this.tempMeasureGraphics.addChild(dynamicLine);
+        } else if (this.measureState === 'placing-row' && this.currentMeasure.point1 && this.currentMeasure.point2) {
+            // Draw small cross at first point
+            const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
+            this.tempMeasureGraphics.addChild(cross1);
             
-            // Draw arrows
-            const arrows = this.drawMeasureArrows(this.currentMeasure.point1.x, xPos, this.config.headerHeight + this.config.rowHeight / 2);
-            this.tempMeasureGraphics.addChild(arrows);
-        } else if (this.measureState === 'placing-text' && this.currentMeasure.point1 && this.currentMeasure.point2) {
-            // Draw both bars
-            const bar1 = this.drawMeasureBar(this.currentMeasure.point1.x, '#FF0000');
-            this.tempMeasureGraphics.addChild(bar1);
-            const bar2 = this.drawMeasureBar(this.currentMeasure.point2.x, '#FF0000');
-            this.tempMeasureGraphics.addChild(bar2);
+            // Draw full vertical line at first point
+            const line1 = this.drawFullVerticalLine(
+                this.currentMeasure.point1.x,
+                this.currentMeasure.point1.y,
+                this.currentMeasure.point2.y
+            );
+            this.tempMeasureGraphics.addChild(line1);
             
-            // Determine row from mouse position
+            // Draw small cross at second point
+            const cross2 = this.drawSmallCross(this.currentMeasure.point2.x, this.currentMeasure.point2.y);
+            this.tempMeasureGraphics.addChild(cross2);
+            
+            // Draw full vertical line at second point
+            const line2 = this.drawFullVerticalLine(
+                this.currentMeasure.point2.x,
+                this.currentMeasure.point1.y,
+                this.currentMeasure.point2.y
+            );
+            this.tempMeasureGraphics.addChild(line2);
+            
+            // Determine row from mouse position (show horizontal grid line)
             const rowIndex = this.getRowIndexAtY(yPos);
-            const arrowY = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
-            
-            // Draw arrows at the row position
-            const arrows = this.drawMeasureArrows(this.currentMeasure.point1.x, this.currentMeasure.point2.x, arrowY);
-            this.tempMeasureGraphics.addChild(arrows);
+            this.drawRowIndicator(rowIndex);
         }
         
         paper.view.draw();
@@ -1128,6 +1159,142 @@ class TimingGenApp {
         return rowIndex;
     }
     
+    // New drawing helper methods for measure feature
+    drawSmallCross(xPos, yPos) {
+        const group = new paper.Group();
+        const crossSize = 6;
+        
+        // Horizontal line of cross
+        const hLine = new paper.Path.Line({
+            from: [xPos - crossSize, yPos],
+            to: [xPos + crossSize, yPos],
+            strokeColor: '#FF0000',
+            strokeWidth: 2
+        });
+        group.addChild(hLine);
+        
+        // Vertical line of cross
+        const vLine = new paper.Path.Line({
+            from: [xPos, yPos - crossSize],
+            to: [xPos, yPos + crossSize],
+            strokeColor: '#FF0000',
+            strokeWidth: 2
+        });
+        group.addChild(vLine);
+        
+        return group;
+    }
+    
+    drawDynamicVerticalLine(xPos, startY, currentY) {
+        // Draw vertical line extending from start row to current mouse position
+        const rowHeight = this.config.rowHeight;
+        const startRowTop = Math.floor((startY - this.config.headerHeight) / rowHeight) * rowHeight + this.config.headerHeight;
+        const startRowBottom = startRowTop + rowHeight;
+        
+        let lineStart, lineEnd;
+        
+        if (currentY < startRowTop) {
+            // Extending upward
+            lineStart = currentY;
+            lineEnd = startRowBottom;
+        } else if (currentY > startRowBottom) {
+            // Extending downward
+            lineStart = startRowTop;
+            lineEnd = currentY;
+        } else {
+            // Within same row
+            lineStart = startRowTop;
+            lineEnd = startRowBottom;
+        }
+        
+        const line = new paper.Path.Line({
+            from: [xPos, lineStart],
+            to: [xPos, lineEnd],
+            strokeColor: '#FF0000',
+            strokeWidth: 2
+        });
+        
+        return line;
+    }
+    
+    drawFullVerticalLine(xPos, startY, endY) {
+        // Draw full vertical line from first point row to second point row
+        const rowHeight = this.config.rowHeight;
+        const startRowTop = Math.floor((startY - this.config.headerHeight) / rowHeight) * rowHeight + this.config.headerHeight;
+        const startRowBottom = startRowTop + rowHeight;
+        const endRowTop = Math.floor((endY - this.config.headerHeight) / rowHeight) * rowHeight + this.config.headerHeight;
+        const endRowBottom = endRowTop + rowHeight;
+        
+        const lineStart = Math.min(startRowTop, endRowTop);
+        const lineEnd = Math.max(startRowBottom, endRowBottom);
+        
+        const line = new paper.Path.Line({
+            from: [xPos, lineStart],
+            to: [xPos, lineEnd],
+            strokeColor: '#FF0000',
+            strokeWidth: 2
+        });
+        
+        return line;
+    }
+    
+    drawRowIndicator(rowIndex) {
+        // Draw horizontal line indicator for row selection
+        const yPos = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
+        const indicator = new paper.Path.Line({
+            from: [0, yPos],
+            to: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, yPos],
+            strokeColor: '#FF0000',
+            strokeWidth: 1,
+            dashArray: [5, 3]
+        });
+        
+        if (this.tempMeasureGraphics) {
+            this.tempMeasureGraphics.addChild(indicator);
+        }
+    }
+    
+    drawArrowHead(x, y, direction, size = 8) {
+        // direction: 'left', 'right', 'up', 'down'
+        let path;
+        
+        switch(direction) {
+            case 'left':
+                path = new paper.Path([
+                    [x, y],
+                    [x + size, y - size/2],
+                    [x + size, y + size/2]
+                ]);
+                break;
+            case 'right':
+                path = new paper.Path([
+                    [x, y],
+                    [x - size, y - size/2],
+                    [x - size, y + size/2]
+                ]);
+                break;
+            case 'up':
+                path = new paper.Path([
+                    [x, y],
+                    [x - size/2, y + size],
+                    [x + size/2, y + size]
+                ]);
+                break;
+            case 'down':
+                path = new paper.Path([
+                    [x, y],
+                    [x - size/2, y - size],
+                    [x + size/2, y - size]
+                ]);
+                break;
+        }
+        
+        path.closed = true;
+        path.fillColor = '#FF0000';
+        
+        return path;
+    }
+    
     findNearestTransition(xPos, yPos) {
         // Find the nearest transition point (cycle boundary) to the click position
         // This snaps to cycle boundaries where signals transition
@@ -1150,6 +1317,47 @@ class TimingGenApp {
         return transitionX;
     }
     
+    finalizeMeasureWithoutText() {
+        // Finalize measure without text input (as requested - text is separate operation)
+        this.currentMeasure.text = ''; // No text for now
+        
+        // Insert blank row if needed at the selected row
+        this.insertBlankRowForMeasure(this.currentMeasure.row);
+        
+        // Add measure to list
+        this.measures.push(this.currentMeasure);
+        
+        // Clean up
+        this.hideInstruction();
+        this.measureMode = false;
+        this.measureState = null;
+        this.currentMeasure = null;
+        this.canvas.style.cursor = 'crosshair';
+        
+        if (this.tempMeasureGraphics) {
+            this.tempMeasureGraphics.remove();
+            this.tempMeasureGraphics = null;
+        }
+        
+        // Restore original onMouseMove
+        this.tool.onMouseMove = this.originalOnMouseMove;
+        
+        this.render();
+    }
+    
+    insertBlankRowForMeasure(rowIndex) {
+        // Insert a blank row at the specified index if needed
+        // For now, we'll just note the row - actual row insertion would require
+        // moving signals down which is complex. This is a placeholder.
+        // The rendering will handle drawing measures between existing rows.
+        
+        // TODO: Implement actual signal moving to create blank rows
+        // This would involve:
+        // 1. Shifting all signals at rowIndex and below down by one row
+        // 2. Updating the canvas height
+        // 3. Re-rendering everything
+    }
+    
     finalizeMeasure() {
         const text = document.getElementById('measure-text-input').value.trim();
         if (!text) {
@@ -1161,6 +1369,7 @@ class TimingGenApp {
         this.measures.push(this.currentMeasure);
         
         document.getElementById('measure-text-dialog').style.display = 'none';
+        this.hideInstruction();
         this.measureMode = false;
         this.measureState = null;
         this.currentMeasure = null;
@@ -1179,6 +1388,7 @@ class TimingGenApp {
     
     cancelMeasure() {
         document.getElementById('measure-text-dialog').style.display = 'none';
+        this.hideInstruction();
         this.measureMode = false;
         this.measureState = null;
         this.currentMeasure = null;
