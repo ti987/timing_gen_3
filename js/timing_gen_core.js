@@ -1228,8 +1228,10 @@ class TimingGenApp {
         // Clear any existing temp graphics
         if (this.tempMeasureGraphics) {
             if (Array.isArray(this.tempMeasureGraphics)) {
-                this.tempMeasureGraphics.forEach(item => item.remove());
-            } else {
+                this.tempMeasureGraphics.forEach(item => {
+                    if (item && item.remove) item.remove();
+                });
+            } else if (this.tempMeasureGraphics.remove) {
                 this.tempMeasureGraphics.remove();
             }
             this.tempMeasureGraphics = null;
@@ -1258,8 +1260,10 @@ class TimingGenApp {
         // Clear any existing temp graphics
         if (this.tempMeasureGraphics) {
             if (Array.isArray(this.tempMeasureGraphics)) {
-                this.tempMeasureGraphics.forEach(item => item.remove());
-            } else {
+                this.tempMeasureGraphics.forEach(item => {
+                    if (item && item.remove) item.remove();
+                });
+            } else if (this.tempMeasureGraphics.remove) {
                 this.tempMeasureGraphics.remove();
             }
             this.tempMeasureGraphics = null;
