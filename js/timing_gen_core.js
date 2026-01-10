@@ -907,17 +907,23 @@ class TimingGenApp {
         
         // Clear temporary graphics
         if (this.tempMeasureGraphics) {
-            this.tempMeasureGraphics.remove();
+            if (Array.isArray(this.tempMeasureGraphics)) {
+                this.tempMeasureGraphics.forEach(item => {
+                    if (item && item.remove) item.remove();
+                });
+            } else if (this.tempMeasureGraphics.remove) {
+                this.tempMeasureGraphics.remove();
+            }
             this.tempMeasureGraphics = null;
         }
         
         this.measureLayer.activate();
-        this.tempMeasureGraphics = new paper.Group();
+        this.tempMeasureGraphics = [];
         
         if (this.measureState === 'second-point' && this.currentMeasure.point1) {
             // After first click: show first line + cross, and dynamic line to mouse
             const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
-            this.tempMeasureGraphics.addChild(cross1);
+            this.tempMeasureGraphics.push(cross1);
             
             // Draw first vertical line
             const line1 = this.drawFullVerticalLine(
@@ -925,7 +931,7 @@ class TimingGenApp {
                 this.currentMeasure.point1.y,
                 this.currentMeasure.point1.y
             );
-            this.tempMeasureGraphics.addChild(line1);
+            this.tempMeasureGraphics.push(line1);
             
             // Draw dynamic vertical line from first point to current mouse position
             const dynamicLine = this.drawDynamicVerticalLine(
@@ -933,11 +939,11 @@ class TimingGenApp {
                 this.currentMeasure.point1.y,
                 yPos
             );
-            this.tempMeasureGraphics.addChild(dynamicLine);
+            this.tempMeasureGraphics.push(dynamicLine);
         } else if (this.measureState === 'placing-row' && this.currentMeasure.point1 && this.currentMeasure.point2) {
             // After second click: show both lines + crosses, and drag arrow to mouse position
             const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
-            this.tempMeasureGraphics.addChild(cross1);
+            this.tempMeasureGraphics.push(cross1);
             
             // Draw full vertical line at first point
             const line1 = this.drawFullVerticalLine(
@@ -945,11 +951,11 @@ class TimingGenApp {
                 this.currentMeasure.point1.y,
                 this.currentMeasure.point2.y
             );
-            this.tempMeasureGraphics.addChild(line1);
+            this.tempMeasureGraphics.push(line1);
             
             // Draw small cross at second point
             const cross2 = this.drawSmallCross(this.currentMeasure.point2.x, this.currentMeasure.point2.y);
-            this.tempMeasureGraphics.addChild(cross2);
+            this.tempMeasureGraphics.push(cross2);
             
             // Draw full vertical line at second point
             const line2 = this.drawFullVerticalLine(
@@ -957,7 +963,7 @@ class TimingGenApp {
                 this.currentMeasure.point1.y,
                 this.currentMeasure.point2.y
             );
-            this.tempMeasureGraphics.addChild(line2);
+            this.tempMeasureGraphics.push(line2);
             
             // Determine row from mouse position and draw arrow at that position
             const rowIndex = this.getRowIndexAtY(yPos);
@@ -969,7 +975,7 @@ class TimingGenApp {
                 this.currentMeasure.point2.x,
                 arrowY
             );
-            this.tempMeasureGraphics.addChild(arrows);
+            this.tempMeasureGraphics.push(arrows);
             
             // Draw dashed row indicator
             this.drawRowIndicator(rowIndex);
@@ -1151,8 +1157,8 @@ class TimingGenApp {
             dashArray: [5, 3]
         });
         
-        if (this.tempMeasureGraphics) {
-            this.tempMeasureGraphics.addChild(indicator);
+        if (this.tempMeasureGraphics && Array.isArray(this.tempMeasureGraphics)) {
+            this.tempMeasureGraphics.push(indicator);
         }
     }
     
@@ -1223,16 +1229,20 @@ class TimingGenApp {
     drawFirstPointVisuals() {
         // Clear any existing temp graphics
         if (this.tempMeasureGraphics) {
-            this.tempMeasureGraphics.remove();
+            if (Array.isArray(this.tempMeasureGraphics)) {
+                this.tempMeasureGraphics.forEach(item => item.remove());
+            } else {
+                this.tempMeasureGraphics.remove();
+            }
             this.tempMeasureGraphics = null;
         }
         
         this.measureLayer.activate();
-        this.tempMeasureGraphics = new paper.Group();
+        this.tempMeasureGraphics = [];
         
         // Draw small cross at first point
         const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
-        this.tempMeasureGraphics.addChild(cross1);
+        this.tempMeasureGraphics.push(cross1);
         
         // Draw first vertical line
         const line1 = this.drawFullVerticalLine(
@@ -1240,7 +1250,7 @@ class TimingGenApp {
             this.currentMeasure.point1.y,
             this.currentMeasure.point1.y
         );
-        this.tempMeasureGraphics.addChild(line1);
+        this.tempMeasureGraphics.push(line1);
         
         paper.view.draw();
     }
@@ -1249,16 +1259,20 @@ class TimingGenApp {
     drawSecondPointVisuals() {
         // Clear any existing temp graphics
         if (this.tempMeasureGraphics) {
-            this.tempMeasureGraphics.remove();
+            if (Array.isArray(this.tempMeasureGraphics)) {
+                this.tempMeasureGraphics.forEach(item => item.remove());
+            } else {
+                this.tempMeasureGraphics.remove();
+            }
             this.tempMeasureGraphics = null;
         }
         
         this.measureLayer.activate();
-        this.tempMeasureGraphics = new paper.Group();
+        this.tempMeasureGraphics = [];
         
         // Draw small cross at first point
         const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
-        this.tempMeasureGraphics.addChild(cross1);
+        this.tempMeasureGraphics.push(cross1);
         
         // Draw full vertical line at first point
         const line1 = this.drawFullVerticalLine(
@@ -1266,11 +1280,11 @@ class TimingGenApp {
             this.currentMeasure.point1.y,
             this.currentMeasure.point2.y
         );
-        this.tempMeasureGraphics.addChild(line1);
+        this.tempMeasureGraphics.push(line1);
         
         // Draw small cross at second point
         const cross2 = this.drawSmallCross(this.currentMeasure.point2.x, this.currentMeasure.point2.y);
-        this.tempMeasureGraphics.addChild(cross2);
+        this.tempMeasureGraphics.push(cross2);
         
         // Draw full vertical line at second point
         const line2 = this.drawFullVerticalLine(
@@ -1278,7 +1292,7 @@ class TimingGenApp {
             this.currentMeasure.point1.y,
             this.currentMeasure.point2.y
         );
-        this.tempMeasureGraphics.addChild(line2);
+        this.tempMeasureGraphics.push(line2);
         
         // Draw double-headed arrow at a default position (middle row between the two points)
         const defaultRow = Math.floor(this.getRowIndexAtY(this.currentMeasure.point1.y) + 
@@ -1289,7 +1303,7 @@ class TimingGenApp {
             this.currentMeasure.point2.x,
             arrowY
         );
-        this.tempMeasureGraphics.addChild(arrows);
+        this.tempMeasureGraphics.push(arrows);
         
         paper.view.draw();
     }
@@ -1312,7 +1326,13 @@ class TimingGenApp {
         this.canvas.style.cursor = 'crosshair';
         
         if (this.tempMeasureGraphics) {
-            this.tempMeasureGraphics.remove();
+            if (Array.isArray(this.tempMeasureGraphics)) {
+                this.tempMeasureGraphics.forEach(item => {
+                    if (item && item.remove) item.remove();
+                });
+            } else if (this.tempMeasureGraphics.remove) {
+                this.tempMeasureGraphics.remove();
+            }
             this.tempMeasureGraphics = null;
         }
         
