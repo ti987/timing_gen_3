@@ -93,11 +93,21 @@ class TimingGenRendering {
     static drawSignal(app, signal, index) {
         const yPos = app.config.headerHeight + index * app.config.rowHeight;
         
+        // Draw selection highlight background if signal is selected
+        if (app.selectedSignals.has(index)) {
+            const highlightRect = new paper.Path.Rectangle({
+                point: [0, yPos],
+                size: [app.config.nameColumnWidth, app.config.rowHeight],
+                fillColor: '#3498db'
+            });
+        }
+        
         // Draw signal name
+        const nameColor = app.selectedSignals.has(index) ? 'white' : 'black';
         const nameText = new paper.PointText({
             point: [app.config.nameColumnWidth - 10, yPos + app.config.rowHeight / 2 + 5],
             content: signal.name,
-            fillColor: 'black',
+            fillColor: nameColor,
             fontFamily: 'Arial',
             fontSize: 14,
             fontWeight: 'bold',

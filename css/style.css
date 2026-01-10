@@ -110,6 +110,11 @@ body {
     background-color: #d5dbdb;
 }
 
+.signal-name-box.selected {
+    background-color: #3498db;
+    color: white;
+}
+
 .signal-name-box.dragging {
     opacity: 0.5;
     background-color: #3498db;
