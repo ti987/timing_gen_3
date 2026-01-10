@@ -923,7 +923,7 @@ class TimingGenApp {
         if (this.measureState === 'second-point' && this.currentMeasure.point1) {
             // After first click: show first line + cross, and dynamic line to mouse
             const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
-            this.tempMeasureGraphics.push(cross1);
+            this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
             
             // Draw first vertical line
             const line1 = this.drawFullVerticalLine(
@@ -943,7 +943,7 @@ class TimingGenApp {
         } else if (this.measureState === 'placing-row' && this.currentMeasure.point1 && this.currentMeasure.point2) {
             // After second click: show both lines + crosses, and drag arrow to mouse position
             const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
-            this.tempMeasureGraphics.push(cross1);
+            this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
             
             // Draw full vertical line at first point
             const line1 = this.drawFullVerticalLine(
@@ -955,7 +955,7 @@ class TimingGenApp {
             
             // Draw small cross at second point
             const cross2 = this.drawSmallCross(this.currentMeasure.point2.x, this.currentMeasure.point2.y);
-            this.tempMeasureGraphics.push(cross2);
+            this.tempMeasureGraphics.push(cross2.hLine, cross2.vLine);
             
             // Draw full vertical line at second point
             const line2 = this.drawFullVerticalLine(
@@ -1069,7 +1069,6 @@ class TimingGenApp {
     
     // New drawing helper methods for measure feature
     drawSmallCross(xPos, yPos) {
-        const group = new paper.Group();
         const crossSize = 6;
         
         // Horizontal line of cross
@@ -1079,7 +1078,6 @@ class TimingGenApp {
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
-        group.addChild(hLine);
         
         // Vertical line of cross
         const vLine = new paper.Path.Line({
@@ -1088,9 +1086,9 @@ class TimingGenApp {
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
-        group.addChild(vLine);
         
-        return group;
+        // Return object with both lines so they can be added to the array
+        return { hLine, vLine };
     }
     
     drawDynamicVerticalLine(xPos, startY, currentY) {
@@ -1242,7 +1240,7 @@ class TimingGenApp {
         
         // Draw small cross at first point
         const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
-        this.tempMeasureGraphics.push(cross1);
+        this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
         
         // Draw first vertical line
         const line1 = this.drawFullVerticalLine(
@@ -1272,7 +1270,7 @@ class TimingGenApp {
         
         // Draw small cross at first point
         const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
-        this.tempMeasureGraphics.push(cross1);
+        this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
         
         // Draw full vertical line at first point
         const line1 = this.drawFullVerticalLine(
@@ -1284,7 +1282,7 @@ class TimingGenApp {
         
         // Draw small cross at second point
         const cross2 = this.drawSmallCross(this.currentMeasure.point2.x, this.currentMeasure.point2.y);
-        this.tempMeasureGraphics.push(cross2);
+        this.tempMeasureGraphics.push(cross2.hLine, cross2.vLine);
         
         // Draw full vertical line at second point
         const line2 = this.drawFullVerticalLine(
