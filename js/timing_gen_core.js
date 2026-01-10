@@ -975,7 +975,7 @@ class TimingGenApp {
                 this.currentMeasure.point2.x,
                 arrowY
             );
-            this.tempMeasureGraphics.push(arrows);
+            this.tempMeasureGraphics.push(...arrows);
             
             // Draw dashed row indicator
             this.drawRowIndicator(rowIndex);
@@ -996,9 +996,9 @@ class TimingGenApp {
     }
     
     drawMeasureArrows(x1, x2, yPos) {
-        const group = new paper.Group();
         const arrowSize = 8;
         const isInward = Math.abs(x2 - x1) > 60;
+        const elements = [];
         
         // Horizontal line between bars
         const line = new paper.Path.Line({
@@ -1007,7 +1007,7 @@ class TimingGenApp {
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
-        group.addChild(line);
+        elements.push(line);
         
         // Arrows at both ends
         if (isInward) {
@@ -1020,7 +1020,7 @@ class TimingGenApp {
             ]);
             leftArrow.closed = true;
             leftArrow.fillColor = '#FF0000';
-            group.addChild(leftArrow);
+            elements.push(leftArrow);
             
             // Right arrow (pointing left)
             const rightArrow = new paper.Path([
@@ -1030,7 +1030,7 @@ class TimingGenApp {
             ]);
             rightArrow.closed = true;
             rightArrow.fillColor = '#FF0000';
-            group.addChild(rightArrow);
+            elements.push(rightArrow);
         } else {
             // Outward pointing arrows
             // Left arrow (pointing left)
@@ -1041,7 +1041,7 @@ class TimingGenApp {
             ]);
             leftArrow.closed = true;
             leftArrow.fillColor = '#FF0000';
-            group.addChild(leftArrow);
+            elements.push(leftArrow);
             
             // Right arrow (pointing right)
             const rightArrow = new paper.Path([
@@ -1051,10 +1051,10 @@ class TimingGenApp {
             ]);
             rightArrow.closed = true;
             rightArrow.fillColor = '#FF0000';
-            group.addChild(rightArrow);
+            elements.push(rightArrow);
         }
         
-        return group;
+        return elements;
     }
     
     getRowIndexAtY(yPos) {
@@ -1301,7 +1301,7 @@ class TimingGenApp {
             this.currentMeasure.point2.x,
             arrowY
         );
-        this.tempMeasureGraphics.push(arrows);
+        this.tempMeasureGraphics.push(...arrows);
         
         paper.view.draw();
     }
@@ -1426,7 +1426,13 @@ class TimingGenApp {
         this.canvas.style.cursor = 'crosshair';
         
         if (this.tempMeasureGraphics) {
-            this.tempMeasureGraphics.remove();
+            if (Array.isArray(this.tempMeasureGraphics)) {
+                this.tempMeasureGraphics.forEach(item => {
+                    if (item && item.remove) item.remove();
+                });
+            } else if (this.tempMeasureGraphics.remove) {
+                this.tempMeasureGraphics.remove();
+            }
             this.tempMeasureGraphics = null;
         }
         
@@ -1445,7 +1451,13 @@ class TimingGenApp {
         this.canvas.style.cursor = 'crosshair';
         
         if (this.tempMeasureGraphics) {
-            this.tempMeasureGraphics.remove();
+            if (Array.isArray(this.tempMeasureGraphics)) {
+                this.tempMeasureGraphics.forEach(item => {
+                    if (item && item.remove) item.remove();
+                });
+            } else if (this.tempMeasureGraphics.remove) {
+                this.tempMeasureGraphics.remove();
+            }
             this.tempMeasureGraphics = null;
         }
         
