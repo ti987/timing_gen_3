@@ -230,6 +230,10 @@ class TimingGenApp {
             if (ev.key === 'Escape') {
                 TimingGenUI.hideAllDialogs(this);
                 this.hideAllMenus();
+                // Cancel measure mode if active
+                if (this.measureMode) {
+                    this.cancelMeasure();
+                }
                 // Cancel selection and dragging
                 this.cancelSelection();
             }
@@ -1079,11 +1083,62 @@ class TimingGenApp {
         const x1 = this.getTransitionMidpointX(measure.signal1Index, measure.cycle1);
         const x2 = this.getTransitionMidpointX(measure.signal2Index, measure.cycle2);
         
-        // Get Y positions accounting for blank rows
-        const y1 = TimingGenRendering.getSignalYPosition(this, measure.signal1Index) + this.config.rowHeight / 2;
-        const y2 = TimingGenRendering.getSignalYPosition(this, measure.signal2Index) + this.config.rowHeight / 2;
+        // Get Y positions - for bus signals, use midY; for bit signals, depends on value
+        const y1 = this.getSignalYAtCycle(measure.signal1Index, measure.cycle1);
+        const y2 = this.getSignalYAtCycle(measure.signal2Index, measure.cycle2);
         
         return { x1, y1, x2, y2 };
+    }
+    
+    getSignalYAtCycle(signalIndex, cycle) {
+        // Get the Y coordinate for a signal at a specific cycle
+        // For bit signals, returns the Y of the actual signal value
+        // For bus signals, returns midY
+        
+        if (signalIndex < 0 || signalIndex >= this.signals.length) {
+            // Fallback to middle of row
+            const baseY = TimingGenRendering.getSignalYPosition(this, 0);
+            return baseY + this.config.rowHeight / 2;
+        }
+        
+        const signal = this.signals[signalIndex];
+        const baseY = TimingGenRendering.getSignalYPosition(this, signalIndex);
+        
+        if (!signal) {
+            return baseY + this.config.rowHeight / 2;
+        }
+        
+        if (signal.type === 'bus') {
+            // Bus signals use midY
+            return baseY + this.config.rowHeight / 2;
+        } else if (signal.type === 'bit') {
+            // Bit signals depend on the value
+            const value = this.getBitValueAtCycle(signal, cycle);
+            const highY = baseY + 10;
+            const lowY = baseY + this.config.rowHeight - 10;
+            const midY = baseY + this.config.rowHeight / 2;
+            
+            if (value === 1) {
+                return highY;
+            } else if (value === 0) {
+                return lowY;
+            } else if (value === 'Z') {
+                return midY;
+            } else {
+                // X or undefined - use mid
+                return midY;
+            }
+        } else if (signal.type === 'clock') {
+            // Clock signals - estimate based on cycle
+            // Clocks toggle, so odd cycles are high, even are low
+            const highY = baseY + 10;
+            const lowY = baseY + this.config.rowHeight - 10;
+            const isHigh = (Math.floor(cycle * 2) % 2) === 1;
+            return isHigh ? highY : lowY;
+        }
+        
+        // Fallback
+        return baseY + this.config.rowHeight / 2;
     }
     
     getTransitionMidpointX(signalIndex, cycle) {
@@ -1121,9 +1176,21 @@ class TimingGenApp {
                 // Midpoint is at: baseX + delayMin + slew/2
                 return baseX + delayInfo.min + slew / 2;
             }
+        } else if (cycle > 0 && signal.type === 'bus') {
+            // For bus signals, check if there's a value change
+            const currentValue = this.getBusValueAtCycle(signal, cycle);
+            const prevValue = this.getBusValueAtCycle(signal, cycle - 1);
+            
+            if (currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X') {
+                // There's a transition - midpoint is at baseX + delayMax + slew/2
+                return baseX + delayInfo.max + slew / 2;
+            }
         }
         
-        // No transition or bus signal - use baseX + delayMin
+        // No transition or first cycle - use baseX + delayMax for bus, delayMin for bit
+        if (signal.type === 'bus') {
+            return baseX + delayInfo.max + slew / 2;
+        }
         return baseX + delayInfo.min;
     }
     
@@ -1277,8 +1344,8 @@ class TimingGenApp {
             
             // Determine gap index from mouse position (which space between rows)
             const gapIndex = this.getGapIndexAtY(yPos);
-            // Calculate Y position for the arrow (at the gap between rows)
-            const arrowY = this.config.headerHeight + (gapIndex + 1) * this.config.rowHeight;
+            // Calculate Y position for the arrow (at 1/3 from top of measure row, which is 2/3 of row height)
+            const arrowY = this.config.headerHeight + (gapIndex + 1) * this.config.rowHeight + this.config.rowHeight / 3;
             
             // Draw the double-headed arrow at the current gap
             const arrows = this.drawMeasureArrows(

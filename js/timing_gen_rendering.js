@@ -748,8 +748,8 @@ class TimingGenRendering {
             const measureRowsBefore = Array.from(app.measureRows).filter(gi => gi < measure.measureRow).length;
             visualGapIndex = measure.measureRow + measureRowsBefore;
         }
-        // Arrow is drawn at the boundary between rows (gap index + 1)
-        const arrowY = headerHeight + (visualGapIndex + 1) * rowHeight;
+        // Arrow is drawn at 1/3 from top of measure row (2/3 of row height)
+        const arrowY = headerHeight + (visualGapIndex + 1) * rowHeight + rowHeight / 3;
         
         // Draw double-headed arrows
         const arrowSize = 8;
