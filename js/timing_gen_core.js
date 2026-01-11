@@ -381,6 +381,10 @@ class TimingGenApp {
                     
                     // Draw first vertical line immediately
                     this.drawFirstPointVisuals();
+                } else {
+                    // Show error message - no signals loaded
+                    alert('Please load or add signals before creating measures');
+                    this.cancelMeasure();
                 }
                 return;
             } else if (this.measureState === 'second-point') {
@@ -396,6 +400,10 @@ class TimingGenApp {
                     
                     // Draw second point visuals immediately (both lines + arrow)
                     this.drawSecondPointVisuals();
+                } else {
+                    // Unexpected - signals were removed during measure creation
+                    alert('Signals were removed. Cancelling measure creation.');
+                    this.cancelMeasure();
                 }
                 return;
             } else if (this.measureState === 'placing-row') {
@@ -1120,21 +1128,28 @@ class TimingGenApp {
     
     findNearestTransition(xPos, yPos) {
         // Find the nearest signal transition to the click position
-        // Returns { signalIndex, cycle } or null
+        // Returns { signalIndex, cycle }
+        
+        // First, check if we have any signals at all
+        if (!this.signals || this.signals.length === 0) {
+            // No signals loaded - can't create measure
+            console.warn('Cannot create measure: no signals loaded');
+            return null;
+        }
         
         const signalIndex = this.getSignalIndexAtY(yPos);
         if (signalIndex === -1 || signalIndex >= this.signals.length) {
             // No valid signal at this Y position, just use the clicked cycle
             const cycle = this.getCycleAtX(xPos);
             // Return default to first signal or cycle 0 if no signals
-            return { signalIndex: 0, cycle: cycle || 0 };
+            return { signalIndex: 0, cycle: cycle !== null ? cycle : 0 };
         }
         
         const signal = this.signals[signalIndex];
         if (!signal) {
             // Signal doesn't exist, use fallback
             const cycle = this.getCycleAtX(xPos);
-            return { signalIndex: 0, cycle: cycle || 0 };
+            return { signalIndex: 0, cycle: cycle !== null ? cycle : 0 };
         }
         
         // Convert X to cycle
@@ -1497,33 +1512,8 @@ class TimingGenApp {
         return path;
     }
     
-    findNearestTransition(xPos, yPos) {
-        // Find the nearest transition point (cycle boundary) to the click position
-        // This snaps to cycle boundaries where signals transition
-        const signalIndex = this.getSignalIndexAtY(yPos);
-        
-        // Allow clicking anywhere in waveform area
-        if (xPos < this.config.nameColumnWidth) {
-            return null;
-        }
-        
-        // Find nearest cycle boundary
-        const relativeX = xPos - this.config.nameColumnWidth;
-        const cycle = Math.round(relativeX / this.config.cycleWidth);
-        
-        if (cycle < 0 || cycle > this.config.cycles) {
-            return null;
-        }
-        
-        const transitionX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
-        return transitionX;
-    }
-    
     // Draw visuals immediately after first click
     drawFirstPointVisuals() {
-        console.log('drawFirstPointVisuals called');
-        console.log('currentMeasure:', this.currentMeasure);
-        
         // Clear any existing temp graphics
         if (this.tempMeasureGraphics) {
             if (Array.isArray(this.tempMeasureGraphics)) {
@@ -1547,8 +1537,6 @@ class TimingGenApp {
             cycle2: this.currentMeasure.cycle1
         });
         
-        console.log('First point coords:', coords);
-        
         // Draw small cross at first point
         const cross1 = this.drawSmallCross(coords.x1, coords.y1);
         this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
@@ -1560,8 +1548,6 @@ class TimingGenApp {
             coords.y1
         );
         this.tempMeasureGraphics.push(line1);
-        
-        console.log('tempMeasureGraphics:', this.tempMeasureGraphics);
         
         paper.view.draw();
     }
