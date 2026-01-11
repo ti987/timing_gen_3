@@ -710,25 +710,42 @@ class TimingGenApp {
         
         const visualRow = Math.floor(relY / this.config.rowHeight);
         
-        // Account for blank rows - we need to map visual row to signal index
-        if (!this.blankRows || this.blankRows.length === 0) {
-            // No blank rows, direct mapping
+        // Account for measure rows - we need to map visual row to signal index
+        if (!this.measureRows || this.measureRows.size === 0) {
+            // No measure rows, direct mapping
             return (visualRow >= 0 && visualRow < this.signals.length) ? visualRow : -1;
         }
         
-        // Count how many blank rows are before this visual row
-        let blankRowsBeforeThis = 0;
-        for (const blankRowIndex of this.blankRows) {
-            if (blankRowIndex <= visualRow) {
-                blankRowsBeforeThis++;
-            } else {
-                break;
+        // Count how many measure rows are before this visual row
+        // Measure rows occupy gaps between signals, so we need to check which gaps are filled
+        const sortedMeasureRows = Array.from(this.measureRows).sort((a, b) => a - b);
+        
+        // Map visual row to signal index by accounting for measure rows
+        let signalIndex = 0;
+        let currentVisualRow = 0;
+        
+        // Iterate through signals and measure rows to find which signal this visual row corresponds to
+        for (signalIndex = 0; signalIndex < this.signals.length; signalIndex++) {
+            // Check if there's a measure row before this signal
+            const gapIndex = signalIndex - 1; // Gap before signal at index signalIndex
+            if (sortedMeasureRows.includes(gapIndex)) {
+                // There's a measure row in this gap
+                if (currentVisualRow === visualRow) {
+                    // We're in the measure row, not a signal row
+                    return -1;
+                }
+                currentVisualRow++;
             }
+            
+            // Now we're at the signal row
+            if (currentVisualRow === visualRow) {
+                return signalIndex;
+            }
+            currentVisualRow++;
         }
         
-        // The actual signal index is visual row minus blank rows before it
-        const signalIndex = visualRow - blankRowsBeforeThis;
-        return (signalIndex >= 0 && signalIndex < this.signals.length) ? signalIndex : -1;
+        // Check if we're past all signals
+        return -1;
     }
     
     toggleSignalSelection(signalIndex) {
