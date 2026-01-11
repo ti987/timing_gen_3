@@ -755,21 +755,41 @@ class TimingGenRendering {
         // Default to outward arrows, only use inward if spacing is too small (< 30px for arrow heads)
         const isInward = spacing < 30;
         
-        // Horizontal line connecting the arrows
-        const hLine = new paper.Path.Line({
-            from: [Math.min(coords.x1, coords.x2), arrowY],
-            to: [Math.max(coords.x1, coords.x2), arrowY],
-            strokeColor: '#FF0000',
-            strokeWidth: 2
-        });
-        
-        // Draw arrow heads using the helper function
+        // For inward arrows, draw horizontal lines extending outward from each vertical line
+        // For outward arrows, draw a single horizontal line between the vertical lines
         if (isInward) {
-            // Arrows pointing inward (towards each other)
+            // Inward arrows: horizontal line segments extend outward from each vertical line
+            const extensionLength = arrowSize * 2; // Length of line segment outside vertical line
+            
+            // Left segment (extends left from left vertical line)
+            const leftSegment = new paper.Path.Line({
+                from: [Math.min(coords.x1, coords.x2) - extensionLength, arrowY],
+                to: [Math.min(coords.x1, coords.x2), arrowY],
+                strokeColor: '#FF0000',
+                strokeWidth: 2
+            });
+            
+            // Right segment (extends right from right vertical line)
+            const rightSegment = new paper.Path.Line({
+                from: [Math.max(coords.x1, coords.x2), arrowY],
+                to: [Math.max(coords.x1, coords.x2) + extensionLength, arrowY],
+                strokeColor: '#FF0000',
+                strokeWidth: 2
+            });
+            
+            // Draw arrow heads pointing inward (towards each other)
             TimingGenRendering.drawArrowHead(Math.min(coords.x1, coords.x2), arrowY, 'right', arrowSize);
             TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'left', arrowSize);
         } else {
-            // Arrows pointing outward (away from each other)
+            // Outward arrows: single horizontal line between vertical lines
+            const hLine = new paper.Path.Line({
+                from: [Math.min(coords.x1, coords.x2), arrowY],
+                to: [Math.max(coords.x1, coords.x2), arrowY],
+                strokeColor: '#FF0000',
+                strokeWidth: 2
+            });
+            
+            // Draw arrow heads pointing outward (away from each other)
             TimingGenRendering.drawArrowHead(Math.min(coords.x1, coords.x2), arrowY, 'left', arrowSize);
             TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'right', arrowSize);
         }

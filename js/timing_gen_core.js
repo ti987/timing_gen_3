@@ -1372,7 +1372,51 @@ class TimingGenApp {
             return { signalIndex, cycle: nearestCycle };
         }
         
-        // For bus signals, just return the clicked cycle
+        // For bus signals, find the nearest transition
+        if (signal.type === 'bus') {
+            let nearestCycle = clickedCycle;
+            let minDistance = Infinity;
+            
+            // Search nearby cycles for transitions
+            for (let cycle = Math.max(1, clickedCycle - 2); cycle <= Math.min(this.config.cycles - 1, clickedCycle + 2); cycle++) {
+                const currentValue = this.getBusValueAtCycle(signal, cycle);
+                const prevValue = this.getBusValueAtCycle(signal, cycle - 1);
+                
+                if (currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X') {
+                    // Found a transition
+                    const transitionX = this.getTransitionMidpointX(signalIndex, cycle);
+                    const distance = Math.abs(transitionX - xPos);
+                    
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestCycle = cycle;
+                    }
+                }
+            }
+            
+            return { signalIndex, cycle: nearestCycle };
+        }
+        
+        // For clock signals, find the nearest cycle boundary (clock transitions at every boundary)
+        if (signal.type === 'clock') {
+            let nearestCycle = clickedCycle;
+            let minDistance = Infinity;
+            
+            // Clock transitions happen at every cycle boundary
+            for (let cycle = Math.max(1, clickedCycle - 1); cycle <= Math.min(this.config.cycles, clickedCycle + 1); cycle++) {
+                const cycleX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+                const distance = Math.abs(cycleX - xPos);
+                
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestCycle = cycle;
+                }
+            }
+            
+            return { signalIndex, cycle: nearestCycle };
+        }
+        
+        // Default: just return the clicked cycle
         return { signalIndex, cycle: clickedCycle };
     }
     
@@ -1504,19 +1548,31 @@ class TimingGenApp {
         const isInward = spacing < 30;
         const elements = [];
         
-        // Horizontal line between bars
-        const line = new paper.Path.Line({
-            from: [Math.min(x1, x2), yPos],
-            to: [Math.max(x1, x2), yPos],
-            strokeColor: '#FF0000',
-            strokeWidth: 2
-        });
-        elements.push(line);
-        
-        // Arrows at both ends
+        // For inward arrows, draw horizontal line segments extending outward from each vertical line
+        // For outward arrows, draw a single horizontal line between the vertical lines
         if (isInward) {
-            // Inward pointing arrows (when spacing is too small)
-            // Left arrow (pointing right)
+            // Inward arrows: horizontal line segments extend outward from each vertical line
+            const extensionLength = arrowSize * 2; // Length of line segment outside vertical line
+            
+            // Left segment (extends left from left vertical line)
+            const leftSegment = new paper.Path.Line({
+                from: [Math.min(x1, x2) - extensionLength, yPos],
+                to: [Math.min(x1, x2), yPos],
+                strokeColor: '#FF0000',
+                strokeWidth: 2
+            });
+            elements.push(leftSegment);
+            
+            // Right segment (extends right from right vertical line)
+            const rightSegment = new paper.Path.Line({
+                from: [Math.max(x1, x2), yPos],
+                to: [Math.max(x1, x2) + extensionLength, yPos],
+                strokeColor: '#FF0000',
+                strokeWidth: 2
+            });
+            elements.push(rightSegment);
+            
+            // Left arrow (pointing right, inward)
             const leftArrow = new paper.Path([
                 [Math.min(x1, x2), yPos],
                 [Math.min(x1, x2) + arrowSize, yPos - arrowSize/2],
@@ -1526,7 +1582,7 @@ class TimingGenApp {
             leftArrow.fillColor = '#FF0000';
             elements.push(leftArrow);
             
-            // Right arrow (pointing left)
+            // Right arrow (pointing left, inward)
             const rightArrow = new paper.Path([
                 [Math.max(x1, x2), yPos],
                 [Math.max(x1, x2) - arrowSize, yPos - arrowSize/2],
@@ -1536,8 +1592,16 @@ class TimingGenApp {
             rightArrow.fillColor = '#FF0000';
             elements.push(rightArrow);
         } else {
-            // Outward pointing arrows
-            // Left arrow (pointing left)
+            // Outward arrows: single horizontal line between vertical lines
+            const line = new paper.Path.Line({
+                from: [Math.min(x1, x2), yPos],
+                to: [Math.max(x1, x2), yPos],
+                strokeColor: '#FF0000',
+                strokeWidth: 2
+            });
+            elements.push(line);
+            
+            // Left arrow (pointing left, outward)
             const leftArrow = new paper.Path([
                 [Math.min(x1, x2), yPos],
                 [Math.min(x1, x2) - arrowSize, yPos - arrowSize/2],
@@ -1547,7 +1611,7 @@ class TimingGenApp {
             leftArrow.fillColor = '#FF0000';
             elements.push(leftArrow);
             
-            // Right arrow (pointing right)
+            // Right arrow (pointing right, outward)
             const rightArrow = new paper.Path([
                 [Math.max(x1, x2), yPos],
                 [Math.max(x1, x2) + arrowSize, yPos - arrowSize/2],
