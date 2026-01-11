@@ -1521,6 +1521,9 @@ class TimingGenApp {
     
     // Draw visuals immediately after first click
     drawFirstPointVisuals() {
+        console.log('drawFirstPointVisuals called');
+        console.log('currentMeasure:', this.currentMeasure);
+        
         // Clear any existing temp graphics
         if (this.tempMeasureGraphics) {
             if (Array.isArray(this.tempMeasureGraphics)) {
@@ -1544,6 +1547,8 @@ class TimingGenApp {
             cycle2: this.currentMeasure.cycle1
         });
         
+        console.log('First point coords:', coords);
+        
         // Draw small cross at first point
         const cross1 = this.drawSmallCross(coords.x1, coords.y1);
         this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
@@ -1555,6 +1560,8 @@ class TimingGenApp {
             coords.y1
         );
         this.tempMeasureGraphics.push(line1);
+        
+        console.log('tempMeasureGraphics:', this.tempMeasureGraphics);
         
         paper.view.draw();
     }
