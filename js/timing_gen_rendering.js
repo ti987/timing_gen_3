@@ -712,14 +712,25 @@ class TimingGenRendering {
         const row1Pos = TimingGenRendering.getSignalYPosition(app, measure.signal1Index);
         const row2Pos = TimingGenRendering.getSignalYPosition(app, measure.signal2Index);
         
-        // Determine the extent of vertical lines
-        const lineStart = Math.min(row1Pos, row2Pos);
-        const lineEnd = Math.max(row1Pos, row2Pos) + rowHeight;
+        // Calculate arrow Y position based on measureRow (gap index)
+        let visualGapIndex = measure.measureRow;
+        if (app.measureRows) {
+            // Count measure rows before this gap to get the visual position
+            const measureRowsBefore = Array.from(app.measureRows).filter(gi => gi < measure.measureRow).length;
+            visualGapIndex = measure.measureRow + measureRowsBefore;
+        }
+        // Arrow is drawn at 1/3 from top of measure row (2/3 of row height)
+        const arrowY = headerHeight + (visualGapIndex + 1) * rowHeight + rowHeight / 3;
+        const measureRowY = headerHeight + (visualGapIndex + 1) * rowHeight;
+        
+        // Determine the extent of vertical lines - from minimum Y among signal1, signal2, and measure row
+        const minY = Math.min(row1Pos, row2Pos, measureRowY);
+        const maxY = Math.max(row1Pos, row2Pos, measureRowY) + rowHeight;
         
         // Draw first vertical line
         const line1 = new paper.Path.Line({
-            from: [coords.x1, lineStart],
-            to: [coords.x1, lineEnd],
+            from: [coords.x1, minY],
+            to: [coords.x1, maxY],
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
@@ -729,27 +740,14 @@ class TimingGenRendering {
         
         // Draw second vertical line
         const line2 = new paper.Path.Line({
-            from: [coords.x2, lineStart],
-            to: [coords.x2, lineEnd],
+            from: [coords.x2, minY],
+            to: [coords.x2, maxY],
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
         
         // Draw small cross at second point
         const cross2 = TimingGenRendering.drawSmallCross(coords.x2, coords.y2);
-        
-        // Calculate arrow Y position based on measureRow (gap index)
-        // measureRow represents the gap between signal rows:
-        // -1: above first signal, 0: between signal 0 and 1, etc.
-        // We need to account for measure rows that may have been inserted
-        let visualGapIndex = measure.measureRow;
-        if (app.measureRows) {
-            // Count measure rows before this gap to get the visual position
-            const measureRowsBefore = Array.from(app.measureRows).filter(gi => gi < measure.measureRow).length;
-            visualGapIndex = measure.measureRow + measureRowsBefore;
-        }
-        // Arrow is drawn at 1/3 from top of measure row (2/3 of row height)
-        const arrowY = headerHeight + (visualGapIndex + 1) * rowHeight + rowHeight / 3;
         
         // Draw double-headed arrows
         const arrowSize = 8;
@@ -776,10 +774,66 @@ class TimingGenRendering {
             TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'right', arrowSize);
         }
         
-        // Draw text label if it exists
+        // Draw measure label in name column for all measures in this row
+        // Get all measures in the same row
+        const measuresInRow = app.measures.filter(m => m.measureRow === measure.measureRow);
+        const measureIndexInRow = measuresInRow.findIndex(m => m === measure);
+        
+        // Create label text - show index if multiple measures in row, or text if available
+        let labelContent = measure.text || `M${index + 1}`;
+        if (measuresInRow.length > 1) {
+            labelContent = `M${index + 1}`;
+        }
+        
+        // Draw label background in name column
+        const labelY = measureRowY;
+        const labelX = 10 + (measureIndexInRow * 40); // Offset multiple labels horizontally
+        
+        const labelBg = new paper.Path.Rectangle({
+            point: [labelX - 5, labelY + 5],
+            size: [35, 20],
+            fillColor: '#FFE6E6',
+            strokeColor: '#FF0000',
+            strokeWidth: 1
+        });
+        
+        // Store measure index for interaction
+        labelBg.data = { measureIndex: index, type: 'measureLabel' };
+        labelBg.onMouseDown = function(event) {
+            if (event.event.button === 0) {
+                // Left click - start dragging measure
+                app.startDragMeasure(this.data.measureIndex, event);
+            } else if (event.event.button === 2) {
+                // Right click - context menu
+                app.currentEditingMeasure = this.data.measureIndex;
+            }
+        };
+        
+        const labelText = new paper.PointText({
+            point: [labelX, labelY + 20],
+            content: labelContent,
+            fillColor: '#FF0000',
+            fontFamily: 'Arial',
+            fontSize: 11,
+            fontWeight: 'bold'
+        });
+        
+        // Store measure index in text for interaction
+        labelText.data = { measureIndex: index, type: 'measureLabel' };
+        labelText.onMouseDown = function(event) {
+            if (event.event.button === 0) {
+                // Left click - start dragging measure
+                app.startDragMeasure(this.data.measureIndex, event);
+            } else if (event.event.button === 2) {
+                // Right click - context menu
+                app.currentEditingMeasure = this.data.measureIndex;
+            }
+        };
+        
+        // Draw text label on the waveform if it exists
         if (measure.text) {
             const textX = Math.max(coords.x1, coords.x2) + 10;
-            const text = new paper.PointText({
+            const waveformText = new paper.PointText({
                 point: [textX, arrowY + 5],
                 content: measure.text,
                 fillColor: '#FF0000',
@@ -789,10 +843,10 @@ class TimingGenRendering {
             });
             
             // Store measure index in text for right-click handling
-            text.data = { measureIndex: index };
+            waveformText.data = { measureIndex: index };
             
             // Make text interactive for right-click
-            text.onMouseDown = function(event) {
+            waveformText.onMouseDown = function(event) {
                 if (event.event.button === 2) {
                     app.currentEditingMeasure = this.data.measureIndex;
                 }

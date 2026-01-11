@@ -894,11 +894,12 @@ class TimingGenApp {
         // Insert all selected signals at the new position
         this.signals.splice(insertIndex, 0, ...selectedSignalsData);
         
-        // Update measure signal indices based on signal object references
+        // Update measure signal indices and gap indices based on signal object references
         this.measures.forEach(measure => {
             // Find new index for signal1
             const signal1 = oldSignals[measure.signal1Index];
             const newIndex1 = this.signals.indexOf(signal1);
+            const oldIndex1 = measure.signal1Index;
             if (newIndex1 !== -1) {
                 measure.signal1Index = newIndex1;
             }
@@ -906,15 +907,132 @@ class TimingGenApp {
             // Find new index for signal2
             const signal2 = oldSignals[measure.signal2Index];
             const newIndex2 = this.signals.indexOf(signal2);
+            const oldIndex2 = measure.signal2Index;
             if (newIndex2 !== -1) {
                 measure.signal2Index = newIndex2;
             }
+            
+            // Adjust measure gap index if the signals it references have moved
+            // The gap index represents the space between signals
+            // If both signals moved together, the relative gap might be the same
+            // If they're now further apart or closer, we need to recalculate
+            
+            // Calculate the new gap index based on the measure's position relative to its signals
+            const minSignalIndex = Math.min(newIndex1, newIndex2);
+            const maxSignalIndex = Math.max(newIndex1, newIndex2);
+            
+            // Determine where the measure should be:
+            // If it was between the signals, keep it between them
+            // If it was above both, keep it above
+            // If it was below both, keep it below
+            
+            const oldMinSignal = Math.min(oldIndex1, oldIndex2);
+            const oldMaxSignal = Math.max(oldIndex1, oldIndex2);
+            const oldMeasureRow = measure.measureRow;
+            
+            // Determine measure's relative position to its signals
+            if (oldMeasureRow < oldMinSignal) {
+                // Measure was above both signals - keep it above
+                measure.measureRow = minSignalIndex - 1;
+            } else if (oldMeasureRow >= oldMaxSignal) {
+                // Measure was at or below the higher signal - keep it there
+                measure.measureRow = maxSignalIndex;
+            } else {
+                // Measure was between the signals - keep it between them
+                // Use a middle gap if there are multiple gaps between them
+                const gapsBetween = maxSignalIndex - minSignalIndex - 1;
+                if (gapsBetween >= 0) {
+                    measure.measureRow = minSignalIndex + Math.floor(gapsBetween / 2);
+                } else {
+                    measure.measureRow = minSignalIndex;
+                }
+            }
+            
+            // Clamp to valid range
+            measure.measureRow = Math.max(-1, Math.min(this.signals.length, measure.measureRow));
         });
         
         // Update selection indices to reflect new positions
         this.selectedSignals.clear();
         for (let i = 0; i < selectedSignalsData.length; i++) {
             this.selectedSignals.add(insertIndex + i);
+        }
+        
+        this.render();
+    }
+    
+    startDragMeasure(measureIndex, event) {
+        this.draggedMeasure = measureIndex;
+        this.isDraggingMeasure = true;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        
+        const onMouseMove = (moveEvent) => {
+            const yPos = moveEvent.clientY - rect.top;
+            this.updateMeasureDragIndicator(yPos);
+        };
+        
+        const onMouseUp = (upEvent) => {
+            const yPos = upEvent.clientY - rect.top;
+            this.dropMeasure(yPos);
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            this.draggedMeasure = null;
+            this.isDraggingMeasure = false;
+            this.removeMeasureDragIndicator();
+        };
+        
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+    
+    updateMeasureDragIndicator(yPos) {
+        const gapIndex = this.getGapIndexAtY(yPos);
+        
+        if (gapIndex !== -1) {
+            // Calculate Y position for the indicator line
+            const indicatorY = this.config.headerHeight + (gapIndex + 1) * this.config.rowHeight;
+            
+            // Remove old indicator if it exists
+            this.removeMeasureDragIndicator();
+            
+            // Create new indicator
+            this.measureDragIndicator = new paper.Path.Line({
+                from: [0, indicatorY],
+                to: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, indicatorY],
+                strokeColor: '#FF0000',
+                strokeWidth: 3,
+                dashArray: [10, 5]
+            });
+            paper.view.draw();
+        }
+    }
+    
+    removeMeasureDragIndicator() {
+        if (this.measureDragIndicator) {
+            this.measureDragIndicator.remove();
+            this.measureDragIndicator = null;
+        }
+    }
+    
+    dropMeasure(yPos) {
+        const gapIndex = this.getGapIndexAtY(yPos);
+        
+        if (gapIndex === -1 || this.draggedMeasure === null) {
+            return; // Invalid drop location
+        }
+        
+        const measure = this.measures[this.draggedMeasure];
+        if (!measure) {
+            return;
+        }
+        
+        // Update measure's gap index
+        measure.measureRow = gapIndex;
+        
+        // Ensure the gap has a measure row
+        if (!this.measureRows.has(gapIndex)) {
+            this.measureRows.add(gapIndex);
         }
         
         this.render();
