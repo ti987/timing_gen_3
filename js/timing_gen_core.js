@@ -1123,14 +1123,26 @@ class TimingGenApp {
         // Returns { signalIndex, cycle } or null
         
         const signalIndex = this.getSignalIndexAtY(yPos);
-        if (signalIndex === -1) return null;
+        if (signalIndex === -1 || signalIndex >= this.signals.length) {
+            // No valid signal at this Y position, just use the clicked cycle
+            const cycle = this.getCycleAtX(xPos);
+            // Return default to first signal or cycle 0 if no signals
+            return { signalIndex: 0, cycle: cycle || 0 };
+        }
         
         const signal = this.signals[signalIndex];
-        if (!signal) return null;
+        if (!signal) {
+            // Signal doesn't exist, use fallback
+            const cycle = this.getCycleAtX(xPos);
+            return { signalIndex: 0, cycle: cycle || 0 };
+        }
         
         // Convert X to cycle
         const clickedCycle = this.getCycleAtX(xPos);
-        if (clickedCycle === null) return null;
+        if (clickedCycle === null) {
+            // Fallback to cycle 0 if click is outside bounds
+            return { signalIndex, cycle: 0 };
+        }
         
         // For bit signals, find the nearest transition
         if (signal.type === 'bit') {
