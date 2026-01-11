@@ -369,13 +369,12 @@ class TimingGenApp {
         // Handle measure mode clicks
         if (this.measureMode) {
             if (this.measureState === 'first-point') {
-                // First click: select first point and draw vertical line immediately
-                const signalIndex = this.getSignalIndexAtY(yPos);
-                const cycle = this.getCycleAtX(xPos);
+                // First click: select first point at nearest transition
+                const transition = this.findNearestTransition(xPos, yPos);
                 
-                if (signalIndex !== -1 && cycle !== null) {
-                    this.currentMeasure.signal1Index = signalIndex;
-                    this.currentMeasure.cycle1 = cycle;
+                if (transition) {
+                    this.currentMeasure.signal1Index = transition.signalIndex;
+                    this.currentMeasure.cycle1 = transition.cycle;
                     this.measureState = 'second-point';
                     this.hideInstruction();
                     this.showInstruction("Click the second point");
@@ -385,13 +384,12 @@ class TimingGenApp {
                 }
                 return;
             } else if (this.measureState === 'second-point') {
-                // Second click: select second point and draw both lines + arrow immediately
-                const signalIndex = this.getSignalIndexAtY(yPos);
-                const cycle = this.getCycleAtX(xPos);
+                // Second click: select second point at nearest transition
+                const transition = this.findNearestTransition(xPos, yPos);
                 
-                if (signalIndex !== -1 && cycle !== null) {
-                    this.currentMeasure.signal2Index = signalIndex;
-                    this.currentMeasure.cycle2 = cycle;
+                if (transition) {
+                    this.currentMeasure.signal2Index = transition.signalIndex;
+                    this.currentMeasure.cycle2 = transition.cycle;
                     this.measureState = 'placing-row';
                     this.hideInstruction();
                     this.showInstruction("Pick a row for the measure");
@@ -1056,14 +1054,94 @@ class TimingGenApp {
         // Convert measure data (signal indices + cycles) to screen coordinates
         // This allows measures to stay aligned with signals even when rows change
         
-        const x1 = this.config.nameColumnWidth + measure.cycle1 * this.config.cycleWidth;
-        const x2 = this.config.nameColumnWidth + measure.cycle2 * this.config.cycleWidth;
+        // Calculate X positions accounting for signal transitions, delay, and slew
+        const x1 = this.getTransitionMidpointX(measure.signal1Index, measure.cycle1);
+        const x2 = this.getTransitionMidpointX(measure.signal2Index, measure.cycle2);
         
         // Get Y positions accounting for blank rows
         const y1 = TimingGenRendering.getSignalYPosition(this, measure.signal1Index) + this.config.rowHeight / 2;
         const y2 = TimingGenRendering.getSignalYPosition(this, measure.signal2Index) + this.config.rowHeight / 2;
         
         return { x1, y1, x2, y2 };
+    }
+    
+    getTransitionMidpointX(signalIndex, cycle) {
+        // Calculate the X coordinate for the middle of a transition at the given cycle
+        // Accounts for delay and slew
+        
+        if (signalIndex < 0 || signalIndex >= this.signals.length) {
+            // Invalid signal, fall back to cycle boundary
+            return this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+        }
+        
+        const signal = this.signals[signalIndex];
+        
+        // Base X position at grid line
+        const baseX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+        
+        // Get delay info for this cycle
+        const delayInfo = this.getEffectiveDelay(signal, cycle);
+        
+        // Get slew for this cycle
+        const slew = this.getEffectiveSlew(signal, cycle);
+        
+        // Check if there's actually a transition at this cycle
+        if (cycle > 0 && signal.type === 'bit') {
+            const currentValue = this.getBitValueAtCycle(signal, cycle);
+            const prevValue = this.getBitValueAtCycle(signal, cycle - 1);
+            
+            if (currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X') {
+                // There's a real transition here
+                // Midpoint is at: baseX + delayMin + slew/2
+                return baseX + delayInfo.min + slew / 2;
+            }
+        }
+        
+        // No transition or bus signal - use baseX + delayMin
+        return baseX + delayInfo.min;
+    }
+    
+    findNearestTransition(xPos, yPos) {
+        // Find the nearest signal transition to the click position
+        // Returns { signalIndex, cycle } or null
+        
+        const signalIndex = this.getSignalIndexAtY(yPos);
+        if (signalIndex === -1) return null;
+        
+        const signal = this.signals[signalIndex];
+        if (!signal) return null;
+        
+        // Convert X to cycle
+        const clickedCycle = this.getCycleAtX(xPos);
+        if (clickedCycle === null) return null;
+        
+        // For bit signals, find the nearest transition
+        if (signal.type === 'bit') {
+            let nearestCycle = clickedCycle;
+            let minDistance = Infinity;
+            
+            // Search nearby cycles for transitions
+            for (let cycle = Math.max(1, clickedCycle - 2); cycle <= Math.min(this.config.cycles - 1, clickedCycle + 2); cycle++) {
+                const currentValue = this.getBitValueAtCycle(signal, cycle);
+                const prevValue = this.getBitValueAtCycle(signal, cycle - 1);
+                
+                if (currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X') {
+                    // Found a transition
+                    const transitionX = this.getTransitionMidpointX(signalIndex, cycle);
+                    const distance = Math.abs(transitionX - xPos);
+                    
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestCycle = cycle;
+                    }
+                }
+            }
+            
+            return { signalIndex, cycle: nearestCycle };
+        }
+        
+        // For bus signals, just return the clicked cycle
+        return { signalIndex, cycle: clickedCycle };
     }
     
     showInstruction(text) {
