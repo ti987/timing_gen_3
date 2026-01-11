@@ -1,5 +1,5 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Version 3.0.2
+// Version 3.0.3
 // Main JavaScript Application using Paper.js
 //
 // Key Features:
@@ -1816,7 +1816,7 @@ window.addEventListener('DOMContentLoaded', () => {
     printData = function() {
         const app = window.timingGenApp;
         const data = {
-            version: '3.0.1',
+            version: '3.0.3',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,
