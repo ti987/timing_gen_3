@@ -854,6 +854,9 @@ class TimingGenApp {
             return;
         }
         
+        // Create a copy of the signals array to track original positions
+        const oldSignals = [...this.signals];
+        
         // Extract selected signals
         const selectedSignalsData = selectedIndices.map(idx => this.signals[idx]);
         
@@ -873,6 +876,23 @@ class TimingGenApp {
         
         // Insert all selected signals at the new position
         this.signals.splice(insertIndex, 0, ...selectedSignalsData);
+        
+        // Update measure signal indices based on signal object references
+        this.measures.forEach(measure => {
+            // Find new index for signal1
+            const signal1 = oldSignals[measure.signal1Index];
+            const newIndex1 = this.signals.indexOf(signal1);
+            if (newIndex1 !== -1) {
+                measure.signal1Index = newIndex1;
+            }
+            
+            // Find new index for signal2
+            const signal2 = oldSignals[measure.signal2Index];
+            const newIndex2 = this.signals.indexOf(signal2);
+            if (newIndex2 !== -1) {
+                measure.signal2Index = newIndex2;
+            }
+        });
         
         // Update selection indices to reflect new positions
         this.selectedSignals.clear();
