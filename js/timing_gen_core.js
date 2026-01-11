@@ -370,9 +370,12 @@ class TimingGenApp {
         if (this.measureMode) {
             if (this.measureState === 'first-point') {
                 // First click: select first point and draw vertical line immediately
-                const transitionX = this.findNearestTransition(xPos, yPos);
-                if (transitionX !== null) {
-                    this.currentMeasure.point1 = { x: transitionX, y: yPos };
+                const signalIndex = this.getSignalIndexAtY(yPos);
+                const cycle = this.getCycleAtX(xPos);
+                
+                if (signalIndex !== -1 && cycle !== null) {
+                    this.currentMeasure.signal1Index = signalIndex;
+                    this.currentMeasure.cycle1 = cycle;
                     this.measureState = 'second-point';
                     this.hideInstruction();
                     this.showInstruction("Click the second point");
@@ -383,9 +386,12 @@ class TimingGenApp {
                 return;
             } else if (this.measureState === 'second-point') {
                 // Second click: select second point and draw both lines + arrow immediately
-                const transitionX = this.findNearestTransition(xPos, yPos);
-                if (transitionX !== null) {
-                    this.currentMeasure.point2 = { x: transitionX, y: yPos };
+                const signalIndex = this.getSignalIndexAtY(yPos);
+                const cycle = this.getCycleAtX(xPos);
+                
+                if (signalIndex !== -1 && cycle !== null) {
+                    this.currentMeasure.signal2Index = signalIndex;
+                    this.currentMeasure.cycle2 = cycle;
                     this.measureState = 'placing-row';
                     this.hideInstruction();
                     this.showInstruction("Pick a row for the measure");
@@ -397,7 +403,7 @@ class TimingGenApp {
             } else if (this.measureState === 'placing-row') {
                 // Third click: finalize row and create measure with blank row insertion
                 const rowIndex = this.getRowIndexAtY(yPos);
-                this.currentMeasure.row = rowIndex;
+                this.currentMeasure.measureRow = rowIndex;
                 
                 // Finalize measure with actual blank row insertion
                 this.finalizeMeasureWithBlankRow();
@@ -1017,9 +1023,11 @@ class TimingGenApp {
         this.measureMode = true;
         this.measureState = 'first-point';
         this.currentMeasure = {
-            point1: null,
-            point2: null,
-            row: null,
+            signal1Index: null,
+            cycle1: null,
+            signal2Index: null,
+            cycle2: null,
+            measureRow: null,
             text: ''
         };
         this.canvas.style.cursor = 'crosshair';
@@ -1030,6 +1038,32 @@ class TimingGenApp {
         // Add onMouseMove handler for visual feedback
         this.originalOnMouseMove = this.tool.onMouseMove;
         this.tool.onMouseMove = (event) => this.handleMeasureMouseMove(event);
+    }
+    
+    getCycleAtX(xPos) {
+        // Convert X position to cycle number
+        const relativeX = xPos - this.config.nameColumnWidth;
+        if (relativeX < 0) return null;
+        
+        const cycle = Math.round(relativeX / this.config.cycleWidth);
+        if (cycle < 0 || cycle > this.config.cycles) {
+            return null;
+        }
+        return cycle;
+    }
+    
+    getMeasureCoordinates(measure) {
+        // Convert measure data (signal indices + cycles) to screen coordinates
+        // This allows measures to stay aligned with signals even when rows change
+        
+        const x1 = this.config.nameColumnWidth + measure.cycle1 * this.config.cycleWidth;
+        const x2 = this.config.nameColumnWidth + measure.cycle2 * this.config.cycleWidth;
+        
+        // Get Y positions accounting for blank rows
+        const y1 = TimingGenRendering.getSignalYPosition(this, measure.signal1Index) + this.config.rowHeight / 2;
+        const y2 = TimingGenRendering.getSignalYPosition(this, measure.signal2Index) + this.config.rowHeight / 2;
+        
+        return { x1, y1, x2, y2 };
     }
     
     showInstruction(text) {
@@ -1064,48 +1098,57 @@ class TimingGenApp {
         this.measureLayer.activate();
         this.tempMeasureGraphics = [];
         
-        if (this.measureState === 'second-point' && this.currentMeasure.point1) {
+        if (this.measureState === 'second-point' && this.currentMeasure.signal1Index !== null) {
             // After first click: show first line + cross, and dynamic line to mouse
-            const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
+            const coords = this.getMeasureCoordinates({
+                signal1Index: this.currentMeasure.signal1Index,
+                cycle1: this.currentMeasure.cycle1,
+                signal2Index: this.currentMeasure.signal1Index,
+                cycle2: this.currentMeasure.cycle1
+            });
+            
+            const cross1 = this.drawSmallCross(coords.x1, coords.y1);
             this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
             
             // Draw first vertical line
             const line1 = this.drawFullVerticalLine(
-                this.currentMeasure.point1.x,
-                this.currentMeasure.point1.y,
-                this.currentMeasure.point1.y
+                coords.x1,
+                coords.y1,
+                coords.y1
             );
             this.tempMeasureGraphics.push(line1);
             
             // Draw dynamic vertical line from first point to current mouse position
             const dynamicLine = this.drawDynamicVerticalLine(
-                this.currentMeasure.point1.x,
-                this.currentMeasure.point1.y,
+                coords.x1,
+                coords.y1,
                 yPos
             );
             this.tempMeasureGraphics.push(dynamicLine);
-        } else if (this.measureState === 'placing-row' && this.currentMeasure.point1 && this.currentMeasure.point2) {
+        } else if (this.measureState === 'placing-row' && this.currentMeasure.signal1Index !== null && this.currentMeasure.signal2Index !== null) {
             // After second click: show both lines + crosses, and drag arrow to mouse position
-            const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
+            const coords = this.getMeasureCoordinates(this.currentMeasure);
+            
+            const cross1 = this.drawSmallCross(coords.x1, coords.y1);
             this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
             
             // Draw full vertical line at first point
             const line1 = this.drawFullVerticalLine(
-                this.currentMeasure.point1.x,
-                this.currentMeasure.point1.y,
-                this.currentMeasure.point2.y
+                coords.x1,
+                coords.y1,
+                coords.y2
             );
             this.tempMeasureGraphics.push(line1);
             
             // Draw small cross at second point
-            const cross2 = this.drawSmallCross(this.currentMeasure.point2.x, this.currentMeasure.point2.y);
+            const cross2 = this.drawSmallCross(coords.x2, coords.y2);
             this.tempMeasureGraphics.push(cross2.hLine, cross2.vLine);
             
             // Draw full vertical line at second point
             const line2 = this.drawFullVerticalLine(
-                this.currentMeasure.point2.x,
-                this.currentMeasure.point1.y,
-                this.currentMeasure.point2.y
+                coords.x2,
+                coords.y1,
+                coords.y2
             );
             this.tempMeasureGraphics.push(line2);
             
@@ -1115,8 +1158,8 @@ class TimingGenApp {
             
             // Draw the double-headed arrow at the current mouse row
             const arrows = this.drawMeasureArrows(
-                this.currentMeasure.point1.x,
-                this.currentMeasure.point2.x,
+                coords.x1,
+                coords.x2,
                 arrowY
             );
             this.tempMeasureGraphics.push(...arrows);
@@ -1386,15 +1429,23 @@ class TimingGenApp {
         this.measureLayer.activate();
         this.tempMeasureGraphics = [];
         
+        // Get coordinates for first point
+        const coords = this.getMeasureCoordinates({
+            signal1Index: this.currentMeasure.signal1Index,
+            cycle1: this.currentMeasure.cycle1,
+            signal2Index: this.currentMeasure.signal1Index,
+            cycle2: this.currentMeasure.cycle1
+        });
+        
         // Draw small cross at first point
-        const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
+        const cross1 = this.drawSmallCross(coords.x1, coords.y1);
         this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
         
         // Draw first vertical line
         const line1 = this.drawFullVerticalLine(
-            this.currentMeasure.point1.x,
-            this.currentMeasure.point1.y,
-            this.currentMeasure.point1.y
+            coords.x1,
+            coords.y1,
+            coords.y1
         );
         this.tempMeasureGraphics.push(line1);
         
@@ -1418,37 +1469,39 @@ class TimingGenApp {
         this.measureLayer.activate();
         this.tempMeasureGraphics = [];
         
+        // Get coordinates for both points
+        const coords = this.getMeasureCoordinates(this.currentMeasure);
+        
         // Draw small cross at first point
-        const cross1 = this.drawSmallCross(this.currentMeasure.point1.x, this.currentMeasure.point1.y);
+        const cross1 = this.drawSmallCross(coords.x1, coords.y1);
         this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
         
         // Draw full vertical line at first point
         const line1 = this.drawFullVerticalLine(
-            this.currentMeasure.point1.x,
-            this.currentMeasure.point1.y,
-            this.currentMeasure.point2.y
+            coords.x1,
+            coords.y1,
+            coords.y2
         );
         this.tempMeasureGraphics.push(line1);
         
         // Draw small cross at second point
-        const cross2 = this.drawSmallCross(this.currentMeasure.point2.x, this.currentMeasure.point2.y);
+        const cross2 = this.drawSmallCross(coords.x2, coords.y2);
         this.tempMeasureGraphics.push(cross2.hLine, cross2.vLine);
         
         // Draw full vertical line at second point
         const line2 = this.drawFullVerticalLine(
-            this.currentMeasure.point2.x,
-            this.currentMeasure.point1.y,
-            this.currentMeasure.point2.y
+            coords.x2,
+            coords.y1,
+            coords.y2
         );
         this.tempMeasureGraphics.push(line2);
         
         // Draw double-headed arrow at a default position (middle row between the two points)
-        const defaultRow = Math.floor(this.getRowIndexAtY(this.currentMeasure.point1.y) + 
-                                     (this.getRowIndexAtY(this.currentMeasure.point2.y) - this.getRowIndexAtY(this.currentMeasure.point1.y)) / 2);
-        const arrowY = this.config.headerHeight + (defaultRow + 0.5) * this.config.rowHeight;
+        const defaultRow = Math.floor((this.currentMeasure.signal1Index + this.currentMeasure.signal2Index) / 2);
+        const arrowY = TimingGenRendering.getSignalYPosition(this, defaultRow) + this.config.rowHeight / 2;
         const arrows = this.drawMeasureArrows(
-            this.currentMeasure.point1.x,
-            this.currentMeasure.point2.x,
+            coords.x1,
+            coords.x2,
             arrowY
         );
         this.tempMeasureGraphics.push(...arrows);
@@ -1461,7 +1514,7 @@ class TimingGenApp {
         this.currentMeasure.text = ''; // No text for now
         
         // Insert blank row at the selected position
-        this.insertBlankRowAtPosition(this.currentMeasure.row);
+        this.insertBlankRowAtPosition(this.currentMeasure.measureRow);
         
         // Add measure to list
         this.measures.push(this.currentMeasure);
@@ -1522,7 +1575,7 @@ class TimingGenApp {
         this.currentMeasure.text = ''; // No text for now
         
         // Insert blank row if needed at the selected row
-        this.insertBlankRowForMeasure(this.currentMeasure.row);
+        this.insertBlankRowForMeasure(this.currentMeasure.measureRow);
         
         // Add measure to list
         this.measures.push(this.currentMeasure);

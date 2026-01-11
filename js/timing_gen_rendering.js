@@ -671,57 +671,65 @@ class TimingGenRendering {
     }
     
     static drawMeasure(app, measure, index) {
-        // Draw vertical lines from first point row to second point row
+        // Get coordinates from measure data (signal indices + cycles)
+        const coords = app.getMeasureCoordinates(measure);
+        
         const rowHeight = app.config.rowHeight;
         const headerHeight = app.config.headerHeight;
         
-        // Calculate row boundaries
-        const row1Top = Math.floor((measure.point1.y - headerHeight) / rowHeight) * rowHeight + headerHeight;
-        const row1Bottom = row1Top + rowHeight;
-        const row2Top = Math.floor((measure.point2.y - headerHeight) / rowHeight) * rowHeight + headerHeight;
-        const row2Bottom = row2Top + rowHeight;
+        // Calculate row boundaries based on signal positions
+        const row1Pos = TimingGenRendering.getSignalYPosition(app, measure.signal1Index);
+        const row2Pos = TimingGenRendering.getSignalYPosition(app, measure.signal2Index);
         
         // Determine the extent of vertical lines
-        const lineStart = Math.min(row1Top, row2Top);
-        const lineEnd = Math.max(row1Bottom, row2Bottom);
+        const lineStart = Math.min(row1Pos, row2Pos);
+        const lineEnd = Math.max(row1Pos, row2Pos) + rowHeight;
         
         // Draw first vertical line
         const line1 = new paper.Path.Line({
-            from: [measure.point1.x, lineStart],
-            to: [measure.point1.x, lineEnd],
+            from: [coords.x1, lineStart],
+            to: [coords.x1, lineEnd],
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
         
         // Draw small cross at first point
-        const cross1 = TimingGenRendering.drawSmallCross(measure.point1.x, measure.point1.y);
+        const cross1 = TimingGenRendering.drawSmallCross(coords.x1, coords.y1);
         
         // Draw second vertical line
         const line2 = new paper.Path.Line({
-            from: [measure.point2.x, lineStart],
-            to: [measure.point2.x, lineEnd],
+            from: [coords.x2, lineStart],
+            to: [coords.x2, lineEnd],
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
         
         // Draw small cross at second point
-        const cross2 = TimingGenRendering.drawSmallCross(measure.point2.x, measure.point2.y);
+        const cross2 = TimingGenRendering.drawSmallCross(coords.x2, coords.y2);
         
-        // Calculate arrow Y position based on row
-        const arrowY = headerHeight + (measure.row + 0.5) * rowHeight;
+        // Calculate arrow Y position based on measureRow (accounting for blank rows)
+        // The measure row is between signal rows, so we need to find the visual row position
+        let visualRow = measure.measureRow;
+        if (app.blankRows) {
+            // Count blank rows before this measure row
+            for (const blankRowIndex of app.blankRows) {
+                if (blankRowIndex < measure.measureRow) {
+                    visualRow++;
+                }
+            }
+        }
+        const arrowY = headerHeight + (visualRow + 0.5) * rowHeight;
         
         // Draw double-headed arrows
-        const x1 = measure.point1.x;
-        const x2 = measure.point2.x;
         const arrowSize = 8;
-        const spacing = Math.abs(x2 - x1);
+        const spacing = Math.abs(coords.x2 - coords.x1);
         // Default to outward arrows, only use inward if spacing is too small (< 30px for arrow heads)
         const isInward = spacing < 30;
         
         // Horizontal line connecting the arrows
         const hLine = new paper.Path.Line({
-            from: [Math.min(x1, x2), arrowY],
-            to: [Math.max(x1, x2), arrowY],
+            from: [Math.min(coords.x1, coords.x2), arrowY],
+            to: [Math.max(coords.x1, coords.x2), arrowY],
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
@@ -729,17 +737,17 @@ class TimingGenRendering {
         // Draw arrow heads using the helper function
         if (isInward) {
             // Arrows pointing inward (towards each other)
-            TimingGenRendering.drawArrowHead(Math.min(x1, x2), arrowY, 'right', arrowSize);
-            TimingGenRendering.drawArrowHead(Math.max(x1, x2), arrowY, 'left', arrowSize);
+            TimingGenRendering.drawArrowHead(Math.min(coords.x1, coords.x2), arrowY, 'right', arrowSize);
+            TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'left', arrowSize);
         } else {
             // Arrows pointing outward (away from each other)
-            TimingGenRendering.drawArrowHead(Math.min(x1, x2), arrowY, 'left', arrowSize);
-            TimingGenRendering.drawArrowHead(Math.max(x1, x2), arrowY, 'right', arrowSize);
+            TimingGenRendering.drawArrowHead(Math.min(coords.x1, coords.x2), arrowY, 'left', arrowSize);
+            TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'right', arrowSize);
         }
         
         // Draw text label if it exists
         if (measure.text) {
-            const textX = Math.max(x1, x2) + 10;
+            const textX = Math.max(coords.x1, coords.x2) + 10;
             const text = new paper.PointText({
                 point: [textX, arrowY + 5],
                 content: measure.text,
