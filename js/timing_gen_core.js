@@ -1129,8 +1129,7 @@ class TimingGenApp {
     
     getSignalYAtCycle(signalIndex, cycle) {
         // Get the Y coordinate for a signal at a specific cycle
-        // For bit signals, returns the Y of the actual signal value
-        // For bus signals, returns midY
+        // Always returns the middle of the signal row
         
         if (signalIndex < 0 || signalIndex >= this.signals.length) {
             // Fallback to middle of row
@@ -1138,43 +1137,9 @@ class TimingGenApp {
             return baseY + this.config.rowHeight / 2;
         }
         
-        const signal = this.signals[signalIndex];
         const baseY = TimingGenRendering.getSignalYPosition(this, signalIndex);
         
-        if (!signal) {
-            return baseY + this.config.rowHeight / 2;
-        }
-        
-        if (signal.type === 'bus') {
-            // Bus signals use midY
-            return baseY + this.config.rowHeight / 2;
-        } else if (signal.type === 'bit') {
-            // Bit signals depend on the value
-            const value = this.getBitValueAtCycle(signal, cycle);
-            const highY = baseY + 10;
-            const lowY = baseY + this.config.rowHeight - 10;
-            const midY = baseY + this.config.rowHeight / 2;
-            
-            if (value === 1) {
-                return highY;
-            } else if (value === 0) {
-                return lowY;
-            } else if (value === 'Z') {
-                return midY;
-            } else {
-                // X or undefined - use mid
-                return midY;
-            }
-        } else if (signal.type === 'clock') {
-            // Clock signals - estimate based on cycle
-            // Clocks toggle, so odd cycles are high, even are low
-            const highY = baseY + 10;
-            const lowY = baseY + this.config.rowHeight - 10;
-            const isHigh = (Math.floor(cycle * 2) % 2) === 1;
-            return isHigh ? highY : lowY;
-        }
-        
-        // Fallback
+        // Always return the middle of the signal row
         return baseY + this.config.rowHeight / 2;
     }
     
