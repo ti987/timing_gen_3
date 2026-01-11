@@ -33,7 +33,8 @@ class TimingGenApp {
             delayColor: '#0000FF', // color for delay uncertainty region (default: blue)
             gridColor: '#e0e0e0',
             signalColor: '#000000',
-            backgroundColor: '#ffffff'
+            backgroundColor: '#ffffff',
+            measureRowColor: '#f5f5f5' // light gray background for measure rows
         };
         
         // Data model
@@ -1296,9 +1297,13 @@ class TimingGenApp {
     }
     
     drawMeasureBar(xPos, color) {
+        // Calculate total height including measure rows
+        const measureRowCount = this.measureRows ? this.measureRows.size : 0;
+        const totalRows = this.signals.length + measureRowCount;
+        
         const bar = new paper.Path.Line({
             from: [xPos, 0],
-            to: [xPos, this.config.headerHeight + this.signals.length * this.config.rowHeight],
+            to: [xPos, this.config.headerHeight + totalRows * this.config.rowHeight],
             strokeColor: color,
             strokeWidth: 2
         });
@@ -1384,21 +1389,25 @@ class TimingGenApp {
         // Gap -1: above first signal (between header and first signal)
         // Gap 0: between signal 0 and signal 1
         // Gap N: between signal N and signal N+1
-        // Gap signals.length: below last signal
+        // 
+        // Gaps are located at the boundaries between rows:
+        // - Gap -1 is at y = headerHeight
+        // - Gap 0 is at y = headerHeight + rowHeight
+        // - Gap N is at y = headerHeight + (N+1) * rowHeight
         
         if (yPos < this.config.headerHeight) {
             return -1; // Above all signals
         }
         
         const relativeY = yPos - this.config.headerHeight;
-        const rawIndex = relativeY / this.config.rowHeight;
         
-        // Round to nearest gap (gaps are at integer boundaries)
-        // If we're in the top half of a row, we're closer to the gap above
-        // If we're in the bottom half, we're closer to the gap below
-        const gapIndex = Math.round(rawIndex) - 1;
+        // Calculate which row boundary is nearest
+        // Each row has height rowHeight, and gaps are at boundaries (0, rowHeight, 2*rowHeight, etc.)
+        // Round to nearest boundary, then convert to gap index
+        const nearestBoundary = Math.round(relativeY / this.config.rowHeight);
+        const gapIndex = nearestBoundary - 1;
         
-        // Clamp to valid range
+        // Clamp to valid range: -1 (above first signal) to signals.length (below last signal)
         return Math.max(-1, Math.min(this.signals.length, gapIndex));
     }
     

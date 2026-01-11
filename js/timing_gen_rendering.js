@@ -50,10 +50,11 @@ class TimingGenRendering {
         if (app.measureRows && app.measureRows.size > 0) {
             const sortedGapIndices = Array.from(app.measureRows).sort((a, b) => a - b);
             
-            for (const gapIndex of sortedGapIndices) {
+            for (let i = 0; i < sortedGapIndices.length; i++) {
+                const gapIndex = sortedGapIndices[i];
                 // Calculate visual Y position for this measure row
-                // Count how many measure rows are before this one
-                const measureRowsBefore = Array.from(app.measureRows).filter(gi => gi < gapIndex).length;
+                // measureRowsBefore is simply the index in the sorted array
+                const measureRowsBefore = i;
                 // The visual position is: header + (gapIndex + 1 + measureRowsBefore) * rowHeight
                 const yPos = app.config.headerHeight + (gapIndex + 1 + measureRowsBefore) * app.config.rowHeight;
                 
@@ -61,7 +62,7 @@ class TimingGenRendering {
                 const background = new paper.Path.Rectangle({
                     point: [0, yPos],
                     size: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, app.config.rowHeight],
-                    fillColor: '#f5f5f5',
+                    fillColor: app.config.measureRowColor || '#f5f5f5',
                     strokeColor: null
                 });
             }
