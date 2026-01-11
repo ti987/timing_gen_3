@@ -39,7 +39,7 @@ class TimingGenApp {
         // Data model
         this.signals = [];
         this.measures = []; // Array of measure objects
-        this.blankRows = []; // Array of blank row indices for measures
+        this.measureRows = new Set(); // Set of gap indices that have dedicated measure rows
         this.currentEditingSignal = null;
         this.currentEditingCycle = null;
         
@@ -1669,31 +1669,16 @@ class TimingGenApp {
         this.render();
     }
     
-    insertBlankRowAtPosition(rowIndex) {
-        // Insert a blank row by shifting signals down
-        // rowIndex can be negative (above all signals), between signals, or after all signals
+    insertBlankRowAtPosition(gapIndex) {
+        // Insert a measure row at the specified gap index
+        // gapIndex can be:
+        // -1: above all signals
+        // 0: between signal 0 and 1
+        // N: between signal N and N+1
+        // signals.length: below all signals
         
-        if (rowIndex < 0) {
-            // Insert above all signals - no signal moving needed
-            return;
-        }
-        
-        if (rowIndex >= this.signals.length) {
-            // Insert below all signals - no signal moving needed
-            return;
-        }
-        
-        // Insert between signals - shift signals at rowIndex and below down by one row
-        // We do this by adjusting the rendering, not by actually moving signal data
-        // The measure will be drawn in the blank space
-        
-        // For now, we'll mark that a blank row exists at this position
-        // The rendering will handle spacing appropriately
-        if (!this.blankRows) {
-            this.blankRows = [];
-        }
-        this.blankRows.push(rowIndex);
-        this.blankRows.sort((a, b) => a - b);
+        // Add this gap index to the set of measure rows
+        this.measureRows.add(gapIndex);
     }
     
     finalizeMeasureWithoutText() {

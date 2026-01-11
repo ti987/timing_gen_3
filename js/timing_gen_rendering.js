@@ -41,10 +41,31 @@ class TimingGenRendering {
     }
     
     static drawGrid(app) {
-        // Calculate total rows including blank rows
-        const blankRowCount = app.blankRows ? app.blankRows.length : 0;
-        const totalRows = app.signals.length + blankRowCount;
+        // Calculate total rows including measure rows
+        const measureRowCount = app.measureRows ? app.measureRows.size : 0;
+        const totalRows = app.signals.length + measureRowCount;
         const maxHeight = app.config.headerHeight + totalRows * app.config.rowHeight;
+        
+        // Draw background for measure rows with a different color
+        if (app.measureRows && app.measureRows.size > 0) {
+            const sortedGapIndices = Array.from(app.measureRows).sort((a, b) => a - b);
+            
+            for (const gapIndex of sortedGapIndices) {
+                // Calculate visual Y position for this measure row
+                // Count how many measure rows are before this one
+                const measureRowsBefore = Array.from(app.measureRows).filter(gi => gi < gapIndex).length;
+                // The visual position is: header + (gapIndex + 1 + measureRowsBefore) * rowHeight
+                const yPos = app.config.headerHeight + (gapIndex + 1 + measureRowsBefore) * app.config.rowHeight;
+                
+                // Draw a light gray background for the measure row
+                const background = new paper.Path.Rectangle({
+                    point: [0, yPos],
+                    size: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, app.config.rowHeight],
+                    fillColor: '#f5f5f5',
+                    strokeColor: null
+                });
+            }
+        }
         
         // Vertical lines (cycle dividers) - draw to max height based on signals
         for (let idx = 0; idx <= app.config.cycles; idx++) {
@@ -57,10 +78,19 @@ class TimingGenRendering {
             });
         }
         
-        // Horizontal lines (signal dividers) - accounting for blank rows
-        for (let idx = 0; idx <= app.signals.length; idx++) {
-            const yPos = TimingGenRendering.getSignalYPosition(app, idx);
-            const line = new paper.Path.Line({
+        // Horizontal lines - draw at every row boundary (signals and measures)
+        // Draw line above first signal
+        let line = new paper.Path.Line({
+            from: [0, app.config.headerHeight],
+            to: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, app.config.headerHeight],
+            strokeColor: app.config.gridColor,
+            strokeWidth: 1
+        });
+        
+        // Draw lines for each signal row
+        for (let idx = 0; idx < app.signals.length; idx++) {
+            const yPos = TimingGenRendering.getSignalYPosition(app, idx) + app.config.rowHeight;
+            line = new paper.Path.Line({
                 from: [0, yPos],
                 to: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, yPos],
                 strokeColor: app.config.gridColor,
@@ -710,18 +740,15 @@ class TimingGenRendering {
         // Calculate arrow Y position based on measureRow (gap index)
         // measureRow represents the gap between signal rows:
         // -1: above first signal, 0: between signal 0 and 1, etc.
-        // We need to account for blank rows that may have been inserted
-        let visualRow = measure.measureRow;
-        if (app.blankRows) {
-            // Count blank rows before this measure row
-            for (const blankRowIndex of app.blankRows) {
-                if (blankRowIndex <= measure.measureRow) {
-                    visualRow++;
-                }
-            }
+        // We need to account for measure rows that may have been inserted
+        let visualGapIndex = measure.measureRow;
+        if (app.measureRows) {
+            // Count measure rows before this gap to get the visual position
+            const measureRowsBefore = Array.from(app.measureRows).filter(gi => gi < measure.measureRow).length;
+            visualGapIndex = measure.measureRow + measureRowsBefore;
         }
         // Arrow is drawn at the boundary between rows (gap index + 1)
-        const arrowY = headerHeight + (visualRow + 1) * rowHeight;
+        const arrowY = headerHeight + (visualGapIndex + 1) * rowHeight;
         
         // Draw double-headed arrows
         const arrowSize = 8;
@@ -837,11 +864,19 @@ class TimingGenRendering {
     }
     
     static getSignalYPosition(app, signalIndex) {
-        // Calculate Y position accounting for blank rows inserted for measures
-        let blankRowsAbove = 0;
-        if (app.blankRows) {
-            blankRowsAbove = app.blankRows.filter(rowIndex => rowIndex <= signalIndex).length;
+        // Calculate Y position accounting for measure rows
+        // Count how many measure rows are above this signal
+        let measureRowsAbove = 0;
+        if (app.measureRows) {
+            // A measure row at gap index N is between signal N and N+1
+            // So it's above signal N+1, N+2, etc.
+            // Gap index -1 is above signal 0, so affects all signals
+            for (const gapIndex of app.measureRows) {
+                if (gapIndex < signalIndex) {
+                    measureRowsAbove++;
+                }
+            }
         }
-        return app.config.headerHeight + (signalIndex + blankRowsAbove) * app.config.rowHeight;
+        return app.config.headerHeight + (signalIndex + measureRowsAbove) * app.config.rowHeight;
     }
 }
