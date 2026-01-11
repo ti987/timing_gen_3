@@ -707,18 +707,21 @@ class TimingGenRendering {
         // Draw small cross at second point
         const cross2 = TimingGenRendering.drawSmallCross(coords.x2, coords.y2);
         
-        // Calculate arrow Y position based on measureRow (accounting for blank rows)
-        // The measure row is between signal rows, so we need to find the visual row position
+        // Calculate arrow Y position based on measureRow (gap index)
+        // measureRow represents the gap between signal rows:
+        // -1: above first signal, 0: between signal 0 and 1, etc.
+        // We need to account for blank rows that may have been inserted
         let visualRow = measure.measureRow;
         if (app.blankRows) {
             // Count blank rows before this measure row
             for (const blankRowIndex of app.blankRows) {
-                if (blankRowIndex < measure.measureRow) {
+                if (blankRowIndex <= measure.measureRow) {
                     visualRow++;
                 }
             }
         }
-        const arrowY = headerHeight + (visualRow + 0.5) * rowHeight;
+        // Arrow is drawn at the boundary between rows (gap index + 1)
+        const arrowY = headerHeight + (visualRow + 1) * rowHeight;
         
         // Draw double-headed arrows
         const arrowSize = 8;

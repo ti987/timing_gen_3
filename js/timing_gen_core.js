@@ -408,8 +408,8 @@ class TimingGenApp {
                 return;
             } else if (this.measureState === 'placing-row') {
                 // Third click: finalize row and create measure with blank row insertion
-                const rowIndex = this.getRowIndexAtY(yPos);
-                this.currentMeasure.measureRow = rowIndex;
+                const gapIndex = this.getGapIndexAtY(yPos);
+                this.currentMeasure.measureRow = gapIndex;
                 
                 // Finalize measure with actual blank row insertion
                 this.finalizeMeasureWithBlankRow();
@@ -1274,11 +1274,12 @@ class TimingGenApp {
             );
             this.tempMeasureGraphics.push(line2);
             
-            // Determine row from mouse position and draw arrow at that position
-            const rowIndex = this.getRowIndexAtY(yPos);
-            const arrowY = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
+            // Determine gap index from mouse position (which space between rows)
+            const gapIndex = this.getGapIndexAtY(yPos);
+            // Calculate Y position for the arrow (at the gap between rows)
+            const arrowY = this.config.headerHeight + (gapIndex + 1) * this.config.rowHeight;
             
-            // Draw the double-headed arrow at the current mouse row
+            // Draw the double-headed arrow at the current gap
             const arrows = this.drawMeasureArrows(
                 coords.x1,
                 coords.x2,
@@ -1286,8 +1287,8 @@ class TimingGenApp {
             );
             this.tempMeasureGraphics.push(...arrows);
             
-            // Draw dashed row indicator
-            this.drawRowIndicator(rowIndex);
+            // Draw dashed row indicator at the gap
+            this.drawRowIndicator(gapIndex);
         }
         
         
@@ -1378,6 +1379,29 @@ class TimingGenApp {
         return rowIndex;
     }
     
+    getGapIndexAtY(yPos) {
+        // Returns the index of the gap (between-row space) at the given Y position
+        // Gap -1: above first signal (between header and first signal)
+        // Gap 0: between signal 0 and signal 1
+        // Gap N: between signal N and signal N+1
+        // Gap signals.length: below last signal
+        
+        if (yPos < this.config.headerHeight) {
+            return -1; // Above all signals
+        }
+        
+        const relativeY = yPos - this.config.headerHeight;
+        const rawIndex = relativeY / this.config.rowHeight;
+        
+        // Round to nearest gap (gaps are at integer boundaries)
+        // If we're in the top half of a row, we're closer to the gap above
+        // If we're in the bottom half, we're closer to the gap below
+        const gapIndex = Math.round(rawIndex) - 1;
+        
+        // Clamp to valid range
+        return Math.max(-1, Math.min(this.signals.length, gapIndex));
+    }
+    
     // New drawing helper methods for measure feature
     drawSmallCross(xPos, yPos) {
         const crossSize = 6;
@@ -1457,12 +1481,14 @@ class TimingGenApp {
     
     drawRowIndicator(rowIndex) {
         // Draw horizontal line indicator for row selection
-        const yPos = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
+        // Draw the line at the boundary between rows (not in the middle)
+        // rowIndex represents the row above the line (line is drawn below this row)
+        const yPos = this.config.headerHeight + (rowIndex + 1) * this.config.rowHeight;
         const indicator = new paper.Path.Line({
             from: [0, yPos],
             to: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, yPos],
             strokeColor: '#FF0000',
-            strokeWidth: 1,
+            strokeWidth: 2,
             dashArray: [5, 3]
         });
         
