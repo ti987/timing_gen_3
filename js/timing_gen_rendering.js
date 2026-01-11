@@ -526,13 +526,12 @@ class TimingGenRendering {
             
             // Get delay info object for this cycle (contains min, max, color)
             const delayInfo = app.getEffectiveDelay(signal, spanStart);
-            console.log("spanstart " + spanStart);
+
             if (spanStart == 0) {
                 // avoid space at the very beginning of the waveform 
                 delayInfo.min = 0; 
                 delayInfo.max = 0; 
             }
-            console.log("delayInfo " + delayInfo.min);
                 
             // Get slew for transitions
             const slew = app.getEffectiveSlew(signal, spanStart);
