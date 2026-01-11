@@ -679,8 +679,27 @@ class TimingGenApp {
         const relY = yPos - this.config.headerHeight;
         if (relY < 0) return -1;
         
-        const index = Math.floor(relY / this.config.rowHeight);
-        return (index >= 0 && index < this.signals.length) ? index : -1;
+        const visualRow = Math.floor(relY / this.config.rowHeight);
+        
+        // Account for blank rows - we need to map visual row to signal index
+        if (!this.blankRows || this.blankRows.length === 0) {
+            // No blank rows, direct mapping
+            return (visualRow >= 0 && visualRow < this.signals.length) ? visualRow : -1;
+        }
+        
+        // Count how many blank rows are before this visual row
+        let blankRowsBeforeThis = 0;
+        for (const blankRowIndex of this.blankRows) {
+            if (blankRowIndex <= visualRow) {
+                blankRowsBeforeThis++;
+            } else {
+                break;
+            }
+        }
+        
+        // The actual signal index is visual row minus blank rows before it
+        const signalIndex = visualRow - blankRowsBeforeThis;
+        return (signalIndex >= 0 && signalIndex < this.signals.length) ? signalIndex : -1;
     }
     
     toggleSignalSelection(signalIndex) {
@@ -1122,7 +1141,9 @@ class TimingGenApp {
     
     drawMeasureArrows(x1, x2, yPos) {
         const arrowSize = 8;
-        const isInward = Math.abs(x2 - x1) > 60;
+        const spacing = Math.abs(x2 - x1);
+        // Default to outward arrows, only use inward if spacing is too small (< 30px for arrow heads)
+        const isInward = spacing < 30;
         const elements = [];
         
         // Horizontal line between bars
@@ -1136,7 +1157,7 @@ class TimingGenApp {
         
         // Arrows at both ends
         if (isInward) {
-            // Inward pointing arrows
+            // Inward pointing arrows (when spacing is too small)
             // Left arrow (pointing right)
             const leftArrow = new paper.Path([
                 [Math.min(x1, x2), yPos],

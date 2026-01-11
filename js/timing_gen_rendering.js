@@ -715,7 +715,8 @@ class TimingGenRendering {
         const x2 = measure.point2.x;
         const arrowSize = 8;
         const spacing = Math.abs(x2 - x1);
-        const isInward = spacing > 60;  // If wide enough, point inward; otherwise point outward
+        // Default to outward arrows, only use inward if spacing is too small (< 30px for arrow heads)
+        const isInward = spacing < 30;
         
         // Horizontal line connecting the arrows
         const hLine = new paper.Path.Line({
