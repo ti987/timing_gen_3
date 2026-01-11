@@ -587,6 +587,11 @@ class TimingGenApp {
     
     // Get effective slew value with priority: cycle > signal > global
     getEffectiveSlew(signal, cycle) {
+        // Safety check: if signal is undefined or null, return global default
+        if (!signal) {
+            return this.config.slew || 0;
+        }
+        
         // Check cycle-level override
         if (signal.cycleOptions && signal.cycleOptions[cycle] && signal.cycleOptions[cycle].slew !== undefined) {
             return signal.cycleOptions[cycle].slew;
@@ -596,7 +601,7 @@ class TimingGenApp {
             return signal.slew;
         }
         // Use global default
-        return this.config.slew;
+        return this.config.slew || 0;
     }
     
     // Get effective delay value with cascading priority: cycle > signal > global
@@ -623,6 +628,13 @@ class TimingGenApp {
         }
         if (this.config.delayColor !== undefined) {
             delayColor = this.config.delayColor;
+        }
+        
+        // Safety check: if signal is undefined or null, return global defaults
+        if (!signal) {
+            const delayMinInPixels = (delayMinInTime * this.config.cycleWidth) / this.config.cycleTime;
+            const delayMaxInPixels = (delayMaxInTime * this.config.cycleWidth) / this.config.cycleTime;
+            return { min: delayMinInPixels, max: delayMaxInPixels, color: delayColor };
         }
         
         // Backward compatibility: handle old single delay field at signal level (only if new fields not set)
@@ -1075,6 +1087,11 @@ class TimingGenApp {
         }
         
         const signal = this.signals[signalIndex];
+        
+        // Safety check: if signal is undefined, fall back to cycle boundary
+        if (!signal) {
+            return this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+        }
         
         // Base X position at grid line
         const baseX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
