@@ -288,13 +288,21 @@ class TimingGenApp {
         this.signals.push(signal);
         
         // Add to unified row system
-        if (!this.rows) {
-            this.rows = [];
+        if (this.rowManager && this.rowManager.isUsingNewSystem()) {
+            this.rowManager.insertRow(this.rows.length, {
+                type: 'signal',
+                data: signal
+            });
+        } else {
+            // Initialize rows array if not present
+            if (!this.rows) {
+                this.rows = [];
+            }
+            this.rows.push({
+                type: 'signal',
+                data: signal
+            });
         }
-        this.rows.push({
-            type: 'signal',
-            data: signal
-        });
         
         TimingGenUI.hideAddSignalDialog();
         this.render();

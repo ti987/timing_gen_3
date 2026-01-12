@@ -346,27 +346,40 @@ class RowManager {
         
         const rows = [];
         
-        // Convert signals to rows
+        // Convert signals to rows, tracking signal index to row index mapping
+        const signalToRowMap = new Map();
+        
         for (let i = 0; i < this.app.signals.length; i++) {
+            // Record mapping before adding
+            signalToRowMap.set(i, rows.length);
+            
             rows.push({
                 type: 'signal',
                 data: this.app.signals[i]
             });
             
             // Check if there's a blank row (measure row) after this signal
+            // In old system, measureRow represents gap index
             if (this.app.blankRows && this.app.blankRows.includes(i)) {
                 // Find measures at this gap index
                 const measuresAtGap = this.app.measures.filter(m => m.measureRow === i);
                 
                 if (measuresAtGap.length > 0) {
-                    // Convert measure signal references to row indices
+                    // Convert measure signal references to row indices using our map
                     measuresAtGap.forEach(measure => {
-                        measure.signal1Row = measure.signal1Index !== undefined 
-                            ? this.signalIndexToRowIndex(measure.signal1Index)
-                            : rows.length - 1; // Default to previous signal
-                        measure.signal2Row = measure.signal2Index !== undefined
-                            ? this.signalIndexToRowIndex(measure.signal2Index)
-                            : rows.length - 1;
+                        // Use signal1Index and signal2Index if they exist
+                        if (measure.signal1Index !== undefined && signalToRowMap.has(measure.signal1Index)) {
+                            measure.signal1Row = signalToRowMap.get(measure.signal1Index);
+                        } else {
+                            // Fallback to previous signal row
+                            measure.signal1Row = rows.length - 1;
+                        }
+                        
+                        if (measure.signal2Index !== undefined && signalToRowMap.has(measure.signal2Index)) {
+                            measure.signal2Row = signalToRowMap.get(measure.signal2Index);
+                        } else {
+                            measure.signal2Row = rows.length - 1;
+                        }
                         
                         // Remove old fields
                         delete measure.measureRow;
