@@ -1847,21 +1847,10 @@ class TimingGenApp {
     
     getRowIndicatorY(gapIndex) {
         // Get the Y position for the row indicator (red line) for a given gap index
-        // If the gap already has a measure row, position the line ABOVE the signal that's above the measure
-        // Otherwise, position it at the gap boundary
+        // The line should appear AT the visual position of the gap (or measure row)
+        // This accounts for all measure rows before this position
         
-        if (this.measureRows && this.measureRows.has(gapIndex)) {
-            // This gap has an existing measure row
-            // We want to show the line at the gap ABOVE the signal that's above this measure row
-            // Gap N is between signal N and signal N+1
-            // Signal N is above gap N
-            // Gap N-1 is above signal N
-            // So we want to show the line at gap N-1
-            const gapAboveSignal = gapIndex - 1;
-            return this.getGapYPosition(gapAboveSignal);
-        }
-        
-        // No measure row at this gap, use regular calculation
+        // Simply return the gap position, which already accounts for measure rows
         return this.getGapYPosition(gapIndex);
     }
     
