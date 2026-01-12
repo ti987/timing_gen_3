@@ -1119,6 +1119,18 @@ class TimingGenApp {
         const signal1Index = this.rowManager.rowIndexToSignalIndex(measure.signal1Row);
         const signal2Index = this.rowManager.rowIndexToSignalIndex(measure.signal2Row);
         
+        // Validate signal indices
+        if (signal1Index < 0 || signal2Index < 0) {
+            console.error('Invalid signal row indices in measure:', measure);
+            // Return default coordinates
+            return {
+                x1: this.config.nameColumnWidth,
+                y1: this.config.headerHeight,
+                x2: this.config.nameColumnWidth,
+                y2: this.config.headerHeight
+            };
+        }
+        
         // Calculate X positions accounting for signal transitions, delay, and slew
         const x1 = this.getTransitionMidpointX(signal1Index, measure.cycle1);
         const x2 = this.getTransitionMidpointX(signal2Index, measure.cycle2);
@@ -1671,10 +1683,10 @@ class TimingGenApp {
                 type: 'measure',
                 data: [this.currentMeasure]
             });
-            
-            // Also add to legacy measures array for backward compatibility
-            this.measures.push(this.currentMeasure);
         }
+        
+        // Also add to legacy measures array for backward compatibility
+        this.measures.push(this.currentMeasure);
         
         // Clean up
         this.hideInstruction();

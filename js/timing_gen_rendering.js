@@ -32,7 +32,9 @@ class TimingGenRendering {
                     // Draw signal
                     app.signalLayer.activate();
                     const signalIndex = app.rowManager.rowIndexToSignalIndex(rowIndex);
-                    TimingGenRendering.drawSignal(app, row.data, signalIndex);
+                    if (signalIndex >= 0) {
+                        TimingGenRendering.drawSignal(app, row.data, signalIndex);
+                    }
                 } else if (row.type === 'measure') {
                     // Draw measures in this row
                     app.measureLayer.activate();
