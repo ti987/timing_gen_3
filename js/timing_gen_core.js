@@ -991,7 +991,7 @@ class TimingGenApp {
         
         if (gapIndex !== -1) {
             // Calculate Y position for the indicator line using the helper function
-            const indicatorY = this.getGapYPosition(gapIndex);
+            const indicatorY = this.getRowIndicatorY(gapIndex);
             
             // Remove old indicator if it exists
             this.removeMeasureDragIndicator();
@@ -1566,9 +1566,9 @@ class TimingGenApp {
             // Determine gap index from mouse position (which space between rows)
             const gapIndex = this.getGapIndexAtY(yPos);
             // Calculate Y position for the arrow (at 1/3 from top of measure row, which is 2/3 of row height)
-            // Use the gap Y position and add 1/3 of row height for the arrow
-            const gapYPos = this.getGapYPosition(gapIndex);
-            const arrowY = gapYPos + this.config.rowHeight / 3;
+            // Use the row indicator Y position (which accounts for existing measure rows)
+            const rowIndicatorY = this.getRowIndicatorY(gapIndex);
+            const arrowY = rowIndicatorY + this.config.rowHeight / 3;
             
             // Draw the double-headed arrow at the current gap
             const arrows = this.drawMeasureArrows(
@@ -1845,6 +1845,27 @@ class TimingGenApp {
         return line;
     }
     
+    getRowIndicatorY(gapIndex) {
+        // Get the Y position for the row indicator (red line) for a given gap index
+        // If the gap already has a measure row, position the line at the top of the measure row
+        // Otherwise, position it at the gap boundary
+        
+        if (this.measureRows && this.measureRows.has(gapIndex)) {
+            // This gap has an existing measure row
+            // Draw the line at the TOP of the measure row (above it)
+            // to indicate that the new measure will share this row
+            // Calculate Y position of the signal above this measure row
+            const signalIndex = gapIndex; // Signal at index gapIndex is above gap gapIndex
+            if (signalIndex >= 0 && signalIndex < this.signals.length) {
+                const signalY = this.getSignalYPosition(signalIndex);
+                return signalY; // Top of the signal (which is also the gap above it)
+            }
+        }
+        
+        // No measure row at this gap, use regular calculation
+        return this.getGapYPosition(gapIndex);
+    }
+    
     getGapYPosition(gapIndex) {
         // Calculate the Y position for a gap index, accounting for measure rows
         // Returns the Y position at the boundary line of the gap
@@ -1868,9 +1889,9 @@ class TimingGenApp {
     
     drawRowIndicator(gapIndex) {
         // Draw horizontal line indicator for row selection
-        // Draw the line at the boundary of the gap (not in the middle)
         // gapIndex represents which gap between signals this is
-        const yPos = this.getGapYPosition(gapIndex);
+        const yPos = this.getRowIndicatorY(gapIndex);
+        
         const indicator = new paper.Path.Line({
             from: [0, yPos],
             to: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, yPos],
