@@ -741,6 +741,16 @@ class TimingGenApp {
     }
     
     getSignalIndexAtY(yPos) {
+        // Use unified row system if available
+        if (this.rowManager && this.rowManager.isUsingNewSystem()) {
+            const rowIndex = this.rowManager.getRowIndexAtY(yPos);
+            if (rowIndex < 0) return -1;
+            
+            // Convert row index to signal index
+            return this.rowManager.rowIndexToSignalIndex(rowIndex);
+        }
+        
+        // Fallback to old system
         const relY = yPos - this.config.headerHeight;
         if (relY < 0) return -1;
         
@@ -910,6 +920,12 @@ class TimingGenApp {
         // Insert all selected signals at the new position
         this.signals.splice(insertIndex, 0, ...selectedSignalsData);
         
+        // Update unified row system
+        if (this.rowManager && this.rowManager.isUsingNewSystem()) {
+            // Rebuild rows array from signals and measures
+            this.rebuildRowsAfterSignalMove(selectedIndices, insertIndex);
+        }
+        
         // Update selection indices to reflect new positions
         this.selectedSignals.clear();
         for (let i = 0; i < selectedSignalsData.length; i++) {
@@ -917,6 +933,88 @@ class TimingGenApp {
         }
         
         this.render();
+    }
+    
+    rebuildRowsAfterSignalMove(movedIndices, insertIndex) {
+        // This function rebuilds the rows array after signals have been moved
+        // and updates measure row references to track the moved signals
+        
+        // Build a map from old signal data objects to their old row indices
+        const oldSignalDataToRow = new Map();
+        this.rows.forEach((row, rowIdx) => {
+            if (row.type === 'signal') {
+                oldSignalDataToRow.set(row.data, rowIdx);
+            }
+        });
+        
+        // Extract all measure rows
+        const measureRows = [];
+        this.rows.forEach(row => {
+            if (row.type === 'measure') {
+                measureRows.push(row);
+            }
+        });
+        
+        // Build new rows array from current signals array
+        const newRows = [];
+        const newSignalDataToRow = new Map();
+        
+        this.signals.forEach((signal, idx) => {
+            const newRowIdx = newRows.length;
+            newRows.push({
+                type: 'signal',
+                data: signal
+            });
+            newSignalDataToRow.set(signal, newRowIdx);
+        });
+        
+        // Update measure references based on signal data objects
+        measureRows.forEach(measureRow => {
+            measureRow.data.forEach(measure => {
+                // Find the signal data object for signal1
+                if (measure.signal1Row !== undefined) {
+                    // Find the old signal row
+                    let signal1Data = null;
+                    this.rows.forEach((row, idx) => {
+                        if (row.type === 'signal' && idx === measure.signal1Row) {
+                            signal1Data = row.data;
+                        }
+                    });
+                    
+                    // Find the new row for this signal
+                    if (signal1Data && newSignalDataToRow.has(signal1Data)) {
+                        measure.signal1Row = newSignalDataToRow.get(signal1Data);
+                    }
+                }
+                
+                // Same for signal2
+                if (measure.signal2Row !== undefined) {
+                    let signal2Data = null;
+                    this.rows.forEach((row, idx) => {
+                        if (row.type === 'signal' && idx === measure.signal2Row) {
+                            signal2Data = row.data;
+                        }
+                    });
+                    
+                    if (signal2Data && newSignalDataToRow.has(signal2Data)) {
+                        measure.signal2Row = newSignalDataToRow.get(signal2Data);
+                    }
+                }
+            });
+            
+            // Re-add measure rows at the end
+            newRows.push(measureRow);
+        });
+        
+        this.rows = newRows;
+        
+        // Also rebuild the legacy measures array
+        this.measures = [];
+        measureRows.forEach(measureRow => {
+            if (Array.isArray(measureRow.data)) {
+                this.measures.push(...measureRow.data);
+            }
+        });
     }
     
     insertCyclesGlobal(startCycle, numCycles) {
