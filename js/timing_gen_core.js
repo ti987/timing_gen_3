@@ -1023,6 +1023,9 @@ class TimingGenApp {
             this.insertCyclesForSignal(signal, startCycle, numCycles);
         });
         
+        // Update measure cycle references
+        this.updateMeasureCyclesAfterInsertion(startCycle, numCycles);
+        
         // Update cycle count
         this.config.cycles += numCycles;
         document.getElementById('cycles-input').value = this.config.cycles;
@@ -1035,6 +1038,9 @@ class TimingGenApp {
         this.signals.forEach(signal => {
             this.deleteCyclesForSignal(signal, startCycle, numCycles);
         });
+        
+        // Update measure cycle references
+        this.updateMeasureCyclesAfterDeletion(startCycle, numCycles);
         
         // Keep cycle count unchanged - the deleted cycles are replaced with steady cycles at the end
         // (steady cycles extend the last state automatically without explicit values)
@@ -1125,6 +1131,102 @@ class TimingGenApp {
         
         signal.values = newValues;
         // Add steady cycles at the end if needed (they extend the last state automatically)
+    }
+    
+    updateMeasureCyclesAfterInsertion(startCycle, numCycles) {
+        // Update cycle references in all measures after cycles are inserted
+        this.measures.forEach(measure => {
+            // Update cycle1 if it's after the insertion point
+            if (measure.cycle1 !== undefined && measure.cycle1 > startCycle) {
+                measure.cycle1 += numCycles;
+            }
+            
+            // Update cycle2 if it's after the insertion point
+            if (measure.cycle2 !== undefined && measure.cycle2 > startCycle) {
+                measure.cycle2 += numCycles;
+            }
+        });
+        
+        // Also update in the rows array
+        if (this.rows) {
+            this.rows.forEach(row => {
+                if (row.type === 'measure' && Array.isArray(row.data)) {
+                    row.data.forEach(measure => {
+                        if (measure.cycle1 !== undefined && measure.cycle1 > startCycle) {
+                            measure.cycle1 += numCycles;
+                        }
+                        if (measure.cycle2 !== undefined && measure.cycle2 > startCycle) {
+                            measure.cycle2 += numCycles;
+                        }
+                    });
+                }
+            });
+        }
+    }
+    
+    updateMeasureCyclesAfterDeletion(startCycle, numCycles) {
+        // Update cycle references in all measures after cycles are deleted
+        this.measures.forEach(measure => {
+            // Update cycle1 if it's after the deletion point
+            if (measure.cycle1 !== undefined) {
+                if (measure.cycle1 >= startCycle && measure.cycle1 < startCycle + numCycles) {
+                    // Cycle was deleted - mark measure as invalid
+                    measure.invalid = true;
+                } else if (measure.cycle1 >= startCycle + numCycles) {
+                    // Shift left by numCycles
+                    measure.cycle1 -= numCycles;
+                }
+            }
+            
+            // Update cycle2 if it's after the deletion point
+            if (measure.cycle2 !== undefined) {
+                if (measure.cycle2 >= startCycle && measure.cycle2 < startCycle + numCycles) {
+                    // Cycle was deleted - mark measure as invalid
+                    measure.invalid = true;
+                } else if (measure.cycle2 >= startCycle + numCycles) {
+                    // Shift left by numCycles
+                    measure.cycle2 -= numCycles;
+                }
+            }
+        });
+        
+        // Remove invalid measures
+        this.measures = this.measures.filter(m => !m.invalid);
+        
+        // Also update in the rows array
+        if (this.rows) {
+            this.rows.forEach(row => {
+                if (row.type === 'measure' && Array.isArray(row.data)) {
+                    row.data.forEach(measure => {
+                        if (measure.cycle1 !== undefined) {
+                            if (measure.cycle1 >= startCycle && measure.cycle1 < startCycle + numCycles) {
+                                measure.invalid = true;
+                            } else if (measure.cycle1 >= startCycle + numCycles) {
+                                measure.cycle1 -= numCycles;
+                            }
+                        }
+                        if (measure.cycle2 !== undefined) {
+                            if (measure.cycle2 >= startCycle && measure.cycle2 < startCycle + numCycles) {
+                                measure.invalid = true;
+                            } else if (measure.cycle2 >= startCycle + numCycles) {
+                                measure.cycle2 -= numCycles;
+                            }
+                        }
+                    });
+                    
+                    // Remove invalid measures from this row
+                    row.data = row.data.filter(m => !m.invalid);
+                }
+            });
+            
+            // Remove empty measure rows
+            this.rows = this.rows.filter(row => {
+                if (row.type === 'measure') {
+                    return row.data && row.data.length > 0;
+                }
+                return true;
+            });
+        }
     }
     
     handleInsertCycles() {
