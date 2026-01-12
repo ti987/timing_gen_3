@@ -939,14 +939,6 @@ class TimingGenApp {
         // This function rebuilds the rows array after signals have been moved
         // and updates measure row references to track the moved signals
         
-        // Build a map from old signal data objects to their old row indices
-        const oldSignalDataToRow = new Map();
-        this.rows.forEach((row, rowIdx) => {
-            if (row.type === 'signal') {
-                oldSignalDataToRow.set(row.data, rowIdx);
-            }
-        });
-        
         // Extract all measure rows
         const measureRows = [];
         this.rows.forEach(row => {
@@ -971,33 +963,35 @@ class TimingGenApp {
         // Update measure references based on signal data objects
         measureRows.forEach(measureRow => {
             measureRow.data.forEach(measure => {
-                // Find the signal data object for signal1
+                // Find the signal data object for signal1 using direct access
                 if (measure.signal1Row !== undefined) {
-                    // Find the old signal row
-                    let signal1Data = null;
-                    this.rows.forEach((row, idx) => {
-                        if (row.type === 'signal' && idx === measure.signal1Row) {
-                            signal1Data = row.data;
+                    // Validate row index
+                    if (measure.signal1Row >= 0 && measure.signal1Row < this.rows.length) {
+                        const oldRow = this.rows[measure.signal1Row];
+                        if (oldRow && oldRow.type === 'signal') {
+                            const signal1Data = oldRow.data;
+                            
+                            // Find the new row for this signal
+                            if (newSignalDataToRow.has(signal1Data)) {
+                                measure.signal1Row = newSignalDataToRow.get(signal1Data);
+                            }
                         }
-                    });
-                    
-                    // Find the new row for this signal
-                    if (signal1Data && newSignalDataToRow.has(signal1Data)) {
-                        measure.signal1Row = newSignalDataToRow.get(signal1Data);
                     }
                 }
                 
                 // Same for signal2
                 if (measure.signal2Row !== undefined) {
-                    let signal2Data = null;
-                    this.rows.forEach((row, idx) => {
-                        if (row.type === 'signal' && idx === measure.signal2Row) {
-                            signal2Data = row.data;
+                    // Validate row index
+                    if (measure.signal2Row >= 0 && measure.signal2Row < this.rows.length) {
+                        const oldRow = this.rows[measure.signal2Row];
+                        if (oldRow && oldRow.type === 'signal') {
+                            const signal2Data = oldRow.data;
+                            
+                            // Find the new row for this signal
+                            if (newSignalDataToRow.has(signal2Data)) {
+                                measure.signal2Row = newSignalDataToRow.get(signal2Data);
+                            }
                         }
-                    });
-                    
-                    if (signal2Data && newSignalDataToRow.has(signal2Data)) {
-                        measure.signal2Row = newSignalDataToRow.get(signal2Data);
                     }
                 }
             });
