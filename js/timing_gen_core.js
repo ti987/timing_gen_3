@@ -1,5 +1,5 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Version 3.0.2
+// Version 3.1.0
 // Main JavaScript Application using Paper.js
 //
 // Key Features:
@@ -10,6 +10,7 @@
 // - JSON save/load with version control
 // - SVG export for documentation
 // - Configurable cycles and timing parameters
+// - Unified row system for signals and measures
 
 class TimingGenApp {
     constructor() {
@@ -36,10 +37,17 @@ class TimingGenApp {
             backgroundColor: '#ffffff'
         };
         
-        // Data model
+        // Data model (unified row system)
+        this.rows = []; // Array of row objects: {type: 'signal'|'measure', data: ...}
+        
+        // Legacy data model (for backward compatibility during migration)
         this.signals = [];
         this.measures = []; // Array of measure objects
         this.blankRows = []; // Array of blank row indices for measures
+        
+        // Row manager for unified row system
+        this.rowManager = new RowManager(this);
+        
         this.currentEditingSignal = null;
         this.currentEditingCycle = null;
         
