@@ -1264,21 +1264,36 @@ class TimingGenApp {
     getTransitionMidpointX(signalIndex, cycle) {
         // Calculate the X coordinate for the middle of a transition at the given cycle
         // Accounts for delay and slew
+        // For clock signals, negative cycle numbers represent falling edges
         
         if (signalIndex < 0 || signalIndex >= this.signals.length) {
             // Invalid signal, fall back to cycle boundary
-            return this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+            const absCycle = Math.abs(cycle);
+            return this.config.nameColumnWidth + absCycle * this.config.cycleWidth;
         }
         
         const signal = this.signals[signalIndex];
         
         // Safety check: if signal is undefined, fall back to cycle boundary
         if (!signal) {
-            return this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+            const absCycle = Math.abs(cycle);
+            return this.config.nameColumnWidth + absCycle * this.config.cycleWidth;
+        }
+        
+        // Handle clock falling edges (negative cycle numbers)
+        if (signal.type === 'clock' && cycle < 0) {
+            const absCycle = Math.abs(cycle + 1); // Convert -1 to 0, -2 to 1, etc.
+            // Falling edge is at mid-cycle
+            return this.config.nameColumnWidth + absCycle * this.config.cycleWidth + this.config.cycleWidth / 2;
         }
         
         // Base X position at grid line
         const baseX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+        
+        // For clock rising edges, return exact cycle boundary
+        if (signal.type === 'clock') {
+            return baseX;
+        }
         
         // Get delay info for this cycle
         const delayInfo = this.getEffectiveDelay(signal, cycle);
@@ -1302,12 +1317,12 @@ class TimingGenApp {
             const prevValue = this.getBusValueAtCycle(signal, cycle - 1);
             
             if (currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X') {
-                // There's a transition - midpoint is at baseX + delayMax + slew/2
+                // There's a transition - midpoint is at baseX + delayMin + slew/2
                 return baseX + delayInfo.min + slew / 2;
             }
         }
         
-        // No transition or first cycle - use baseX + delayMax for bus, delayMin for bit
+        // No transition or first cycle - use baseX + delayMin for most signals
         if (signal.type === 'bus') {
             return baseX + delayInfo.min + slew / 2;
         }
@@ -1397,20 +1412,42 @@ class TimingGenApp {
             return { signalIndex, cycle: nearestCycle };
         }
         
-        // For clock signals, find the nearest cycle boundary (clock transitions at every boundary)
+        // For clock signals, find the nearest clock edge (both rising and falling)
         if (signal.type === 'clock') {
             let nearestCycle = clickedCycle;
+            let nearestEdge = 'rising'; // 'rising' or 'falling'
             let minDistance = Infinity;
             
-            // Clock transitions happen at every cycle boundary
-            for (let cycle = Math.max(1, clickedCycle - 1); cycle <= Math.min(this.config.cycles, clickedCycle + 1); cycle++) {
-                const cycleX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
-                const distance = Math.abs(cycleX - xPos);
+            // Clock has two edges per cycle: rising and falling
+            // Rising edge is at cycle boundary, falling edge is at mid-cycle
+            for (let cycle = Math.max(0, clickedCycle - 1); cycle <= Math.min(this.config.cycles, clickedCycle + 1); cycle++) {
+                // Rising edge (at cycle boundary)
+                const risingEdgeX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+                const risingDistance = Math.abs(risingEdgeX - xPos);
                 
-                if (distance < minDistance) {
-                    minDistance = distance;
+                if (risingDistance < minDistance) {
+                    minDistance = risingDistance;
                     nearestCycle = cycle;
+                    nearestEdge = 'rising';
                 }
+                
+                // Falling edge (at mid-cycle)
+                if (cycle < this.config.cycles) {
+                    const fallingEdgeX = this.config.nameColumnWidth + cycle * this.config.cycleWidth + this.config.cycleWidth / 2;
+                    const fallingDistance = Math.abs(fallingEdgeX - xPos);
+                    
+                    if (fallingDistance < minDistance) {
+                        minDistance = fallingDistance;
+                        nearestCycle = cycle;
+                        nearestEdge = 'falling';
+                    }
+                }
+            }
+            
+            // Store edge type in the cycle value
+            // Use negative cycle numbers for falling edges: -1 means cycle 0 falling, -2 means cycle 1 falling, etc.
+            if (nearestEdge === 'falling') {
+                nearestCycle = -(nearestCycle + 1);
             }
             
             return { signalIndex, cycle: nearestCycle };
@@ -1451,6 +1488,26 @@ class TimingGenApp {
         
         this.measureLayer.activate();
         this.tempMeasureGraphics = [];
+        
+        // Show snap-to indicator during first and second point selection
+        if (this.measureState === 'first-point' || this.measureState === 'second-point') {
+            // Find snap-to point
+            const snapPoint = this.findNearestTransition(xPos, yPos);
+            if (snapPoint) {
+                const snapX = this.getTransitionMidpointX(snapPoint.signalIndex, snapPoint.cycle);
+                const snapY = this.getSignalYAtCycle(snapPoint.signalIndex, snapPoint.cycle);
+                
+                // Draw snap-to indicator (small circle)
+                const snapIndicator = new paper.Path.Circle({
+                    center: [snapX, snapY],
+                    radius: 8,
+                    strokeColor: '#FF0000',
+                    strokeWidth: 2,
+                    fillColor: new paper.Color(1, 0, 0, 0.2) // Semi-transparent red
+                });
+                this.tempMeasureGraphics.push(snapIndicator);
+            }
+        }
         
         if (this.measureState === 'second-point' && this.currentMeasure.signal1Index !== null) {
             // After first click: show first line + cross, and dynamic line to mouse
@@ -1641,10 +1698,8 @@ class TimingGenApp {
         // Gap 0: between signal 0 and signal 1
         // Gap N: between signal N and signal N+1
         // 
-        // Gaps are located at the boundaries between rows:
-        // - Gap -1 is at y = headerHeight
-        // - Gap 0 is at y = headerHeight + rowHeight
-        // - Gap N is at y = headerHeight + (N+1) * rowHeight
+        // This function needs to account for existing measure rows when determining
+        // which gap the Y position corresponds to
         
         if (yPos < this.config.headerHeight) {
             return -1; // Above all signals
@@ -1652,14 +1707,63 @@ class TimingGenApp {
         
         const relativeY = yPos - this.config.headerHeight;
         
-        // Calculate which row boundary is nearest
-        // Each row has height rowHeight, and gaps are at boundaries (0, rowHeight, 2*rowHeight, etc.)
-        // Round to nearest boundary, then convert to gap index
-        const nearestBoundary = Math.round(relativeY / this.config.rowHeight);
-        const gapIndex = nearestBoundary - 1;
+        // We need to iterate through the visual layout to find which gap this Y position is in
+        // Start with gap -1 (above first signal)
+        let currentY = 0;
+        const sortedMeasureRows = this.measureRows ? Array.from(this.measureRows).sort((a, b) => a - b) : [];
+        let measureRowIndex = 0;
         
-        // Clamp to valid range: -1 (above first signal) to signals.length (below last signal)
-        return Math.max(-1, Math.min(this.signals.length, gapIndex));
+        for (let gapIndex = -1; gapIndex <= this.signals.length; gapIndex++) {
+            // Check if there's a measure row at this gap index
+            if (measureRowIndex < sortedMeasureRows.length && sortedMeasureRows[measureRowIndex] === gapIndex) {
+                // There's a measure row here
+                const measureRowTop = currentY;
+                const measureRowBottom = currentY + this.config.rowHeight;
+                
+                // Check if click is in this measure row
+                if (relativeY >= measureRowTop && relativeY < measureRowBottom) {
+                    return gapIndex;
+                }
+                
+                currentY += this.config.rowHeight;
+                measureRowIndex++;
+            }
+            
+            // Check if there's a signal row after this gap (except for the last gap which is below all signals)
+            if (gapIndex < this.signals.length - 1) {
+                // There's a signal row here (signal at index gapIndex + 1)
+                const signalRowTop = currentY;
+                const signalRowBottom = currentY + this.config.rowHeight;
+                
+                // If click is in the top half of the signal row, it's closer to the gap above
+                // If click is in the bottom half, it's closer to the gap below
+                if (relativeY >= signalRowTop && relativeY < signalRowTop + this.config.rowHeight / 2) {
+                    return gapIndex;
+                } else if (relativeY >= signalRowTop + this.config.rowHeight / 2 && relativeY < signalRowBottom) {
+                    // Check if we're not at the end
+                    if (gapIndex + 1 < this.signals.length) {
+                        return gapIndex + 1;
+                    }
+                }
+                
+                currentY += this.config.rowHeight;
+            } else if (gapIndex === this.signals.length - 1) {
+                // Last signal row
+                const signalRowTop = currentY;
+                const signalRowBottom = currentY + this.config.rowHeight;
+                
+                if (relativeY >= signalRowTop && relativeY < signalRowTop + this.config.rowHeight / 2) {
+                    return gapIndex;
+                } else if (relativeY >= signalRowTop + this.config.rowHeight / 2) {
+                    return this.signals.length; // Below last signal
+                }
+                
+                currentY += this.config.rowHeight;
+            }
+        }
+        
+        // If we get here, return the last gap (below all signals)
+        return this.signals.length;
     }
     
     // New drawing helper methods for measure feature
