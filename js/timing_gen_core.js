@@ -990,8 +990,8 @@ class TimingGenApp {
         const gapIndex = this.getGapIndexAtY(yPos);
         
         if (gapIndex !== -1) {
-            // Calculate Y position for the indicator line
-            const indicatorY = this.config.headerHeight + (gapIndex + 1) * this.config.rowHeight;
+            // Calculate Y position for the indicator line using the helper function
+            const indicatorY = this.getGapYPosition(gapIndex);
             
             // Remove old indicator if it exists
             this.removeMeasureDragIndicator();
@@ -1566,7 +1566,9 @@ class TimingGenApp {
             // Determine gap index from mouse position (which space between rows)
             const gapIndex = this.getGapIndexAtY(yPos);
             // Calculate Y position for the arrow (at 1/3 from top of measure row, which is 2/3 of row height)
-            const arrowY = this.config.headerHeight + (gapIndex + 1) * this.config.rowHeight + this.config.rowHeight / 3;
+            // Use the gap Y position and add 1/3 of row height for the arrow
+            const gapYPos = this.getGapYPosition(gapIndex);
+            const arrowY = gapYPos + this.config.rowHeight / 3;
             
             // Draw the double-headed arrow at the current gap
             const arrows = this.drawMeasureArrows(
@@ -1843,11 +1845,32 @@ class TimingGenApp {
         return line;
     }
     
-    drawRowIndicator(rowIndex) {
+    getGapYPosition(gapIndex) {
+        // Calculate the Y position for a gap index, accounting for measure rows
+        // Returns the Y position at the boundary line of the gap
+        // Gap -1 is at headerHeight, Gap 0 is after first signal, etc.
+        
+        // Count how many measure rows are at or before this gap
+        let measureRowsBefore = 0;
+        if (this.measureRows) {
+            for (const gi of this.measureRows) {
+                if (gi <= gapIndex) {
+                    measureRowsBefore++;
+                }
+            }
+        }
+        
+        // The visual position accounts for signals before this gap plus measure rows
+        // Gap N is after signal N (so N+1 signals are before it)
+        const signalsBeforeGap = gapIndex + 1;
+        return this.config.headerHeight + (signalsBeforeGap + measureRowsBefore) * this.config.rowHeight;
+    }
+    
+    drawRowIndicator(gapIndex) {
         // Draw horizontal line indicator for row selection
-        // Draw the line at the boundary between rows (not in the middle)
-        // rowIndex represents the row above the line (line is drawn below this row)
-        const yPos = this.config.headerHeight + (rowIndex + 1) * this.config.rowHeight;
+        // Draw the line at the boundary of the gap (not in the middle)
+        // gapIndex represents which gap between signals this is
+        const yPos = this.getGapYPosition(gapIndex);
         const indicator = new paper.Path.Line({
             from: [0, yPos],
             to: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, yPos],
