@@ -1303,13 +1303,13 @@ class TimingGenApp {
             
             if (currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X') {
                 // There's a transition - midpoint is at baseX + delayMax + slew/2
-                return baseX + delayInfo.max + slew / 2;
+                return baseX + delayInfo.min + slew / 2;
             }
         }
         
         // No transition or first cycle - use baseX + delayMax for bus, delayMin for bit
         if (signal.type === 'bus') {
-            return baseX + delayInfo.max + slew / 2;
+            return baseX + delayInfo.min + slew / 2;
         }
         return baseX + delayInfo.min;
     }
