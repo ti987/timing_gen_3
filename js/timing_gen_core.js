@@ -284,7 +284,18 @@ class TimingGenApp {
             signal.values[0] = 'X';
         }
         
+        // Add to legacy signals array for backward compatibility
         this.signals.push(signal);
+        
+        // Add to unified row system
+        if (!this.rows) {
+            this.rows = [];
+        }
+        this.rows.push({
+            type: 'signal',
+            data: signal
+        });
+        
         TimingGenUI.hideAddSignalDialog();
         this.render();
     }
@@ -332,7 +343,17 @@ class TimingGenApp {
         this.hideAllMenus();
         if (this.currentEditingSignal !== null) {
             if (confirm(`Delete signal "${this.signals[this.currentEditingSignal].name}"?`)) {
+                // Delete from legacy signals array
                 this.signals.splice(this.currentEditingSignal, 1);
+                
+                // Delete from unified row system
+                if (this.rowManager && this.rowManager.isUsingNewSystem()) {
+                    const rowIndex = this.rowManager.signalIndexToRowIndex(this.currentEditingSignal);
+                    if (rowIndex >= 0) {
+                        this.rowManager.deleteRow(rowIndex);
+                    }
+                }
+                
                 this.currentEditingSignal = null;
                 this.render();
             }

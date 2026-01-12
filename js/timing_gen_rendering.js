@@ -1,5 +1,5 @@
 // Timing Gen 3 - Rendering Module
-// Version 3.0.2
+// Version 3.1.0
 // Handles all waveform rendering functionality using Paper.js
 
 class TimingGenRendering {
@@ -41,9 +41,16 @@ class TimingGenRendering {
     }
     
     static drawGrid(app) {
-        // Calculate total rows including blank rows
-        const blankRowCount = app.blankRows ? app.blankRows.length : 0;
-        const totalRows = app.signals.length + blankRowCount;
+        // Calculate total rows
+        let totalRows;
+        if (app.rowManager && app.rowManager.isUsingNewSystem()) {
+            totalRows = app.rowManager.getTotalRows();
+        } else {
+            // Old system: signals + blank rows
+            const blankRowCount = app.blankRows ? app.blankRows.length : 0;
+            totalRows = app.signals.length + blankRowCount;
+        }
+        
         const maxHeight = app.config.headerHeight + totalRows * app.config.rowHeight;
         
         // Vertical lines (cycle dividers) - draw to max height based on signals
@@ -57,9 +64,16 @@ class TimingGenRendering {
             });
         }
         
-        // Horizontal lines (signal dividers) - accounting for blank rows
-        for (let idx = 0; idx <= app.signals.length; idx++) {
-            const yPos = TimingGenRendering.getSignalYPosition(app, idx);
+        // Horizontal lines (row dividers)
+        for (let idx = 0; idx <= totalRows; idx++) {
+            let yPos;
+            if (app.rowManager && app.rowManager.isUsingNewSystem()) {
+                yPos = app.rowManager.getRowYPosition(idx);
+            } else {
+                // Old system
+                yPos = TimingGenRendering.getSignalYPosition(app, idx);
+            }
+            
             const line = new paper.Path.Line({
                 from: [0, yPos],
                 to: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, yPos],
@@ -834,7 +848,13 @@ class TimingGenRendering {
     }
     
     static getSignalYPosition(app, signalIndex) {
-        // Calculate Y position accounting for blank rows inserted for measures
+        // Use row manager for unified row system
+        if (app.rowManager && app.rowManager.isUsingNewSystem()) {
+            const rowIndex = app.rowManager.signalIndexToRowIndex(signalIndex);
+            return app.rowManager.getRowYPosition(rowIndex);
+        }
+        
+        // Fallback to old system: Calculate Y position accounting for blank rows
         let blankRowsAbove = 0;
         if (app.blankRows) {
             blankRowsAbove = app.blankRows.filter(rowIndex => rowIndex <= signalIndex).length;
