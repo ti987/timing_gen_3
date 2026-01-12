@@ -64,12 +64,17 @@ class RowManager {
             return;
         }
         
+        if (fromIndex === toIndex) {
+            return; // No move needed
+        }
+        
         // Remove row from original position
         const [row] = this.app.rows.splice(fromIndex, 1);
         
-        // Insert at new position
-        const insertIndex = toIndex > fromIndex ? toIndex : toIndex;
-        this.app.rows.splice(insertIndex, 0, row);
+        // Calculate insertion index after removal
+        // If moving down, toIndex stays the same (element removed shifts indices)
+        // If moving up, toIndex stays the same
+        this.app.rows.splice(toIndex, 0, row);
         
         // Update any measure references that point to moved rows
         this.updateMeasureReferencesAfterMove(fromIndex, toIndex);
