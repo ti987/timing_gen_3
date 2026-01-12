@@ -4,7 +4,7 @@
 
 class TimingGenData {
     static saveToJSON(app) {
-        // Save in new row-based format (v3.1.0)
+        // Save in unified row-based format (v3.1.0)
         const data = {
             version: '3.1.0',
             config: {
@@ -15,17 +15,9 @@ class TimingGenData {
                 delayMin: app.config.delayMin,
                 delayMax: app.config.delayMax,
                 delayColor: app.config.delayColor
-            }
+            },
+            rows: app.rows
         };
-        
-        // Use new row-based format if available
-        if (app.rowManager && app.rowManager.isUsingNewSystem()) {
-            data.rows = app.rows;
-        } else {
-            // Fallback to old format for backward compatibility
-            data.signals = app.signals;
-            data.measures = app.measures;
-        }
         
         const jsonStr = JSON.stringify(data, null, 2);
         const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -81,15 +73,14 @@ class TimingGenData {
                     }
                 }
                 
-                // Check version and load data accordingly
-                if (data.version === '3.1.0' && data.rows) {
-                    // New row-based format
+                // Load unified row data (v3.1.0 format only)
+                if (data.rows) {
                     app.rows = data.rows;
-                    // Extract signals and measures for backward compatibility
+                    // Extract signals and measures for legacy array access
                     TimingGenData.extractLegacyData(app);
                 } else {
-                    // Old format (3.0.2 or earlier) - migrate to new system
-                    TimingGenData.loadLegacyFormat(app, data);
+                    alert('Old file format not supported. This version requires v3.1.0 format.');
+                    return;
                 }
                 
                 app.initializeCanvas();
@@ -105,43 +96,8 @@ class TimingGenData {
     }
     
     /**
-     * Load data from old format (v3.0.2 and earlier)
-     * Migrates to new row-based system
-     */
-    static loadLegacyFormat(app, data) {
-        // Load signals
-        if (data.signals) {
-            app.signals = data.signals;
-            // Ensure all bit and bus signals have base_clock
-            app.signals.forEach(signal => {
-                if ((signal.type === 'bit' || signal.type === 'bus') && !signal.base_clock) {
-                    const clockSignal = app.signals.find(sg => sg.type === 'clock');
-                    signal.base_clock = clockSignal ? clockSignal.name : 'clk';
-                }
-            });
-        }
-        
-        // Load measures
-        if (data.measures) {
-            app.measures = data.measures;
-        } else {
-            app.measures = [];
-        }
-        
-        // Load blank rows if present
-        if (data.blankRows) {
-            app.blankRows = data.blankRows;
-        } else {
-            app.blankRows = [];
-        }
-        
-        // Migrate to new system
-        app.rowManager.migrateToNewSystem();
-    }
-    
-    /**
      * Extract legacy signals and measures arrays from rows
-     * For backward compatibility with code that still uses these arrays
+     * For compatibility with code that still uses these arrays
      */
     static extractLegacyData(app) {
         app.signals = [];
@@ -156,9 +112,6 @@ class TimingGenData {
                 app.measures.push(...row.data);
             }
         });
-        
-        // Clear blank rows as they're not used in new system
-        app.blankRows = [];
     }
     
     static exportToSVG(app) {

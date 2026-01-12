@@ -25,17 +25,34 @@ class TimingGenRendering {
         // Draw header with cycle numbers
         TimingGenRendering.drawHeader(app);
         
-        // Draw signals
-        app.signalLayer.activate();
-        app.signals.forEach((signal, index) => {
-            TimingGenRendering.drawSignal(app, signal, index);
-        });
-        
-        // Draw measures
-        app.measureLayer.activate();
-        app.measures.forEach((measure, index) => {
-            TimingGenRendering.drawMeasure(app, measure, index);
-        });
+        // Draw rows (signals and measures) from unified rows array
+        if (app.rows && app.rows.length > 0) {
+            app.rows.forEach((row, rowIndex) => {
+                if (row.type === 'signal') {
+                    // Draw signal
+                    app.signalLayer.activate();
+                    const signalIndex = app.rowManager.rowIndexToSignalIndex(rowIndex);
+                    TimingGenRendering.drawSignal(app, row.data, signalIndex);
+                } else if (row.type === 'measure') {
+                    // Draw measures in this row
+                    app.measureLayer.activate();
+                    row.data.forEach((measure) => {
+                        TimingGenRendering.drawMeasure(app, measure, rowIndex);
+                    });
+                }
+            });
+        } else {
+            // Fallback to old system (signals + measures arrays)
+            app.signalLayer.activate();
+            app.signals.forEach((signal, index) => {
+                TimingGenRendering.drawSignal(app, signal, index);
+            });
+            
+            app.measureLayer.activate();
+            app.measures.forEach((measure, index) => {
+                TimingGenRendering.drawMeasure(app, measure, index);
+            });
+        }
         
         paper.view.draw();
     }
@@ -684,16 +701,16 @@ class TimingGenRendering {
         });
     }
     
-    static drawMeasure(app, measure, index) {
-        // Get coordinates from measure data (signal indices + cycles)
+    static drawMeasure(app, measure, measureRowIndex) {
+        // Get coordinates from measure data (signal row indices + cycles)
         const coords = app.getMeasureCoordinates(measure);
         
         const rowHeight = app.config.rowHeight;
         const headerHeight = app.config.headerHeight;
         
-        // Calculate row boundaries based on signal positions
-        const row1Pos = TimingGenRendering.getSignalYPosition(app, measure.signal1Index);
-        const row2Pos = TimingGenRendering.getSignalYPosition(app, measure.signal2Index);
+        // Calculate row boundaries based on signal row positions
+        const row1Pos = app.rowManager.getRowYPosition(measure.signal1Row);
+        const row2Pos = app.rowManager.getRowYPosition(measure.signal2Row);
         
         // Determine the extent of vertical lines
         const lineStart = Math.min(row1Pos, row2Pos);
@@ -721,18 +738,9 @@ class TimingGenRendering {
         // Draw small cross at second point
         const cross2 = TimingGenRendering.drawSmallCross(coords.x2, coords.y2);
         
-        // Calculate arrow Y position based on measureRow (accounting for blank rows)
-        // The measure row is between signal rows, so we need to find the visual row position
-        let visualRow = measure.measureRow;
-        if (app.blankRows) {
-            // Count blank rows before this measure row
-            for (const blankRowIndex of app.blankRows) {
-                if (blankRowIndex < measure.measureRow) {
-                    visualRow++;
-                }
-            }
-        }
-        const arrowY = headerHeight + (visualRow + 0.5) * rowHeight;
+        // Calculate arrow Y position based on measureRow
+        // Use the measure row index directly from unified system
+        const arrowY = app.rowManager.getRowYPosition(measure.measureRow) + rowHeight / 2;
         
         // Draw double-headed arrows
         const arrowSize = 8;
