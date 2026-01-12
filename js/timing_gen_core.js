@@ -1857,7 +1857,7 @@ class TimingGenApp {
             // Calculate Y position of the signal above this measure row
             const signalIndex = gapIndex; // Signal at index gapIndex is above gap gapIndex
             if (signalIndex >= 0 && signalIndex < this.signals.length) {
-                const signalY = this.getSignalYPosition(signalIndex);
+                const signalY = TimingGenRendering.getSignalYPosition(this, signalIndex);
                 return signalY; // Top of the signal (which is also the gap above it)
             }
         }
