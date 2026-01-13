@@ -994,6 +994,15 @@ class TimingGenApp {
                         }
                     }
                 }
+                
+                // Update measureRow to be between signal1Row and signal2Row
+                if (measure.signal1Row !== undefined && measure.signal2Row !== undefined) {
+                    // Place measure row between or after the two signals
+                    const minRow = Math.min(measure.signal1Row, measure.signal2Row);
+                    const maxRow = Math.max(measure.signal1Row, measure.signal2Row);
+                    // Place it between them (will be appended as measure row later)
+                    measure.measureRow = maxRow + 1;
+                }
             });
             
             // Re-add measure rows at the end
@@ -1361,7 +1370,15 @@ class TimingGenApp {
         // Get slew for this cycle
         const slew = this.getEffectiveSlew(signal, cycle);
         
-        // Check if there's actually a transition at this cycle
+        // Handle clock signals - they have transitions at every cycle
+        if (signal.type === 'clock') {
+            // Clock has rising edge at cycle boundary and falling edge at mid-cycle
+            // For measures, we typically want the rising edge (cycle boundary)
+            // Midpoint of rising edge is at: baseX + delayMin + slew/2
+            return baseX + delayInfo.min + slew / 2;
+        }
+        
+        // Check if there's actually a transition at this cycle for bit signals
         if (cycle > 0 && signal.type === 'bit') {
             const currentValue = this.getBitValueAtCycle(signal, cycle);
             const prevValue = this.getBitValueAtCycle(signal, cycle - 1);
