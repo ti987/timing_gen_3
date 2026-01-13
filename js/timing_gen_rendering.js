@@ -710,13 +710,15 @@ class TimingGenRendering {
         const rowHeight = app.config.rowHeight;
         const headerHeight = app.config.headerHeight;
         
-        // Calculate row boundaries based on signal row positions
+        // Calculate row positions for signal1, signal2, and measure row
         const row1Pos = app.rowManager.getRowYPosition(measure.signal1Row);
         const row2Pos = app.rowManager.getRowYPosition(measure.signal2Row);
+        const measureRowPos = app.rowManager.getRowYPosition(measure.measureRow);
         
         // Determine the extent of vertical lines
-        const lineStart = Math.min(row1Pos, row2Pos);
-        const lineEnd = Math.max(row1Pos, row2Pos) + rowHeight;
+        // Lines should span from the minimum to maximum among signal1, signal2, and measure row
+        const lineStart = Math.min(row1Pos, row2Pos, measureRowPos);
+        const lineEnd = Math.max(row1Pos, row2Pos, measureRowPos) + rowHeight;
         
         // Draw first vertical line
         const line1 = new paper.Path.Line({
@@ -742,7 +744,7 @@ class TimingGenRendering {
         
         // Calculate arrow Y position based on measureRow
         // Use the measure row index directly from unified system
-        const arrowY = app.rowManager.getRowYPosition(measure.measureRow) + rowHeight / 2;
+        const arrowY = measureRowPos + rowHeight / 2;
         
         // Draw double-headed arrows
         const arrowSize = 8;
