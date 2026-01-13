@@ -947,17 +947,16 @@ class TimingGenApp {
             }
         });
         
-        // Build new rows array from current signals array
-        const newRows = [];
+        // Build signal rows array first
+        const signalRows = [];
         const newSignalDataToRow = new Map();
         
         this.signals.forEach((signal, idx) => {
-            const newRowIdx = newRows.length;
-            newRows.push({
+            signalRows.push({
                 type: 'signal',
                 data: signal
             });
-            newSignalDataToRow.set(signal, newRowIdx);
+            newSignalDataToRow.set(signal, idx);
         });
         
         // Update measure references based on signal data objects
@@ -971,9 +970,10 @@ class TimingGenApp {
                         if (oldRow && oldRow.type === 'signal') {
                             const signal1Data = oldRow.data;
                             
-                            // Find the new row for this signal
+                            // Find the new signal index for this signal
                             if (newSignalDataToRow.has(signal1Data)) {
-                                measure.signal1Row = newSignalDataToRow.get(signal1Data);
+                                const newSignalIndex = newSignalDataToRow.get(signal1Data);
+                                measure.signal1Row = newSignalIndex;
                             }
                         }
                     }
@@ -987,35 +987,98 @@ class TimingGenApp {
                         if (oldRow && oldRow.type === 'signal') {
                             const signal2Data = oldRow.data;
                             
-                            // Find the new row for this signal
+                            // Find the new signal index for this signal
                             if (newSignalDataToRow.has(signal2Data)) {
-                                measure.signal2Row = newSignalDataToRow.get(signal2Data);
+                                const newSignalIndex = newSignalDataToRow.get(signal2Data);
+                                measure.signal2Row = newSignalIndex;
                             }
                         }
                     }
                 }
-                
-                // Update measureRow to be between signal1Row and signal2Row
-                if (measure.signal1Row !== undefined && measure.signal2Row !== undefined) {
-                    // Place measure row between or after the two signals
-                    const minRow = Math.min(measure.signal1Row, measure.signal2Row);
-                    const maxRow = Math.max(measure.signal1Row, measure.signal2Row);
-                    // Place it between them (will be appended as measure row later)
-                    measure.measureRow = maxRow + 1;
-                }
             });
+        });
+        
+        // Now build the final rows array with measures inserted at appropriate positions
+        const newRows = [];
+        let signalRowIndex = 0;
+        
+        // Helper function to check if a measure should be inserted after a given signal row
+        const getMeasuresForPosition = (afterSignalIndex) => {
+            const measuresAtPosition = [];
+            measureRows.forEach(measureRow => {
+                measureRow.data.forEach(measure => {
+                    if (measure.signal1Row !== undefined && measure.signal2Row !== undefined) {
+                        const minRow = Math.min(measure.signal1Row, measure.signal2Row);
+                        const maxRow = Math.max(measure.signal1Row, measure.signal2Row);
+                        
+                        // Insert measure row after the higher of the two signals
+                        // or between them if there's space
+                        if (maxRow === afterSignalIndex) {
+                            // Update the measureRow field to reflect actual position
+                            measure.measureRow = newRows.length + 1;
+                            measuresAtPosition.push(measure);
+                        }
+                    }
+                });
+            });
+            return measuresAtPosition;
+        };
+        
+        // Build rows array: signals with measures inserted after appropriate positions
+        for (let i = 0; i < signalRows.length; i++) {
+            // Add signal row
+            newRows.push(signalRows[i]);
             
-            // Re-add measure rows at the end
-            newRows.push(measureRow);
+            // Check if any measures should be inserted after this signal
+            const measuresHere = getMeasuresForPosition(i);
+            if (measuresHere.length > 0) {
+                // Group all measures at this position into one measure row
+                newRows.push({
+                    type: 'measure',
+                    data: measuresHere
+                });
+            }
+        }
+        
+        // Update row indices now that we know final positions
+        newRows.forEach((row, finalRowIndex) => {
+            if (row.type === 'signal') {
+                newSignalDataToRow.set(row.data, finalRowIndex);
+            } else if (row.type === 'measure') {
+                row.data.forEach(measure => {
+                    measure.measureRow = finalRowIndex;
+                });
+            }
+        });
+        
+        // Update measure signal row references to final positions
+        newRows.forEach(row => {
+            if (row.type === 'measure') {
+                row.data.forEach(measure => {
+                    if (measure.signal1Row !== undefined) {
+                        // Find the signal in signalRows and get its final position
+                        const signal1Data = signalRows[measure.signal1Row]?.data;
+                        if (signal1Data && newSignalDataToRow.has(signal1Data)) {
+                            measure.signal1Row = newSignalDataToRow.get(signal1Data);
+                        }
+                    }
+                    if (measure.signal2Row !== undefined) {
+                        const signal2Data = signalRows[measure.signal2Row]?.data;
+                        if (signal2Data && newSignalDataToRow.has(signal2Data)) {
+                            measure.signal2Row = newSignalDataToRow.get(signal2Data);
+                        }
+                    }
+                });
+            }
         });
         
         this.rows = newRows;
         
         // Also rebuild the legacy measures array
         this.measures = [];
-        measureRows.forEach(measureRow => {
-            if (Array.isArray(measureRow.data)) {
-                this.measures.push(...measureRow.data);
+        newRows.forEach(row => {
+            if (row.type === 'measure' && Array.isArray(row.data)) {
+                this.measures.push(...row.data);
             }
         });
     }
