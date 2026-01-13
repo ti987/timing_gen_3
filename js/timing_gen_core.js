@@ -64,10 +64,12 @@ class TimingGenApp {
         
         // Drag and drop state
         this.draggedSignal = null;
+        this.draggedMeasureRow = null;
         this.dragIndicator = null;
         
         // Selection state
         this.selectedSignals = new Set(); // Set of signal indices
+        this.selectedMeasureRows = new Set(); // Set of measure row indices
         this.isDragging = false;
         
         // Paper.js layers
@@ -460,31 +462,48 @@ class TimingGenApp {
         
         // Check if click is in signal name area
         if (xPos < this.config.nameColumnWidth) {
-            const signalIndex = this.getSignalIndexAtY(yPos);
-            if (signalIndex !== -1) {
-                // Handle selection with modifier keys
-                if (nativeEvent.ctrlKey || nativeEvent.metaKey) {
-                    // Ctrl-click: toggle selection
-                    this.toggleSignalSelection(signalIndex);
-                    this.render();
-                } else if (nativeEvent.shiftKey) {
-                    // Shift-click: select range
-                    this.selectSignalRange(signalIndex);
-                    this.render();
-                } else if (nativeEvent.altKey) {
-                    // Alt-click: deselect
-                    this.deselectSignal(signalIndex);
-                    this.render();
-                } else {
-                    // Regular click: select and start drag
-                    if (!this.selectedSignals.has(signalIndex)) {
-                        // If not already selected, make it the only selection
-                        this.selectedSignals.clear();
-                        this.selectedSignals.add(signalIndex);
+            // Try to get row at this Y position
+            const row = this.getRowAtY(yPos);
+            
+            if (row && row.type === 'signal') {
+                // Handle signal selection
+                const signalIndex = this.rowManager.rowIndexToSignalIndex(row.index);
+                if (signalIndex !== -1) {
+                    // Handle selection with modifier keys
+                    if (nativeEvent.ctrlKey || nativeEvent.metaKey) {
+                        // Ctrl-click: toggle selection
+                        this.toggleSignalSelection(signalIndex);
                         this.render();
+                    } else if (nativeEvent.shiftKey) {
+                        // Shift-click: select range
+                        this.selectSignalRange(signalIndex);
+                        this.render();
+                    } else if (nativeEvent.altKey) {
+                        // Alt-click: deselect
+                        this.deselectSignal(signalIndex);
+                        this.render();
+                    } else {
+                        // Regular click: select and start drag
+                        if (!this.selectedSignals.has(signalIndex)) {
+                            // If not already selected, make it the only selection
+                            this.selectedSignals.clear();
+                            this.selectedMeasureRows.clear();
+                            this.selectedSignals.add(signalIndex);
+                            this.render();
+                        }
+                        this.startDragSignal(signalIndex, event);
                     }
-                    this.startDragSignal(signalIndex, event);
                 }
+            } else if (row && row.type === 'measure') {
+                // Handle measure row selection
+                if (!this.selectedMeasureRows.has(row.index)) {
+                    // If not already selected, make it the only selection
+                    this.selectedSignals.clear();
+                    this.selectedMeasureRows.clear();
+                    this.selectedMeasureRows.add(row.index);
+                    this.render();
+                }
+                this.startDragMeasureRow(row.index, event);
             }
             return;
         }
@@ -777,6 +796,24 @@ class TimingGenApp {
         return (signalIndex >= 0 && signalIndex < this.signals.length) ? signalIndex : -1;
     }
     
+    getRowAtY(yPos) {
+        // Get row index and type at Y position
+        if (!this.rowManager || !this.rowManager.isUsingNewSystem()) {
+            return null;
+        }
+        
+        const rowIndex = this.rowManager.getRowIndexAtY(yPos);
+        if (rowIndex < 0 || rowIndex >= this.rows.length) {
+            return null;
+        }
+        
+        return {
+            index: rowIndex,
+            type: this.rows[rowIndex].type,
+            data: this.rows[rowIndex].data
+        };
+    }
+    
     toggleSignalSelection(signalIndex) {
         if (this.selectedSignals.has(signalIndex)) {
             this.selectedSignals.delete(signalIndex);
@@ -843,6 +880,90 @@ class TimingGenApp {
         
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
+    }
+    
+    startDragMeasureRow(rowIndex, event) {
+        this.draggedMeasureRow = rowIndex;
+        this.isDragging = true;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        
+        const onMouseMove = (moveEvent) => {
+            const yPos = moveEvent.clientY - rect.top;
+            this.updateDragIndicator(yPos);
+        };
+        
+        const onMouseUp = (upEvent) => {
+            const yPos = upEvent.clientY - rect.top;
+            this.dropMeasureRow(yPos);
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            this.draggedMeasureRow = null;
+            this.isDragging = false;
+            this.removeDragIndicator();
+        };
+        
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+    
+    dropMeasureRow(yPos) {
+        const targetRow = this.getRowAtY(yPos);
+        
+        if (!targetRow || targetRow.index === this.draggedMeasureRow) {
+            return; // Invalid drop location or same position
+        }
+        
+        // Extract the measure row being moved
+        const measureRow = this.rows[this.draggedMeasureRow];
+        
+        // Remove from old position
+        this.rows.splice(this.draggedMeasureRow, 1);
+        
+        // Calculate new insertion index
+        let newIndex = targetRow.index;
+        if (this.draggedMeasureRow < targetRow.index) {
+            // Moved down, adjust for removal
+            newIndex--;
+        }
+        
+        // Determine if we should insert above or below target
+        const targetYStart = this.rowManager.getRowYPosition(newIndex);
+        const targetYMid = targetYStart + this.config.rowHeight / 2;
+        if (yPos >= targetYMid) {
+            newIndex++; // Insert below
+        }
+        
+        // Insert at new position
+        this.rows.splice(newIndex, 0, measureRow);
+        
+        // Update all row indices in measures and rebuild
+        this.rebuildAfterMeasureRowMove();
+        
+        // Update selection
+        this.selectedMeasureRows.clear();
+        this.selectedMeasureRows.add(newIndex);
+        
+        this.render();
+    }
+    
+    rebuildAfterMeasureRowMove() {
+        // After moving a measure row, update measureRow field in all measures
+        this.rows.forEach((row, rowIndex) => {
+            if (row.type === 'measure') {
+                row.data.forEach(measure => {
+                    measure.measureRow = rowIndex;
+                });
+            }
+        });
+        
+        // Rebuild legacy measures array
+        this.measures = [];
+        this.rows.forEach(row => {
+            if (row.type === 'measure' && Array.isArray(row.data)) {
+                this.measures.push(...row.data);
+            }
+        });
     }
     
     updateDragIndicator(yPos) {

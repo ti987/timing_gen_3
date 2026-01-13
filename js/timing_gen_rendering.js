@@ -36,6 +36,10 @@ class TimingGenRendering {
                         TimingGenRendering.drawSignal(app, row.data, signalIndex);
                     }
                 } else if (row.type === 'measure') {
+                    // Draw measure row name in name column
+                    app.gridLayer.activate();
+                    TimingGenRendering.drawMeasureRowName(app, rowIndex, row.data.length);
+                    
                     // Draw measures in this row
                     app.measureLayer.activate();
                     row.data.forEach((measure) => {
@@ -700,6 +704,33 @@ class TimingGenRendering {
             fillColor: '#999999',
             strokeColor: signalColor,
             strokeWidth: 2
+        });
+    }
+    
+    static drawMeasureRowName(app, rowIndex, measureCount) {
+        // Draw name column for measure row
+        const yPos = app.rowManager.getRowYPosition(rowIndex);
+        
+        // Highlight if selected
+        if (app.selectedMeasureRows && app.selectedMeasureRows.has(rowIndex)) {
+            const highlightRect = new paper.Path.Rectangle({
+                point: [0, yPos],
+                size: [app.config.nameColumnWidth, app.config.rowHeight],
+                fillColor: '#e74c3c'  // Red to distinguish from signal selection
+            });
+        }
+        
+        // Draw measure row label
+        const nameColor = (app.selectedMeasureRows && app.selectedMeasureRows.has(rowIndex)) ? 'white' : '#666';
+        const label = measureCount > 1 ? `Measures (${measureCount})` : 'Measure';
+        const nameText = new paper.PointText({
+            point: [app.config.nameColumnWidth - 10, yPos + app.config.rowHeight / 2 + 5],
+            content: label,
+            fillColor: nameColor,
+            fontFamily: 'Arial',
+            fontSize: 12,
+            fontStyle: 'italic',
+            justification: 'right'
         });
     }
     
