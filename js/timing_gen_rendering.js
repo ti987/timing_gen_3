@@ -902,19 +902,7 @@ class TimingGenRendering {
     }
     
     static getSignalYPosition(app, signalIndex) {
-        // Calculate Y position accounting for measure rows
-        // Count how many measure rows are above this signal
-        let measureRowsAbove = 0;
-        if (app.measureRows) {
-            // A measure row at gap index N is between signal N and N+1
-            // So it's above signal N+1, N+2, etc.
-            // Gap index -1 is above signal 0, so affects all signals
-            for (const gapIndex of app.measureRows) {
-                if (gapIndex < signalIndex) {
-                    measureRowsAbove++;
-                }
-            }
-        }
-        return app.config.headerHeight + (signalIndex + measureRowsAbove) * app.config.rowHeight;
+        // Calculate Y position for a signal row (no more measure rows)
+        return app.config.headerHeight + signalIndex * app.config.rowHeight;
     }
 }
