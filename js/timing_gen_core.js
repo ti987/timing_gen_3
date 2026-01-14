@@ -412,9 +412,8 @@ class TimingGenApp {
                 const transition = this.findNearestTransition(xPos, yPos);
                 
                 if (transition) {
-                    // Convert signal index to row index
-                    const signalRow = this.rowManager.signalIndexToRowIndex(transition.signalIndex);
-                    this.currentMeasure.signal1Row = signalRow;
+                    const signal = this.signals[transition.signalIndex];
+                    this.currentMeasure.signal1Name = signal.name;
                     this.currentMeasure.cycle1 = transition.cycle;
                     this.measureState = 'second-point';
                     this.hideInstruction();
@@ -429,33 +428,21 @@ class TimingGenApp {
                 }
                 return;
             } else if (this.measureState === 'second-point') {
-                // Second click: select second point at nearest transition
+                // Second click: select second point at nearest transition and finalize
                 const transition = this.findNearestTransition(xPos, yPos);
                 
                 if (transition) {
-                    // Convert signal index to row index
-                    const signalRow = this.rowManager.signalIndexToRowIndex(transition.signalIndex);
-                    this.currentMeasure.signal2Row = signalRow;
+                    const signal = this.signals[transition.signalIndex];
+                    this.currentMeasure.signal2Name = signal.name;
                     this.currentMeasure.cycle2 = transition.cycle;
-                    this.measureState = 'placing-row';
-                    this.hideInstruction();
-                    this.showInstruction("Pick a row for the measure");
                     
-                    // Draw second point visuals immediately (both lines + arrow)
-                    this.drawSecondPointVisuals();
+                    // Finalize measure immediately without requiring row selection
+                    this.finalizeMeasure();
                 } else {
                     // Unexpected - signals were removed during measure creation
                     alert('Signals were removed. Cancelling measure creation.');
                     this.cancelMeasure();
                 }
-                return;
-            } else if (this.measureState === 'placing-row') {
-                // Third click: finalize row and create measure with blank row insertion
-                const rowIndex = this.getRowIndexAtY(yPos);
-                this.currentMeasure.measureRow = rowIndex;
-                
-                // Finalize measure with actual blank row insertion
-                this.finalizeMeasureWithBlankRow();
                 return;
             }
         }
@@ -1499,54 +1486,73 @@ class TimingGenApp {
     }
     
     getMeasureCoordinates(measure) {
-        // Convert measure data (signal row indices + cycles) to screen coordinates
+        // Convert measure data (signal names + cycles) to screen coordinates
         // This allows measures to stay aligned with signals even when rows change
         
-        // Convert row indices back to signal indices for transition calculation
-        const signal1Index = this.rowManager.rowIndexToSignalIndex(measure.signal1Row);
-        const signal2Index = this.rowManager.rowIndexToSignalIndex(measure.signal2Row);
-        
-        // Validate signal indices
-        if (signal1Index < 0 || signal2Index < 0) {
-            console.error('Invalid signal row indices in measure:', measure);
-            // Return default coordinates
-            return {
-                x1: this.config.nameColumnWidth,
-                y1: this.config.headerHeight,
-                x2: this.config.nameColumnWidth,
-                y2: this.config.headerHeight
-            };
-        }
+        // Find signal indices by name
+        const signal1Index = this.signals.findIndex(s => s.name === measure.signal1Name);
+        const signal2Index = this.signals.findIndex(s => s.name === measure.signal2Name);
         
         // Calculate X positions accounting for signal transitions, delay, and slew
         const x1 = this.getTransitionMidpointX(signal1Index, measure.cycle1);
         const x2 = this.getTransitionMidpointX(signal2Index, measure.cycle2);
         
-        // Get Y positions directly from row indices
-        const y1 = this.rowManager.getRowYPosition(measure.signal1Row) + this.config.rowHeight / 2;
-        const y2 = this.rowManager.getRowYPosition(measure.signal2Row) + this.config.rowHeight / 2;
+        // Get Y positions - always use middle of signal row
+        const y1 = this.getSignalYAtCycle(signal1Index, measure.cycle1);
+        const y2 = this.getSignalYAtCycle(signal2Index, measure.cycle2);
         
-        return { x1, y1, x2, y2 };
+        return { x1, y1, x2, y2, signal1Index, signal2Index };
+    }
+    
+    getSignalYAtCycle(signalIndex, cycle) {
+        // Get the Y coordinate for a signal at a specific cycle
+        // Always returns the middle of the signal row
+        
+        if (signalIndex < 0 || signalIndex >= this.signals.length) {
+            // Fallback to middle of row
+            const baseY = TimingGenRendering.getSignalYPosition(this, 0);
+            return baseY + this.config.rowHeight / 2;
+        }
+        
+        const baseY = TimingGenRendering.getSignalYPosition(this, signalIndex);
+        
+        // Always return the middle of the signal row
+        return baseY + this.config.rowHeight / 2;
     }
     
     getTransitionMidpointX(signalIndex, cycle) {
         // Calculate the X coordinate for the middle of a transition at the given cycle
         // Accounts for delay and slew
+        // For clock signals, negative cycle numbers represent falling edges
         
         if (signalIndex < 0 || signalIndex >= this.signals.length) {
             // Invalid signal, fall back to cycle boundary
-            return this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+            const absCycle = Math.abs(cycle);
+            return this.config.nameColumnWidth + absCycle * this.config.cycleWidth;
         }
         
         const signal = this.signals[signalIndex];
         
         // Safety check: if signal is undefined, fall back to cycle boundary
         if (!signal) {
-            return this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+            const absCycle = Math.abs(cycle);
+            return this.config.nameColumnWidth + absCycle * this.config.cycleWidth;
+        }
+        
+        // Handle clock falling edges (negative cycle numbers)
+        if (signal.type === 'clock' && cycle < 0) {
+            const absCycle = Math.abs(cycle + 1); // Convert -1 to 0, -2 to 1, etc.
+            // Falling edge is at mid-cycle
+            return this.config.nameColumnWidth + absCycle * this.config.cycleWidth + this.config.cycleWidth / 2;
         }
         
         // Base X position at grid line
         const baseX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+        
+        // For clock rising edges, return exact cycle boundary
+        if (signal.type === 'clock') {
+            return baseX;
+        }
         
         // Get delay info for this cycle
         const delayInfo = this.getEffectiveDelay(signal, cycle);
@@ -1554,15 +1560,7 @@ class TimingGenApp {
         // Get slew for this cycle
         const slew = this.getEffectiveSlew(signal, cycle);
         
-        // Handle clock signals - they have transitions at every cycle
-        if (signal.type === 'clock') {
-            // Clock has rising edge at cycle boundary and falling edge at mid-cycle
-            // For measures, we typically want the rising edge (cycle boundary)
-            // Midpoint of rising edge is at: baseX + delayMin + slew/2
-            return baseX + delayInfo.min + slew / 2;
-        }
-        
-        // Check if there's actually a transition at this cycle for bit signals
+        // Check if there's actually a transition at this cycle
         if (cycle > 0 && signal.type === 'bit') {
             const currentValue = this.getBitValueAtCycle(signal, cycle);
             const prevValue = this.getBitValueAtCycle(signal, cycle - 1);
@@ -1572,9 +1570,21 @@ class TimingGenApp {
                 // Midpoint is at: baseX + delayMin + slew/2
                 return baseX + delayInfo.min + slew / 2;
             }
+        } else if (cycle > 0 && signal.type === 'bus') {
+            // For bus signals, check if there's a value change
+            const currentValue = this.getBusValueAtCycle(signal, cycle);
+            const prevValue = this.getBusValueAtCycle(signal, cycle - 1);
+            
+            if (currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X') {
+                // There's a transition - midpoint is at baseX + delayMin + slew/2
+                return baseX + delayInfo.min + slew / 2;
+            }
         }
         
-        // No transition or bus signal - use baseX + delayMin
+        // No transition or first cycle - use baseX + delayMin for most signals
+        if (signal.type === 'bus') {
+            return baseX + delayInfo.min + slew / 2;
+        }
         return baseX + delayInfo.min;
     }
     
@@ -1636,6 +1646,47 @@ class TimingGenApp {
             return { signalIndex, cycle: nearestCycle };
         }
         
+        // For clock signals, find the nearest clock edge (both rising and falling)
+        if (signal.type === 'clock') {
+            let nearestCycle = clickedCycle;
+            let nearestEdge = 'rising'; // 'rising' or 'falling'
+            let minDistance = Infinity;
+            
+            // Clock has two edges per cycle: rising and falling
+            // Rising edge is at cycle boundary, falling edge is at mid-cycle
+            for (let cycle = Math.max(0, clickedCycle - 1); cycle <= Math.min(this.config.cycles, clickedCycle + 1); cycle++) {
+                // Rising edge (at cycle boundary)
+                const risingEdgeX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+                const risingDistance = Math.abs(risingEdgeX - xPos);
+                
+                if (risingDistance < minDistance) {
+                    minDistance = risingDistance;
+                    nearestCycle = cycle;
+                    nearestEdge = 'rising';
+                }
+                
+                // Falling edge (at mid-cycle)
+                if (cycle < this.config.cycles) {
+                    const fallingEdgeX = this.config.nameColumnWidth + cycle * this.config.cycleWidth + this.config.cycleWidth / 2;
+                    const fallingDistance = Math.abs(fallingEdgeX - xPos);
+                    
+                    if (fallingDistance < minDistance) {
+                        minDistance = fallingDistance;
+                        nearestCycle = cycle;
+                        nearestEdge = 'falling';
+                    }
+                }
+            }
+            
+            // Store edge type in the cycle value
+            // Use negative cycle numbers for falling edges: -1 means cycle 0 falling, -2 means cycle 1 falling, etc.
+            if (nearestEdge === 'falling') {
+                nearestCycle = -(nearestCycle + 1);
+            }
+            
+            return { signalIndex, cycle: nearestCycle };
+        }
+        
         // For bus signals, just return the clicked cycle
         return { signalIndex, cycle: clickedCycle };
     }
@@ -1672,12 +1723,32 @@ class TimingGenApp {
         this.measureLayer.activate();
         this.tempMeasureGraphics = [];
         
-        if (this.measureState === 'second-point' && this.currentMeasure.signal1Row !== null) {
+        // Show snap-to indicator during first and second point selection
+        if (this.measureState === 'first-point' || this.measureState === 'second-point') {
+            // Find snap-to point
+            const snapPoint = this.findNearestTransition(xPos, yPos);
+            if (snapPoint) {
+                const snapX = this.getTransitionMidpointX(snapPoint.signalIndex, snapPoint.cycle);
+                const snapY = this.getSignalYAtCycle(snapPoint.signalIndex, snapPoint.cycle);
+                
+                // Draw snap-to indicator (small circle)
+                const snapIndicator = new paper.Path.Circle({
+                    center: [snapX, snapY],
+                    radius: 8,
+                    strokeColor: '#FF0000',
+                    strokeWidth: 2,
+                    fillColor: new paper.Color(1, 0, 0, 0.2) // Semi-transparent red
+                });
+                this.tempMeasureGraphics.push(snapIndicator);
+            }
+        }
+        
+        if (this.measureState === 'second-point' && this.currentMeasure.signal1Name !== null) {
             // After first click: show first line + cross, and dynamic line to mouse
             const coords = this.getMeasureCoordinates({
-                signal1Row: this.currentMeasure.signal1Row,
+                signal1Name: this.currentMeasure.signal1Name,
                 cycle1: this.currentMeasure.cycle1,
-                signal2Row: this.currentMeasure.signal1Row,
+                signal2Name: this.currentMeasure.signal1Name,
                 cycle2: this.currentMeasure.cycle1
             });
             
@@ -1699,49 +1770,7 @@ class TimingGenApp {
                 yPos
             );
             this.tempMeasureGraphics.push(dynamicLine);
-        } else if (this.measureState === 'placing-row' && this.currentMeasure.signal1Row !== null && this.currentMeasure.signal2Row !== null) {
-            // After second click: show both lines + crosses, and drag arrow to mouse position
-            const coords = this.getMeasureCoordinates(this.currentMeasure);
-            
-            const cross1 = this.drawSmallCross(coords.x1, coords.y1);
-            this.tempMeasureGraphics.push(cross1.hLine, cross1.vLine);
-            
-            // Draw full vertical line at first point
-            const line1 = this.drawFullVerticalLine(
-                coords.x1,
-                coords.y1,
-                coords.y2
-            );
-            this.tempMeasureGraphics.push(line1);
-            
-            // Draw small cross at second point
-            const cross2 = this.drawSmallCross(coords.x2, coords.y2);
-            this.tempMeasureGraphics.push(cross2.hLine, cross2.vLine);
-            
-            // Draw full vertical line at second point
-            const line2 = this.drawFullVerticalLine(
-                coords.x2,
-                coords.y1,
-                coords.y2
-            );
-            this.tempMeasureGraphics.push(line2);
-            
-            // Determine row from mouse position and draw arrow at that position
-            const rowIndex = this.getRowIndexAtY(yPos);
-            const arrowY = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
-            
-            // Draw the double-headed arrow at the current mouse row
-            const arrows = this.drawMeasureArrows(
-                coords.x1,
-                coords.x2,
-                arrowY
-            );
-            this.tempMeasureGraphics.push(...arrows);
-            
-            // Draw dashed row indicator
-            this.drawRowIndicator(rowIndex);
         }
-        
         
         paper.view.draw();
     }
@@ -1983,9 +2012,9 @@ class TimingGenApp {
         
         // Get coordinates for first point
         const coords = this.getMeasureCoordinates({
-            signal1Row: this.currentMeasure.signal1Row,
+            signal1Name: this.currentMeasure.signal1Name,
             cycle1: this.currentMeasure.cycle1,
-            signal2Row: this.currentMeasure.signal1Row,
+            signal2Name: this.currentMeasure.signal1Name,
             cycle2: this.currentMeasure.cycle1
         });
         
@@ -2176,21 +2205,18 @@ class TimingGenApp {
     }
     
     finalizeMeasure() {
-        const text = document.getElementById('measure-text-input').value.trim();
-        if (!text) {
-            alert('Please enter a label for the measure');
-            return;
-        }
+        // Finalize measure without text input (text can be edited separately)
+        this.currentMeasure.text = ''; // No text by default
         
-        this.currentMeasure.text = text;
+        // Add measure to list
         this.measures.push(this.currentMeasure);
         
-        document.getElementById('measure-text-dialog').style.display = 'none';
+        // Clean up
         this.hideInstruction();
         this.measureMode = false;
         this.measureState = null;
         this.currentMeasure = null;
-        this.canvas.style.cursor = 'crosshair';
+        this.canvas.style.cursor = 'default';
         
         if (this.tempMeasureGraphics) {
             if (Array.isArray(this.tempMeasureGraphics)) {
