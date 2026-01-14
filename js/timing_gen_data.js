@@ -86,16 +86,8 @@ class TimingGenData {
                 
                 if (data.measures) {
                     app.measures = data.measures;
-                    // Reconstruct measureRows Set from measures
-                    app.measureRows = new Set();
-                    data.measures.forEach(measure => {
-                        if (measure.measureRow !== undefined) {
-                            app.measureRows.add(measure.measureRow);
-                        }
-                    });
                 } else {
                     app.measures = [];
-                    app.measureRows = new Set();
                 }
                 
                 app.initializeCanvas();

@@ -41,32 +41,9 @@ class TimingGenRendering {
     }
     
     static drawGrid(app) {
-        // Calculate total rows including measure rows
-        const measureRowCount = app.measureRows ? app.measureRows.size : 0;
-        const totalRows = app.signals.length + measureRowCount;
+        // Calculate total rows based on signals only (no more measure rows)
+        const totalRows = app.signals.length;
         const maxHeight = app.config.headerHeight + totalRows * app.config.rowHeight;
-        
-        // Draw background for measure rows with a different color
-        if (app.measureRows && app.measureRows.size > 0) {
-            const sortedGapIndices = Array.from(app.measureRows).sort((a, b) => a - b);
-            
-            for (let i = 0; i < sortedGapIndices.length; i++) {
-                const gapIndex = sortedGapIndices[i];
-                // Calculate visual Y position for this measure row
-                // measureRowsBefore is simply the index in the sorted array
-                const measureRowsBefore = i;
-                // The visual position is: header + (gapIndex + 1 + measureRowsBefore) * rowHeight
-                const yPos = app.config.headerHeight + (gapIndex + 1 + measureRowsBefore) * app.config.rowHeight;
-                
-                // Draw a light gray background for the measure row
-                const background = new paper.Path.Rectangle({
-                    point: [0, yPos],
-                    size: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, app.config.rowHeight],
-                    fillColor: app.config.measureRowColor || '#f5f5f5',
-                    strokeColor: null
-                });
-            }
-        }
         
         // Vertical lines (cycle dividers) - draw to max height based on signals
         for (let idx = 0; idx <= app.config.cycles; idx++) {
@@ -702,30 +679,29 @@ class TimingGenRendering {
     }
     
     static drawMeasure(app, measure, index) {
-        // Get coordinates from measure data (signal indices + cycles)
+        // Get coordinates from measure data (signal names + cycles)
         const coords = app.getMeasureCoordinates(measure);
+        
+        // If signal not found, skip drawing
+        if (coords.signal1Index === -1 || coords.signal2Index === -1) {
+            return;
+        }
         
         const rowHeight = app.config.rowHeight;
         const headerHeight = app.config.headerHeight;
         
         // Calculate row boundaries based on signal positions
-        const row1Pos = TimingGenRendering.getSignalYPosition(app, measure.signal1Index);
-        const row2Pos = TimingGenRendering.getSignalYPosition(app, measure.signal2Index);
+        const row1Pos = TimingGenRendering.getSignalYPosition(app, coords.signal1Index);
+        const row2Pos = TimingGenRendering.getSignalYPosition(app, coords.signal2Index);
         
-        // Calculate arrow Y position based on measureRow (gap index)
-        let visualGapIndex = measure.measureRow;
-        if (app.measureRows) {
-            // Count measure rows before this gap to get the visual position
-            const measureRowsBefore = Array.from(app.measureRows).filter(gi => gi < measure.measureRow).length;
-            visualGapIndex = measure.measureRow + measureRowsBefore;
-        }
-        // Arrow is drawn at 1/3 from top of measure row (2/3 of row height)
-        const arrowY = headerHeight + (visualGapIndex + 1) * rowHeight + rowHeight / 3;
-        const measureRowY = headerHeight + (visualGapIndex + 1) * rowHeight;
+        // Calculate arrow Y position - place it between the two signals or below the lower signal
+        const minRow = Math.min(coords.signal1Index, coords.signal2Index);
+        const maxRow = Math.max(coords.signal1Index, coords.signal2Index);
+        const arrowY = headerHeight + (maxRow + 1) * rowHeight + rowHeight / 3;
         
-        // Determine the extent of vertical lines - from minimum Y among signal1, signal2, and measure row
-        const minY = Math.min(row1Pos, row2Pos, measureRowY);
-        const maxY = Math.max(row1Pos, row2Pos, measureRowY) + rowHeight;
+        // Determine the extent of vertical lines - from top signal to arrow position
+        const minY = Math.min(row1Pos, row2Pos);
+        const maxY = arrowY + rowHeight / 3;
         
         // Draw first vertical line
         const line1 = new paper.Path.Line({
@@ -794,23 +770,16 @@ class TimingGenRendering {
             TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'right', arrowSize);
         }
         
-        // Draw measure label in name column for all measures in this row
-        // Get all measures in the same row
-        const measuresInRow = app.measures.filter(m => m.measureRow === measure.measureRow);
-        const measureIndexInRow = measuresInRow.findIndex(m => m === measure);
-        
-        // Create label text - show index if multiple measures in row, or text if available
+        // Draw measure label in name column
+        // Create label text - show text if available, otherwise show index
         let labelContent = measure.text || `M${index + 1}`;
-        if (measuresInRow.length > 1) {
-            labelContent = `M${index + 1}`;
-        }
         
-        // Draw label background in name column
-        const labelY = measureRowY;
-        const labelX = 10 + (measureIndexInRow * 40); // Offset multiple labels horizontally
+        // Draw label background in name column at the arrow Y position
+        const labelX = 10 + (index * 40) % (app.config.nameColumnWidth - 50); // Offset labels horizontally, wrap if needed
+        const labelY = arrowY - rowHeight / 3;
         
         const labelBg = new paper.Path.Rectangle({
-            point: [labelX - 5, labelY + 5],
+            point: [labelX - 5, labelY - 10],
             size: [35, 20],
             fillColor: '#FFE6E6',
             strokeColor: '#FF0000',
@@ -821,8 +790,8 @@ class TimingGenRendering {
         labelBg.data = { measureIndex: index, type: 'measureLabel' };
         labelBg.onMouseDown = function(event) {
             if (event.event.button === 0) {
-                // Left click - start dragging measure
-                app.startDragMeasure(this.data.measureIndex, event);
+                // Left click - start dragging measure (if implemented)
+                // app.startDragMeasure(this.data.measureIndex, event);
             } else if (event.event.button === 2) {
                 // Right click - context menu
                 app.currentEditingMeasure = this.data.measureIndex;
@@ -830,7 +799,7 @@ class TimingGenRendering {
         };
         
         const labelText = new paper.PointText({
-            point: [labelX, labelY + 20],
+            point: [labelX, labelY + 5],
             content: labelContent,
             fillColor: '#FF0000',
             fontFamily: 'Arial',
@@ -842,8 +811,8 @@ class TimingGenRendering {
         labelText.data = { measureIndex: index, type: 'measureLabel' };
         labelText.onMouseDown = function(event) {
             if (event.event.button === 0) {
-                // Left click - start dragging measure
-                app.startDragMeasure(this.data.measureIndex, event);
+                // Left click - start dragging measure (disabled since no dedicated rows)
+                // app.startDragMeasure(this.data.measureIndex, event);
             } else if (event.event.button === 2) {
                 // Right click - context menu
                 app.currentEditingMeasure = this.data.measureIndex;
