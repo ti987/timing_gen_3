@@ -47,6 +47,17 @@ class TimingGenRendering {
                     });
                 }
             });
+            
+            // Also draw measures from the measures array (for signal-name based measures)
+            if (app.measures && app.measures.length > 0) {
+                app.measureLayer.activate();
+                app.measures.forEach((measure, index) => {
+                    // Only draw if measure has signal names (new format)
+                    if (measure.signal1Name && measure.signal2Name) {
+                        TimingGenRendering.drawMeasure(app, measure, index);
+                    }
+                });
+            }
         } else {
             // Fallback to old system (signals + measures arrays)
             app.signalLayer.activate();
