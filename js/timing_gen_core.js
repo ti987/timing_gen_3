@@ -971,35 +971,78 @@ class TimingGenApp {
     }
     
     updateDragIndicator(yPos) {
-        const targetIndex = this.getSignalIndexAtY(yPos);
+        // For unified row system, use row-based indicator
+        if (this.rowManager && this.rowManager.isUsingNewSystem()) {
+            const rowIndex = this.rowManager.getRowIndexAtY(yPos);
+            const totalRows = this.rowManager.getTotalRows();
+            
+            // Allow dropping at any position from 0 to totalRows
+            if (rowIndex >= 0 && rowIndex <= totalRows) {
+                let indicatorY;
+                
+                if (rowIndex >= totalRows) {
+                    // Drop at the end
+                    indicatorY = this.config.headerHeight + totalRows * this.config.rowHeight;
+                } else {
+                    // Determine if we should show indicator above or below the target row
+                    const targetYStart = this.config.headerHeight + rowIndex * this.config.rowHeight;
+                    const targetYMid = targetYStart + this.config.rowHeight / 2;
+                    
+                    if (yPos < targetYMid) {
+                        // Drop above target
+                        indicatorY = targetYStart;
+                    } else {
+                        // Drop below target
+                        indicatorY = targetYStart + this.config.rowHeight;
+                    }
+                }
+                
+                if (!this.dragIndicator) {
+                    this.dragIndicator = document.createElement('div');
+                    this.dragIndicator.className = 'drag-indicator';
+                    document.getElementById('drawing-area').appendChild(this.dragIndicator);
+                }
+                
+                this.dragIndicator.style.top = indicatorY + 'px';
+                this.dragIndicator.style.display = 'block';
+                return;
+            }
+        } else {
+            // Old system - use signal-based indicator
+            const targetIndex = this.getSignalIndexAtY(yPos);
+            
+            // Check if target is valid and not one of the selected signals being dragged
+            if (targetIndex !== -1 && !this.selectedSignals.has(targetIndex)) {
+                // Calculate valid drop positions (between signals or at edges)
+                // The indicator shows where the selected signals will be inserted
+                let indicatorY;
+                
+                // Determine if we should show indicator above or below the target
+                const targetYStart = this.config.headerHeight + targetIndex * this.config.rowHeight;
+                const targetYMid = targetYStart + this.config.rowHeight / 2;
+                
+                if (yPos < targetYMid) {
+                    // Drop above target
+                    indicatorY = targetYStart;
+                } else {
+                    // Drop below target
+                    indicatorY = targetYStart + this.config.rowHeight;
+                }
+                
+                if (!this.dragIndicator) {
+                    this.dragIndicator = document.createElement('div');
+                    this.dragIndicator.className = 'drag-indicator';
+                    document.getElementById('drawing-area').appendChild(this.dragIndicator);
+                }
+                
+                this.dragIndicator.style.top = indicatorY + 'px';
+                this.dragIndicator.style.display = 'block';
+                return;
+            }
+        }
         
-        // Check if target is valid and not one of the selected signals being dragged
-        if (targetIndex !== -1 && !this.selectedSignals.has(targetIndex)) {
-            // Calculate valid drop positions (between signals or at edges)
-            // The indicator shows where the selected signals will be inserted
-            let indicatorY;
-            
-            // Determine if we should show indicator above or below the target
-            const targetYStart = this.config.headerHeight + targetIndex * this.config.rowHeight;
-            const targetYMid = targetYStart + this.config.rowHeight / 2;
-            
-            if (yPos < targetYMid) {
-                // Drop above target
-                indicatorY = targetYStart;
-            } else {
-                // Drop below target
-                indicatorY = targetYStart + this.config.rowHeight;
-            }
-            
-            if (!this.dragIndicator) {
-                this.dragIndicator = document.createElement('div');
-                this.dragIndicator.className = 'drag-indicator';
-                document.getElementById('drawing-area').appendChild(this.dragIndicator);
-            }
-            
-            this.dragIndicator.style.top = indicatorY + 'px';
-            this.dragIndicator.style.display = 'block';
-        } else if (this.dragIndicator) {
+        // Hide indicator if invalid position
+        if (this.dragIndicator) {
             this.dragIndicator.style.display = 'none';
         }
     }
@@ -1012,6 +1055,83 @@ class TimingGenApp {
     }
     
     dropSignal(yPos) {
+        // For unified row system, use row-based drop logic
+        if (this.rowManager && this.rowManager.isUsingNewSystem()) {
+            const targetRowIndex = this.rowManager.getRowIndexAtY(yPos);
+            const totalRows = this.rowManager.getTotalRows();
+            
+            if (targetRowIndex < 0) {
+                return; // Invalid drop location (above header)
+            }
+            
+            // Get all selected signals (sorted by their current index)
+            const selectedIndices = Array.from(this.selectedSignals).sort((a, b) => a - b);
+            
+            if (selectedIndices.length === 0) {
+                return;
+            }
+            
+            // Determine insertion row index
+            let insertRowIndex = targetRowIndex;
+            if (targetRowIndex < totalRows) {
+                const targetYStart = this.config.headerHeight + targetRowIndex * this.config.rowHeight;
+                const targetYMid = targetYStart + this.config.rowHeight / 2;
+                if (yPos >= targetYMid) {
+                    insertRowIndex++; // Insert below
+                }
+            } else {
+                insertRowIndex = totalRows; // Insert at end
+            }
+            
+            // Get the row indices of selected signals
+            const selectedSignalRows = selectedIndices.map(idx => 
+                this.rowManager.signalIndexToRowIndex(idx)
+            );
+            
+            // Extract selected signals data
+            const selectedSignalsData = selectedIndices.map(idx => this.signals[idx]);
+            
+            // Remove selected signals from both signals array and rows array
+            for (let i = selectedIndices.length - 1; i >= 0; i--) {
+                this.signals.splice(selectedIndices[i], 1);
+                this.rows.splice(selectedSignalRows[i], 1);
+                
+                // Adjust insert position if we removed rows before it
+                if (selectedSignalRows[i] < insertRowIndex) {
+                    insertRowIndex--;
+                }
+            }
+            
+            // Insert signals back at new position
+            for (let i = 0; i < selectedSignalsData.length; i++) {
+                this.signals.splice(insertRowIndex + i, 0, selectedSignalsData[i]);
+                this.rows.splice(insertRowIndex + i, 0, {
+                    type: 'signal',
+                    data: selectedSignalsData[i]
+                });
+            }
+            
+            // Update measure references after the move
+            this.rebuildAfterSignalRowMove();
+            
+            // Update selection to reflect new signal indices
+            this.selectedSignals.clear();
+            // Find new signal indices after the move
+            let signalCount = 0;
+            for (let i = 0; i < this.rows.length; i++) {
+                if (this.rows[i].type === 'signal') {
+                    if (i >= insertRowIndex && i < insertRowIndex + selectedSignalsData.length) {
+                        this.selectedSignals.add(signalCount);
+                    }
+                    signalCount++;
+                }
+            }
+            
+            this.render();
+            return;
+        }
+        
+        // Old system - use signal-based drop logic
         const targetIndex = this.getSignalIndexAtY(yPos);
         
         if (targetIndex === -1 || this.selectedSignals.has(targetIndex)) {
@@ -1045,12 +1165,6 @@ class TimingGenApp {
         // Insert all selected signals at the new position
         this.signals.splice(insertIndex, 0, ...selectedSignalsData);
         
-        // Update unified row system
-        if (this.rowManager && this.rowManager.isUsingNewSystem()) {
-            // Rebuild rows array from signals and measures
-            this.rebuildRowsAfterSignalMove(selectedIndices, insertIndex);
-        }
-        
         // Update selection indices to reflect new positions
         this.selectedSignals.clear();
         for (let i = 0; i < selectedSignalsData.length; i++) {
@@ -1058,6 +1172,60 @@ class TimingGenApp {
         }
         
         this.render();
+    }
+    
+    rebuildAfterSignalRowMove() {
+        // After moving signals in the unified row system, update all measure references
+        // Build a map of signal data objects to their new row indices
+        const signalDataToRow = new Map();
+        const signalDataToIndex = new Map();
+        let signalIdx = 0;
+        
+        this.rows.forEach((row, rowIndex) => {
+            if (row.type === 'signal') {
+                signalDataToRow.set(row.data, rowIndex);
+                signalDataToIndex.set(row.data, signalIdx);
+                signalIdx++;
+            }
+        });
+        
+        // Update all measures to reference the correct row indices
+        this.rows.forEach(row => {
+            if (row.type === 'measure' && Array.isArray(row.data)) {
+                row.data.forEach(measure => {
+                    // Find signal by name and update row reference
+                    if (measure.signal1Name) {
+                        const signal1 = this.signals.find(s => s.name === measure.signal1Name);
+                        if (signal1 && signalDataToRow.has(signal1)) {
+                            measure.signal1Row = signalDataToRow.get(signal1);
+                        }
+                    }
+                    if (measure.signal2Name) {
+                        const signal2 = this.signals.find(s => s.name === measure.signal2Name);
+                        if (signal2 && signalDataToRow.has(signal2)) {
+                            measure.signal2Row = signalDataToRow.get(signal2);
+                        }
+                    }
+                });
+            }
+        });
+        
+        // Rebuild measure row indices
+        this.rows.forEach((row, rowIndex) => {
+            if (row.type === 'measure') {
+                row.data.forEach(measure => {
+                    measure.measureRow = rowIndex;
+                });
+            }
+        });
+        
+        // Rebuild legacy measures array
+        this.measures = [];
+        this.rows.forEach(row => {
+            if (row.type === 'measure' && Array.isArray(row.data)) {
+                this.measures.push(...row.data);
+            }
+        });
     }
     
     rebuildRowsAfterSignalMove(movedIndices, insertIndex) {
