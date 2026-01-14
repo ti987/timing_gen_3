@@ -1864,24 +1864,6 @@ class TimingGenApp {
         
         this.render();
     }
-        this.canvas.style.cursor = 'crosshair';
-        
-        if (this.tempMeasureGraphics) {
-            if (Array.isArray(this.tempMeasureGraphics)) {
-                this.tempMeasureGraphics.forEach(item => {
-                    if (item && item.remove) item.remove();
-                });
-            } else if (this.tempMeasureGraphics.remove) {
-                this.tempMeasureGraphics.remove();
-            }
-            this.tempMeasureGraphics = null;
-        }
-        
-        // Restore original onMouseMove
-        this.tool.onMouseMove = this.originalOnMouseMove;
-        
-        this.render();
-    }
     
     cancelMeasure() {
         document.getElementById('measure-text-dialog').style.display = 'none';
