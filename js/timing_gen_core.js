@@ -1,5 +1,5 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Version 3.0.3
+// Version 3.1.0
 // Main JavaScript Application using Paper.js
 //
 // Key Features:
@@ -10,6 +10,7 @@
 // - JSON save/load with version control
 // - SVG export for documentation
 // - Configurable cycles and timing parameters
+// - Unified row system for signals and measures
 
 class TimingGenApp {
     constructor() {
@@ -33,14 +34,20 @@ class TimingGenApp {
             delayColor: '#0000FF', // color for delay uncertainty region (default: blue)
             gridColor: '#e0e0e0',
             signalColor: '#000000',
-            backgroundColor: '#ffffff',
-            measureRowColor: '#f5f5f5' // light gray background for measure rows
+            backgroundColor: '#ffffff'
         };
         
-        // Data model
+        // Data model (unified row system)
+        this.rows = []; // Array of row objects: {type: 'signal'|'measure', data: ...}
+        
+        // Legacy data model (for backward compatibility during migration)
         this.signals = [];
         this.measures = []; // Array of measure objects
-        this.measureRows = new Set(); // Set of gap indices that have dedicated measure rows
+        this.blankRows = []; // Array of blank row indices for measures
+        
+        // Row manager for unified row system
+        this.rowManager = new RowManager(this);
+        
         this.currentEditingSignal = null;
         this.currentEditingCycle = null;
         
@@ -57,10 +64,12 @@ class TimingGenApp {
         
         // Drag and drop state
         this.draggedSignal = null;
+        this.draggedMeasureRow = null;
         this.dragIndicator = null;
         
         // Selection state
         this.selectedSignals = new Set(); // Set of signal indices
+        this.selectedMeasureRows = new Set(); // Set of measure row indices
         this.isDragging = false;
         
         // Paper.js layers
@@ -230,10 +239,6 @@ class TimingGenApp {
             if (ev.key === 'Escape') {
                 TimingGenUI.hideAllDialogs(this);
                 this.hideAllMenus();
-                // Cancel measure mode if active
-                if (this.measureMode) {
-                    this.cancelMeasure();
-                }
                 // Cancel selection and dragging
                 this.cancelSelection();
             }
@@ -281,7 +286,26 @@ class TimingGenApp {
             signal.values[0] = 'X';
         }
         
+        // Add to legacy signals array for backward compatibility
         this.signals.push(signal);
+        
+        // Add to unified row system
+        if (this.rowManager && this.rowManager.isUsingNewSystem()) {
+            this.rowManager.insertRow(this.rows.length, {
+                type: 'signal',
+                data: signal
+            });
+        } else {
+            // Initialize rows array if not present
+            if (!this.rows) {
+                this.rows = [];
+            }
+            this.rows.push({
+                type: 'signal',
+                data: signal
+            });
+        }
+        
         TimingGenUI.hideAddSignalDialog();
         this.render();
     }
@@ -329,7 +353,17 @@ class TimingGenApp {
         this.hideAllMenus();
         if (this.currentEditingSignal !== null) {
             if (confirm(`Delete signal "${this.signals[this.currentEditingSignal].name}"?`)) {
+                // Delete from legacy signals array
                 this.signals.splice(this.currentEditingSignal, 1);
+                
+                // Delete from unified row system
+                if (this.rowManager && this.rowManager.isUsingNewSystem()) {
+                    const rowIndex = this.rowManager.signalIndexToRowIndex(this.currentEditingSignal);
+                    if (rowIndex >= 0) {
+                        this.rowManager.deleteRow(rowIndex);
+                    }
+                }
+                
                 this.currentEditingSignal = null;
                 this.render();
             }
@@ -378,7 +412,9 @@ class TimingGenApp {
                 const transition = this.findNearestTransition(xPos, yPos);
                 
                 if (transition) {
-                    this.currentMeasure.signal1Index = transition.signalIndex;
+                    // Convert signal index to row index
+                    const signalRow = this.rowManager.signalIndexToRowIndex(transition.signalIndex);
+                    this.currentMeasure.signal1Row = signalRow;
                     this.currentMeasure.cycle1 = transition.cycle;
                     this.measureState = 'second-point';
                     this.hideInstruction();
@@ -397,7 +433,9 @@ class TimingGenApp {
                 const transition = this.findNearestTransition(xPos, yPos);
                 
                 if (transition) {
-                    this.currentMeasure.signal2Index = transition.signalIndex;
+                    // Convert signal index to row index
+                    const signalRow = this.rowManager.signalIndexToRowIndex(transition.signalIndex);
+                    this.currentMeasure.signal2Row = signalRow;
                     this.currentMeasure.cycle2 = transition.cycle;
                     this.measureState = 'placing-row';
                     this.hideInstruction();
@@ -413,8 +451,8 @@ class TimingGenApp {
                 return;
             } else if (this.measureState === 'placing-row') {
                 // Third click: finalize row and create measure with blank row insertion
-                const gapIndex = this.getGapIndexAtY(yPos);
-                this.currentMeasure.measureRow = gapIndex;
+                const rowIndex = this.getRowIndexAtY(yPos);
+                this.currentMeasure.measureRow = rowIndex;
                 
                 // Finalize measure with actual blank row insertion
                 this.finalizeMeasureWithBlankRow();
@@ -424,31 +462,48 @@ class TimingGenApp {
         
         // Check if click is in signal name area
         if (xPos < this.config.nameColumnWidth) {
-            const signalIndex = this.getSignalIndexAtY(yPos);
-            if (signalIndex !== -1) {
-                // Handle selection with modifier keys
-                if (nativeEvent.ctrlKey || nativeEvent.metaKey) {
-                    // Ctrl-click: toggle selection
-                    this.toggleSignalSelection(signalIndex);
-                    this.render();
-                } else if (nativeEvent.shiftKey) {
-                    // Shift-click: select range
-                    this.selectSignalRange(signalIndex);
-                    this.render();
-                } else if (nativeEvent.altKey) {
-                    // Alt-click: deselect
-                    this.deselectSignal(signalIndex);
-                    this.render();
-                } else {
-                    // Regular click: select and start drag
-                    if (!this.selectedSignals.has(signalIndex)) {
-                        // If not already selected, make it the only selection
-                        this.selectedSignals.clear();
-                        this.selectedSignals.add(signalIndex);
+            // Try to get row at this Y position
+            const row = this.getRowAtY(yPos);
+            
+            if (row && row.type === 'signal') {
+                // Handle signal selection
+                const signalIndex = this.rowManager.rowIndexToSignalIndex(row.index);
+                if (signalIndex !== -1) {
+                    // Handle selection with modifier keys
+                    if (nativeEvent.ctrlKey || nativeEvent.metaKey) {
+                        // Ctrl-click: toggle selection
+                        this.toggleSignalSelection(signalIndex);
                         this.render();
+                    } else if (nativeEvent.shiftKey) {
+                        // Shift-click: select range
+                        this.selectSignalRange(signalIndex);
+                        this.render();
+                    } else if (nativeEvent.altKey) {
+                        // Alt-click: deselect
+                        this.deselectSignal(signalIndex);
+                        this.render();
+                    } else {
+                        // Regular click: select and start drag
+                        if (!this.selectedSignals.has(signalIndex)) {
+                            // If not already selected, make it the only selection
+                            this.selectedSignals.clear();
+                            this.selectedMeasureRows.clear();
+                            this.selectedSignals.add(signalIndex);
+                            this.render();
+                        }
+                        this.startDragSignal(signalIndex, event);
                     }
-                    this.startDragSignal(signalIndex, event);
                 }
+            } else if (row && row.type === 'measure') {
+                // Handle measure row selection
+                if (!this.selectedMeasureRows.has(row.index)) {
+                    // If not already selected, make it the only selection
+                    this.selectedSignals.clear();
+                    this.selectedMeasureRows.clear();
+                    this.selectedMeasureRows.add(row.index);
+                    this.render();
+                }
+                this.startDragMeasureRow(row.index, event);
             }
             return;
         }
@@ -705,47 +760,58 @@ class TimingGenApp {
     }
     
     getSignalIndexAtY(yPos) {
+        // Use unified row system if available
+        if (this.rowManager && this.rowManager.isUsingNewSystem()) {
+            const rowIndex = this.rowManager.getRowIndexAtY(yPos);
+            if (rowIndex < 0) return -1;
+            
+            // Convert row index to signal index
+            return this.rowManager.rowIndexToSignalIndex(rowIndex);
+        }
+        
+        // Fallback to old system
         const relY = yPos - this.config.headerHeight;
         if (relY < 0) return -1;
         
         const visualRow = Math.floor(relY / this.config.rowHeight);
         
-        // Account for measure rows - we need to map visual row to signal index
-        if (!this.measureRows || this.measureRows.size === 0) {
-            // No measure rows, direct mapping
+        // Account for blank rows - we need to map visual row to signal index
+        if (!this.blankRows || this.blankRows.length === 0) {
+            // No blank rows, direct mapping
             return (visualRow >= 0 && visualRow < this.signals.length) ? visualRow : -1;
         }
         
-        // Count how many measure rows are before this visual row
-        // Measure rows occupy gaps between signals, so we need to check which gaps are filled
-        const sortedMeasureRows = Array.from(this.measureRows).sort((a, b) => a - b);
-        
-        // Map visual row to signal index by accounting for measure rows
-        let signalIndex = 0;
-        let currentVisualRow = 0;
-        
-        // Iterate through signals and measure rows to find which signal this visual row corresponds to
-        for (signalIndex = 0; signalIndex < this.signals.length; signalIndex++) {
-            // Check if there's a measure row before this signal
-            const gapIndex = signalIndex - 1; // Gap before signal at index signalIndex
-            if (sortedMeasureRows.includes(gapIndex)) {
-                // There's a measure row in this gap
-                if (currentVisualRow === visualRow) {
-                    // We're in the measure row, not a signal row
-                    return -1;
-                }
-                currentVisualRow++;
+        // Count how many blank rows are before this visual row
+        let blankRowsBeforeThis = 0;
+        for (const blankRowIndex of this.blankRows) {
+            if (blankRowIndex <= visualRow) {
+                blankRowsBeforeThis++;
+            } else {
+                break;
             }
-            
-            // Now we're at the signal row
-            if (currentVisualRow === visualRow) {
-                return signalIndex;
-            }
-            currentVisualRow++;
         }
         
-        // Check if we're past all signals
-        return -1;
+        // The actual signal index is visual row minus blank rows before it
+        const signalIndex = visualRow - blankRowsBeforeThis;
+        return (signalIndex >= 0 && signalIndex < this.signals.length) ? signalIndex : -1;
+    }
+    
+    getRowAtY(yPos) {
+        // Get row index and type at Y position
+        if (!this.rowManager || !this.rowManager.isUsingNewSystem()) {
+            return null;
+        }
+        
+        const rowIndex = this.rowManager.getRowIndexAtY(yPos);
+        if (rowIndex < 0 || rowIndex >= this.rows.length) {
+            return null;
+        }
+        
+        return {
+            index: rowIndex,
+            type: this.rows[rowIndex].type,
+            data: this.rows[rowIndex].data
+        };
     }
     
     toggleSignalSelection(signalIndex) {
@@ -816,6 +882,90 @@ class TimingGenApp {
         document.addEventListener('mouseup', onMouseUp);
     }
     
+    startDragMeasureRow(rowIndex, event) {
+        this.draggedMeasureRow = rowIndex;
+        this.isDragging = true;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        
+        const onMouseMove = (moveEvent) => {
+            const yPos = moveEvent.clientY - rect.top;
+            this.updateDragIndicator(yPos);
+        };
+        
+        const onMouseUp = (upEvent) => {
+            const yPos = upEvent.clientY - rect.top;
+            this.dropMeasureRow(yPos);
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            this.draggedMeasureRow = null;
+            this.isDragging = false;
+            this.removeDragIndicator();
+        };
+        
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+    
+    dropMeasureRow(yPos) {
+        const targetRow = this.getRowAtY(yPos);
+        
+        if (!targetRow || targetRow.index === this.draggedMeasureRow) {
+            return; // Invalid drop location or same position
+        }
+        
+        // Extract the measure row being moved
+        const measureRow = this.rows[this.draggedMeasureRow];
+        
+        // Remove from old position
+        this.rows.splice(this.draggedMeasureRow, 1);
+        
+        // Calculate new insertion index
+        let newIndex = targetRow.index;
+        if (this.draggedMeasureRow < targetRow.index) {
+            // Moved down, adjust for removal
+            newIndex--;
+        }
+        
+        // Determine if we should insert above or below target
+        const targetYStart = this.rowManager.getRowYPosition(newIndex);
+        const targetYMid = targetYStart + this.config.rowHeight / 2;
+        if (yPos >= targetYMid) {
+            newIndex++; // Insert below
+        }
+        
+        // Insert at new position
+        this.rows.splice(newIndex, 0, measureRow);
+        
+        // Update all row indices in measures and rebuild
+        this.rebuildAfterMeasureRowMove();
+        
+        // Update selection
+        this.selectedMeasureRows.clear();
+        this.selectedMeasureRows.add(newIndex);
+        
+        this.render();
+    }
+    
+    rebuildAfterMeasureRowMove() {
+        // After moving a measure row, update measureRow field in all measures
+        this.rows.forEach((row, rowIndex) => {
+            if (row.type === 'measure') {
+                row.data.forEach(measure => {
+                    measure.measureRow = rowIndex;
+                });
+            }
+        });
+        
+        // Rebuild legacy measures array
+        this.measures = [];
+        this.rows.forEach(row => {
+            if (row.type === 'measure' && Array.isArray(row.data)) {
+                this.measures.push(...row.data);
+            }
+        });
+    }
+    
     updateDragIndicator(yPos) {
         const targetIndex = this.getSignalIndexAtY(yPos);
         
@@ -871,9 +1021,6 @@ class TimingGenApp {
             return;
         }
         
-        // Create a copy of the signals array to track original positions
-        const oldSignals = [...this.signals];
-        
         // Extract selected signals
         const selectedSignalsData = selectedIndices.map(idx => this.signals[idx]);
         
@@ -894,63 +1041,11 @@ class TimingGenApp {
         // Insert all selected signals at the new position
         this.signals.splice(insertIndex, 0, ...selectedSignalsData);
         
-        // Update measure signal indices and gap indices based on signal object references
-        this.measures.forEach(measure => {
-            // Find new index for signal1
-            const signal1 = oldSignals[measure.signal1Index];
-            const newIndex1 = this.signals.indexOf(signal1);
-            const oldIndex1 = measure.signal1Index;
-            if (newIndex1 !== -1) {
-                measure.signal1Index = newIndex1;
-            }
-            
-            // Find new index for signal2
-            const signal2 = oldSignals[measure.signal2Index];
-            const newIndex2 = this.signals.indexOf(signal2);
-            const oldIndex2 = measure.signal2Index;
-            if (newIndex2 !== -1) {
-                measure.signal2Index = newIndex2;
-            }
-            
-            // Adjust measure gap index if the signals it references have moved
-            // The gap index represents the space between signals
-            // If both signals moved together, the relative gap might be the same
-            // If they're now further apart or closer, we need to recalculate
-            
-            // Calculate the new gap index based on the measure's position relative to its signals
-            const minSignalIndex = Math.min(newIndex1, newIndex2);
-            const maxSignalIndex = Math.max(newIndex1, newIndex2);
-            
-            // Determine where the measure should be:
-            // If it was between the signals, keep it between them
-            // If it was above both, keep it above
-            // If it was below both, keep it below
-            
-            const oldMinSignal = Math.min(oldIndex1, oldIndex2);
-            const oldMaxSignal = Math.max(oldIndex1, oldIndex2);
-            const oldMeasureRow = measure.measureRow;
-            
-            // Determine measure's relative position to its signals
-            if (oldMeasureRow < oldMinSignal) {
-                // Measure was above both signals - keep it above
-                measure.measureRow = minSignalIndex - 1;
-            } else if (oldMeasureRow >= oldMaxSignal) {
-                // Measure was at or below the higher signal - keep it there
-                measure.measureRow = maxSignalIndex;
-            } else {
-                // Measure was between the signals - keep it between them
-                // Use a middle gap if there are multiple gaps between them
-                const gapsBetween = maxSignalIndex - minSignalIndex - 1;
-                if (gapsBetween >= 0) {
-                    measure.measureRow = minSignalIndex + Math.floor(gapsBetween / 2);
-                } else {
-                    measure.measureRow = minSignalIndex;
-                }
-            }
-            
-            // Clamp to valid range
-            measure.measureRow = Math.max(-1, Math.min(this.signals.length, measure.measureRow));
-        });
+        // Update unified row system
+        if (this.rowManager && this.rowManager.isUsingNewSystem()) {
+            // Rebuild rows array from signals and measures
+            this.rebuildRowsAfterSignalMove(selectedIndices, insertIndex);
+        }
         
         // Update selection indices to reflect new positions
         this.selectedSignals.clear();
@@ -961,81 +1056,152 @@ class TimingGenApp {
         this.render();
     }
     
-    startDragMeasure(measureIndex, event) {
-        this.draggedMeasure = measureIndex;
-        this.isDraggingMeasure = true;
+    rebuildRowsAfterSignalMove(movedIndices, insertIndex) {
+        // This function rebuilds the rows array after signals have been moved
+        // and updates measure row references to track the moved signals
         
-        const rect = this.canvas.getBoundingClientRect();
+        // Extract all measure rows
+        const measureRows = [];
+        this.rows.forEach(row => {
+            if (row.type === 'measure') {
+                measureRows.push(row);
+            }
+        });
         
-        const onMouseMove = (moveEvent) => {
-            const yPos = moveEvent.clientY - rect.top;
-            this.updateMeasureDragIndicator(yPos);
-        };
+        // Build signal rows array first
+        const signalRows = [];
+        const newSignalDataToRow = new Map();
         
-        const onMouseUp = (upEvent) => {
-            const yPos = upEvent.clientY - rect.top;
-            this.dropMeasure(yPos);
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            this.draggedMeasure = null;
-            this.isDraggingMeasure = false;
-            this.removeMeasureDragIndicator();
-        };
-        
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    }
-    
-    updateMeasureDragIndicator(yPos) {
-        const gapIndex = this.getGapIndexAtY(yPos);
-        
-        if (gapIndex !== -1) {
-            // Calculate Y position for the indicator line using the helper function
-            const indicatorY = this.getRowIndicatorY(gapIndex);
-            
-            // Remove old indicator if it exists
-            this.removeMeasureDragIndicator();
-            
-            // Create new indicator
-            this.measureDragIndicator = new paper.Path.Line({
-                from: [0, indicatorY],
-                to: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, indicatorY],
-                strokeColor: '#FF0000',
-                strokeWidth: 3,
-                dashArray: [10, 5]
+        this.signals.forEach((signal, idx) => {
+            signalRows.push({
+                type: 'signal',
+                data: signal
             });
-            paper.view.draw();
-        }
-    }
-    
-    removeMeasureDragIndicator() {
-        if (this.measureDragIndicator) {
-            this.measureDragIndicator.remove();
-            this.measureDragIndicator = null;
-        }
-    }
-    
-    dropMeasure(yPos) {
-        const gapIndex = this.getGapIndexAtY(yPos);
+            newSignalDataToRow.set(signal, idx);
+        });
         
-        if (gapIndex === -1 || this.draggedMeasure === null) {
-            return; // Invalid drop location
+        // Update measure references based on signal data objects
+        measureRows.forEach(measureRow => {
+            measureRow.data.forEach(measure => {
+                // Find the signal data object for signal1 using direct access
+                if (measure.signal1Row !== undefined) {
+                    // Validate row index
+                    if (measure.signal1Row >= 0 && measure.signal1Row < this.rows.length) {
+                        const oldRow = this.rows[measure.signal1Row];
+                        if (oldRow && oldRow.type === 'signal') {
+                            const signal1Data = oldRow.data;
+                            
+                            // Find the new signal index for this signal
+                            if (newSignalDataToRow.has(signal1Data)) {
+                                const newSignalIndex = newSignalDataToRow.get(signal1Data);
+                                measure.signal1Row = newSignalIndex;
+                            }
+                        }
+                    }
+                }
+                
+                // Same for signal2
+                if (measure.signal2Row !== undefined) {
+                    // Validate row index
+                    if (measure.signal2Row >= 0 && measure.signal2Row < this.rows.length) {
+                        const oldRow = this.rows[measure.signal2Row];
+                        if (oldRow && oldRow.type === 'signal') {
+                            const signal2Data = oldRow.data;
+                            
+                            // Find the new signal index for this signal
+                            if (newSignalDataToRow.has(signal2Data)) {
+                                const newSignalIndex = newSignalDataToRow.get(signal2Data);
+                                measure.signal2Row = newSignalIndex;
+                            }
+                        }
+                    }
+                }
+            });
+        });
+        
+        // Now build the final rows array with measures inserted at appropriate positions
+        const newRows = [];
+        let signalRowIndex = 0;
+        
+        // Helper function to check if a measure should be inserted after a given signal row
+        const getMeasuresForPosition = (afterSignalIndex) => {
+            const measuresAtPosition = [];
+            measureRows.forEach(measureRow => {
+                measureRow.data.forEach(measure => {
+                    if (measure.signal1Row !== undefined && measure.signal2Row !== undefined) {
+                        const minRow = Math.min(measure.signal1Row, measure.signal2Row);
+                        const maxRow = Math.max(measure.signal1Row, measure.signal2Row);
+                        
+                        // Insert measure row after the higher of the two signals
+                        // or between them if there's space
+                        if (maxRow === afterSignalIndex) {
+                            // Update the measureRow field to reflect actual position
+                            measure.measureRow = newRows.length + 1;
+                            measuresAtPosition.push(measure);
+                        }
+                    }
+                });
+            });
+            return measuresAtPosition;
+        };
+        
+        // Build rows array: signals with measures inserted after appropriate positions
+        for (let i = 0; i < signalRows.length; i++) {
+            // Add signal row
+            newRows.push(signalRows[i]);
+            
+            // Check if any measures should be inserted after this signal
+            const measuresHere = getMeasuresForPosition(i);
+            if (measuresHere.length > 0) {
+                // Group all measures at this position into one measure row
+                newRows.push({
+                    type: 'measure',
+                    data: measuresHere
+                });
+            }
         }
         
-        const measure = this.measures[this.draggedMeasure];
-        if (!measure) {
-            return;
-        }
+        // Update row indices now that we know final positions
+        newRows.forEach((row, finalRowIndex) => {
+            if (row.type === 'signal') {
+                newSignalDataToRow.set(row.data, finalRowIndex);
+            } else if (row.type === 'measure') {
+                row.data.forEach(measure => {
+                    measure.measureRow = finalRowIndex;
+                });
+            }
+        });
         
-        // Update measure's gap index
-        measure.measureRow = gapIndex;
+        // Update measure signal row references to final positions
+        newRows.forEach(row => {
+            if (row.type === 'measure') {
+                row.data.forEach(measure => {
+                    if (measure.signal1Row !== undefined) {
+                        // Find the signal in signalRows and get its final position
+                        const signal1Data = signalRows[measure.signal1Row]?.data;
+                        if (signal1Data && newSignalDataToRow.has(signal1Data)) {
+                            measure.signal1Row = newSignalDataToRow.get(signal1Data);
+                        }
+                    }
+                    if (measure.signal2Row !== undefined) {
+                        const signal2Data = signalRows[measure.signal2Row]?.data;
+                        if (signal2Data && newSignalDataToRow.has(signal2Data)) {
+                            measure.signal2Row = newSignalDataToRow.get(signal2Data);
+                        }
+                    }
+                });
+            }
+        });
         
-        // Ensure the gap has a measure row
-        if (!this.measureRows.has(gapIndex)) {
-            this.measureRows.add(gapIndex);
-        }
+        this.rows = newRows;
         
-        this.render();
+        // Also rebuild the legacy measures array
+        this.measures = [];
+        newRows.forEach(row => {
+            if (row.type === 'measure' && Array.isArray(row.data)) {
+                this.measures.push(...row.data);
+            }
+        });
     }
     
     insertCyclesGlobal(startCycle, numCycles) {
@@ -1043,6 +1209,9 @@ class TimingGenApp {
         this.signals.forEach(signal => {
             this.insertCyclesForSignal(signal, startCycle, numCycles);
         });
+        
+        // Update measure cycle references
+        this.updateMeasureCyclesAfterInsertion(startCycle, numCycles);
         
         // Update cycle count
         this.config.cycles += numCycles;
@@ -1056,6 +1225,9 @@ class TimingGenApp {
         this.signals.forEach(signal => {
             this.deleteCyclesForSignal(signal, startCycle, numCycles);
         });
+        
+        // Update measure cycle references
+        this.updateMeasureCyclesAfterDeletion(startCycle, numCycles);
         
         // Keep cycle count unchanged - the deleted cycles are replaced with steady cycles at the end
         // (steady cycles extend the last state automatically without explicit values)
@@ -1148,6 +1320,102 @@ class TimingGenApp {
         // Add steady cycles at the end if needed (they extend the last state automatically)
     }
     
+    updateMeasureCyclesAfterInsertion(startCycle, numCycles) {
+        // Update cycle references in all measures after cycles are inserted
+        this.measures.forEach(measure => {
+            // Update cycle1 if it's after the insertion point
+            if (measure.cycle1 !== undefined && measure.cycle1 > startCycle) {
+                measure.cycle1 += numCycles;
+            }
+            
+            // Update cycle2 if it's after the insertion point
+            if (measure.cycle2 !== undefined && measure.cycle2 > startCycle) {
+                measure.cycle2 += numCycles;
+            }
+        });
+        
+        // Also update in the rows array
+        if (this.rows) {
+            this.rows.forEach(row => {
+                if (row.type === 'measure' && Array.isArray(row.data)) {
+                    row.data.forEach(measure => {
+                        if (measure.cycle1 !== undefined && measure.cycle1 > startCycle) {
+                            measure.cycle1 += numCycles;
+                        }
+                        if (measure.cycle2 !== undefined && measure.cycle2 > startCycle) {
+                            measure.cycle2 += numCycles;
+                        }
+                    });
+                }
+            });
+        }
+    }
+    
+    updateMeasureCyclesAfterDeletion(startCycle, numCycles) {
+        // Update cycle references in all measures after cycles are deleted
+        this.measures.forEach(measure => {
+            // Update cycle1 if it's after the deletion point
+            if (measure.cycle1 !== undefined) {
+                if (measure.cycle1 >= startCycle && measure.cycle1 < startCycle + numCycles) {
+                    // Cycle was deleted - mark measure as invalid
+                    measure.invalid = true;
+                } else if (measure.cycle1 >= startCycle + numCycles) {
+                    // Shift left by numCycles
+                    measure.cycle1 -= numCycles;
+                }
+            }
+            
+            // Update cycle2 if it's after the deletion point
+            if (measure.cycle2 !== undefined) {
+                if (measure.cycle2 >= startCycle && measure.cycle2 < startCycle + numCycles) {
+                    // Cycle was deleted - mark measure as invalid
+                    measure.invalid = true;
+                } else if (measure.cycle2 >= startCycle + numCycles) {
+                    // Shift left by numCycles
+                    measure.cycle2 -= numCycles;
+                }
+            }
+        });
+        
+        // Remove invalid measures
+        this.measures = this.measures.filter(m => !m.invalid);
+        
+        // Also update in the rows array
+        if (this.rows) {
+            this.rows.forEach(row => {
+                if (row.type === 'measure' && Array.isArray(row.data)) {
+                    row.data.forEach(measure => {
+                        if (measure.cycle1 !== undefined) {
+                            if (measure.cycle1 >= startCycle && measure.cycle1 < startCycle + numCycles) {
+                                measure.invalid = true;
+                            } else if (measure.cycle1 >= startCycle + numCycles) {
+                                measure.cycle1 -= numCycles;
+                            }
+                        }
+                        if (measure.cycle2 !== undefined) {
+                            if (measure.cycle2 >= startCycle && measure.cycle2 < startCycle + numCycles) {
+                                measure.invalid = true;
+                            } else if (measure.cycle2 >= startCycle + numCycles) {
+                                measure.cycle2 -= numCycles;
+                            }
+                        }
+                    });
+                    
+                    // Remove invalid measures from this row
+                    row.data = row.data.filter(m => !m.invalid);
+                }
+            });
+            
+            // Remove empty measure rows
+            this.rows = this.rows.filter(row => {
+                if (row.type === 'measure') {
+                    return row.data && row.data.length > 0;
+                }
+                return true;
+            });
+        }
+    }
+    
     handleInsertCycles() {
         const numCycles = parseInt(document.getElementById('insert-cycles-input').value);
         
@@ -1201,11 +1469,11 @@ class TimingGenApp {
         this.measureMode = true;
         this.measureState = 'first-point';
         this.currentMeasure = {
-            signal1Index: null,
+            signal1Row: null,  // Changed from signal1Index to signal1Row
             cycle1: null,
-            signal2Index: null,
+            signal2Row: null,  // Changed from signal2Index to signal2Row
             cycle2: null,
-            measureRow: null,
+            measureRow: null,  // Row index where measure will be placed
             text: ''
         };
         this.canvas.style.cursor = 'crosshair';
@@ -1231,69 +1499,54 @@ class TimingGenApp {
     }
     
     getMeasureCoordinates(measure) {
-        // Convert measure data (signal indices + cycles) to screen coordinates
+        // Convert measure data (signal row indices + cycles) to screen coordinates
         // This allows measures to stay aligned with signals even when rows change
         
-        // Calculate X positions accounting for signal transitions, delay, and slew
-        const x1 = this.getTransitionMidpointX(measure.signal1Index, measure.cycle1);
-        const x2 = this.getTransitionMidpointX(measure.signal2Index, measure.cycle2);
+        // Convert row indices back to signal indices for transition calculation
+        const signal1Index = this.rowManager.rowIndexToSignalIndex(measure.signal1Row);
+        const signal2Index = this.rowManager.rowIndexToSignalIndex(measure.signal2Row);
         
-        // Get Y positions - for bus signals, use midY; for bit signals, depends on value
-        const y1 = this.getSignalYAtCycle(measure.signal1Index, measure.cycle1);
-        const y2 = this.getSignalYAtCycle(measure.signal2Index, measure.cycle2);
-        
-        return { x1, y1, x2, y2 };
-    }
-    
-    getSignalYAtCycle(signalIndex, cycle) {
-        // Get the Y coordinate for a signal at a specific cycle
-        // Always returns the middle of the signal row
-        
-        if (signalIndex < 0 || signalIndex >= this.signals.length) {
-            // Fallback to middle of row
-            const baseY = TimingGenRendering.getSignalYPosition(this, 0);
-            return baseY + this.config.rowHeight / 2;
+        // Validate signal indices
+        if (signal1Index < 0 || signal2Index < 0) {
+            console.error('Invalid signal row indices in measure:', measure);
+            // Return default coordinates
+            return {
+                x1: this.config.nameColumnWidth,
+                y1: this.config.headerHeight,
+                x2: this.config.nameColumnWidth,
+                y2: this.config.headerHeight
+            };
         }
         
-        const baseY = TimingGenRendering.getSignalYPosition(this, signalIndex);
+        // Calculate X positions accounting for signal transitions, delay, and slew
+        const x1 = this.getTransitionMidpointX(signal1Index, measure.cycle1);
+        const x2 = this.getTransitionMidpointX(signal2Index, measure.cycle2);
         
-        // Always return the middle of the signal row
-        return baseY + this.config.rowHeight / 2;
+        // Get Y positions directly from row indices
+        const y1 = this.rowManager.getRowYPosition(measure.signal1Row) + this.config.rowHeight / 2;
+        const y2 = this.rowManager.getRowYPosition(measure.signal2Row) + this.config.rowHeight / 2;
+        
+        return { x1, y1, x2, y2 };
     }
     
     getTransitionMidpointX(signalIndex, cycle) {
         // Calculate the X coordinate for the middle of a transition at the given cycle
         // Accounts for delay and slew
-        // For clock signals, negative cycle numbers represent falling edges
         
         if (signalIndex < 0 || signalIndex >= this.signals.length) {
             // Invalid signal, fall back to cycle boundary
-            const absCycle = Math.abs(cycle);
-            return this.config.nameColumnWidth + absCycle * this.config.cycleWidth;
+            return this.config.nameColumnWidth + cycle * this.config.cycleWidth;
         }
         
         const signal = this.signals[signalIndex];
         
         // Safety check: if signal is undefined, fall back to cycle boundary
         if (!signal) {
-            const absCycle = Math.abs(cycle);
-            return this.config.nameColumnWidth + absCycle * this.config.cycleWidth;
-        }
-        
-        // Handle clock falling edges (negative cycle numbers)
-        if (signal.type === 'clock' && cycle < 0) {
-            const absCycle = Math.abs(cycle + 1); // Convert -1 to 0, -2 to 1, etc.
-            // Falling edge is at mid-cycle
-            return this.config.nameColumnWidth + absCycle * this.config.cycleWidth + this.config.cycleWidth / 2;
+            return this.config.nameColumnWidth + cycle * this.config.cycleWidth;
         }
         
         // Base X position at grid line
         const baseX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
-        
-        // For clock rising edges, return exact cycle boundary
-        if (signal.type === 'clock') {
-            return baseX;
-        }
         
         // Get delay info for this cycle
         const delayInfo = this.getEffectiveDelay(signal, cycle);
@@ -1301,7 +1554,15 @@ class TimingGenApp {
         // Get slew for this cycle
         const slew = this.getEffectiveSlew(signal, cycle);
         
-        // Check if there's actually a transition at this cycle
+        // Handle clock signals - they have transitions at every cycle
+        if (signal.type === 'clock') {
+            // Clock has rising edge at cycle boundary and falling edge at mid-cycle
+            // For measures, we typically want the rising edge (cycle boundary)
+            // Midpoint of rising edge is at: baseX + delayMin + slew/2
+            return baseX + delayInfo.min + slew / 2;
+        }
+        
+        // Check if there's actually a transition at this cycle for bit signals
         if (cycle > 0 && signal.type === 'bit') {
             const currentValue = this.getBitValueAtCycle(signal, cycle);
             const prevValue = this.getBitValueAtCycle(signal, cycle - 1);
@@ -1311,21 +1572,9 @@ class TimingGenApp {
                 // Midpoint is at: baseX + delayMin + slew/2
                 return baseX + delayInfo.min + slew / 2;
             }
-        } else if (cycle > 0 && signal.type === 'bus') {
-            // For bus signals, check if there's a value change
-            const currentValue = this.getBusValueAtCycle(signal, cycle);
-            const prevValue = this.getBusValueAtCycle(signal, cycle - 1);
-            
-            if (currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X') {
-                // There's a transition - midpoint is at baseX + delayMin + slew/2
-                return baseX + delayInfo.min + slew / 2;
-            }
         }
         
-        // No transition or first cycle - use baseX + delayMin for most signals
-        if (signal.type === 'bus') {
-            return baseX + delayInfo.min + slew / 2;
-        }
+        // No transition or bus signal - use baseX + delayMin
         return baseX + delayInfo.min;
     }
     
@@ -1387,73 +1636,7 @@ class TimingGenApp {
             return { signalIndex, cycle: nearestCycle };
         }
         
-        // For bus signals, find the nearest transition
-        if (signal.type === 'bus') {
-            let nearestCycle = clickedCycle;
-            let minDistance = Infinity;
-            
-            // Search nearby cycles for transitions
-            for (let cycle = Math.max(1, clickedCycle - 2); cycle <= Math.min(this.config.cycles - 1, clickedCycle + 2); cycle++) {
-                const currentValue = this.getBusValueAtCycle(signal, cycle);
-                const prevValue = this.getBusValueAtCycle(signal, cycle - 1);
-                
-                if (currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X') {
-                    // Found a transition
-                    const transitionX = this.getTransitionMidpointX(signalIndex, cycle);
-                    const distance = Math.abs(transitionX - xPos);
-                    
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        nearestCycle = cycle;
-                    }
-                }
-            }
-            
-            return { signalIndex, cycle: nearestCycle };
-        }
-        
-        // For clock signals, find the nearest clock edge (both rising and falling)
-        if (signal.type === 'clock') {
-            let nearestCycle = clickedCycle;
-            let nearestEdge = 'rising'; // 'rising' or 'falling'
-            let minDistance = Infinity;
-            
-            // Clock has two edges per cycle: rising and falling
-            // Rising edge is at cycle boundary, falling edge is at mid-cycle
-            for (let cycle = Math.max(0, clickedCycle - 1); cycle <= Math.min(this.config.cycles, clickedCycle + 1); cycle++) {
-                // Rising edge (at cycle boundary)
-                const risingEdgeX = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
-                const risingDistance = Math.abs(risingEdgeX - xPos);
-                
-                if (risingDistance < minDistance) {
-                    minDistance = risingDistance;
-                    nearestCycle = cycle;
-                    nearestEdge = 'rising';
-                }
-                
-                // Falling edge (at mid-cycle)
-                if (cycle < this.config.cycles) {
-                    const fallingEdgeX = this.config.nameColumnWidth + cycle * this.config.cycleWidth + this.config.cycleWidth / 2;
-                    const fallingDistance = Math.abs(fallingEdgeX - xPos);
-                    
-                    if (fallingDistance < minDistance) {
-                        minDistance = fallingDistance;
-                        nearestCycle = cycle;
-                        nearestEdge = 'falling';
-                    }
-                }
-            }
-            
-            // Store edge type in the cycle value
-            // Use negative cycle numbers for falling edges: -1 means cycle 0 falling, -2 means cycle 1 falling, etc.
-            if (nearestEdge === 'falling') {
-                nearestCycle = -(nearestCycle + 1);
-            }
-            
-            return { signalIndex, cycle: nearestCycle };
-        }
-        
-        // Default: just return the clicked cycle
+        // For bus signals, just return the clicked cycle
         return { signalIndex, cycle: clickedCycle };
     }
     
@@ -1489,32 +1672,12 @@ class TimingGenApp {
         this.measureLayer.activate();
         this.tempMeasureGraphics = [];
         
-        // Show snap-to indicator during first and second point selection
-        if (this.measureState === 'first-point' || this.measureState === 'second-point') {
-            // Find snap-to point
-            const snapPoint = this.findNearestTransition(xPos, yPos);
-            if (snapPoint) {
-                const snapX = this.getTransitionMidpointX(snapPoint.signalIndex, snapPoint.cycle);
-                const snapY = this.getSignalYAtCycle(snapPoint.signalIndex, snapPoint.cycle);
-                
-                // Draw snap-to indicator (small circle)
-                const snapIndicator = new paper.Path.Circle({
-                    center: [snapX, snapY],
-                    radius: 8,
-                    strokeColor: '#FF0000',
-                    strokeWidth: 2,
-                    fillColor: new paper.Color(1, 0, 0, 0.2) // Semi-transparent red
-                });
-                this.tempMeasureGraphics.push(snapIndicator);
-            }
-        }
-        
-        if (this.measureState === 'second-point' && this.currentMeasure.signal1Index !== null) {
+        if (this.measureState === 'second-point' && this.currentMeasure.signal1Row !== null) {
             // After first click: show first line + cross, and dynamic line to mouse
             const coords = this.getMeasureCoordinates({
-                signal1Index: this.currentMeasure.signal1Index,
+                signal1Row: this.currentMeasure.signal1Row,
                 cycle1: this.currentMeasure.cycle1,
-                signal2Index: this.currentMeasure.signal1Index,
+                signal2Row: this.currentMeasure.signal1Row,
                 cycle2: this.currentMeasure.cycle1
             });
             
@@ -1536,7 +1699,7 @@ class TimingGenApp {
                 yPos
             );
             this.tempMeasureGraphics.push(dynamicLine);
-        } else if (this.measureState === 'placing-row' && this.currentMeasure.signal1Index !== null && this.currentMeasure.signal2Index !== null) {
+        } else if (this.measureState === 'placing-row' && this.currentMeasure.signal1Row !== null && this.currentMeasure.signal2Row !== null) {
             // After second click: show both lines + crosses, and drag arrow to mouse position
             const coords = this.getMeasureCoordinates(this.currentMeasure);
             
@@ -1563,14 +1726,11 @@ class TimingGenApp {
             );
             this.tempMeasureGraphics.push(line2);
             
-            // Determine gap index from mouse position (which space between rows)
-            const gapIndex = this.getGapIndexAtY(yPos);
-            // Calculate Y position for the arrow (at 1/3 from top of measure row, which is 2/3 of row height)
-            // Use the row indicator Y position (which accounts for existing measure rows)
-            const rowIndicatorY = this.getRowIndicatorY(gapIndex);
-            const arrowY = rowIndicatorY + this.config.rowHeight / 3;
+            // Determine row from mouse position and draw arrow at that position
+            const rowIndex = this.getRowIndexAtY(yPos);
+            const arrowY = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
             
-            // Draw the double-headed arrow at the current gap
+            // Draw the double-headed arrow at the current mouse row
             const arrows = this.drawMeasureArrows(
                 coords.x1,
                 coords.x2,
@@ -1578,8 +1738,8 @@ class TimingGenApp {
             );
             this.tempMeasureGraphics.push(...arrows);
             
-            // Draw dashed row indicator at the gap
-            this.drawRowIndicator(gapIndex);
+            // Draw dashed row indicator
+            this.drawRowIndicator(rowIndex);
         }
         
         
@@ -1587,13 +1747,9 @@ class TimingGenApp {
     }
     
     drawMeasureBar(xPos, color) {
-        // Calculate total height including measure rows
-        const measureRowCount = this.measureRows ? this.measureRows.size : 0;
-        const totalRows = this.signals.length + measureRowCount;
-        
         const bar = new paper.Path.Line({
             from: [xPos, 0],
-            to: [xPos, this.config.headerHeight + totalRows * this.config.rowHeight],
+            to: [xPos, this.config.headerHeight + this.signals.length * this.config.rowHeight],
             strokeColor: color,
             strokeWidth: 2
         });
@@ -1607,31 +1763,19 @@ class TimingGenApp {
         const isInward = spacing < 30;
         const elements = [];
         
-        // For inward arrows, draw horizontal line segments extending outward from each vertical line
-        // For outward arrows, draw a single horizontal line between the vertical lines
+        // Horizontal line between bars
+        const line = new paper.Path.Line({
+            from: [Math.min(x1, x2), yPos],
+            to: [Math.max(x1, x2), yPos],
+            strokeColor: '#FF0000',
+            strokeWidth: 2
+        });
+        elements.push(line);
+        
+        // Arrows at both ends
         if (isInward) {
-            // Inward arrows: horizontal line segments extend outward from each vertical line
-            const extensionLength = arrowSize * 2; // Length of line segment outside vertical line
-            
-            // Left segment (extends left from left vertical line)
-            const leftSegment = new paper.Path.Line({
-                from: [Math.min(x1, x2) - extensionLength, yPos],
-                to: [Math.min(x1, x2), yPos],
-                strokeColor: '#FF0000',
-                strokeWidth: 2
-            });
-            elements.push(leftSegment);
-            
-            // Right segment (extends right from right vertical line)
-            const rightSegment = new paper.Path.Line({
-                from: [Math.max(x1, x2), yPos],
-                to: [Math.max(x1, x2) + extensionLength, yPos],
-                strokeColor: '#FF0000',
-                strokeWidth: 2
-            });
-            elements.push(rightSegment);
-            
-            // Left arrow (pointing right, inward)
+            // Inward pointing arrows (when spacing is too small)
+            // Left arrow (pointing right)
             const leftArrow = new paper.Path([
                 [Math.min(x1, x2), yPos],
                 [Math.min(x1, x2) + arrowSize, yPos - arrowSize/2],
@@ -1641,7 +1785,7 @@ class TimingGenApp {
             leftArrow.fillColor = '#FF0000';
             elements.push(leftArrow);
             
-            // Right arrow (pointing left, inward)
+            // Right arrow (pointing left)
             const rightArrow = new paper.Path([
                 [Math.max(x1, x2), yPos],
                 [Math.max(x1, x2) - arrowSize, yPos - arrowSize/2],
@@ -1651,16 +1795,8 @@ class TimingGenApp {
             rightArrow.fillColor = '#FF0000';
             elements.push(rightArrow);
         } else {
-            // Outward arrows: single horizontal line between vertical lines
-            const line = new paper.Path.Line({
-                from: [Math.min(x1, x2), yPos],
-                to: [Math.max(x1, x2), yPos],
-                strokeColor: '#FF0000',
-                strokeWidth: 2
-            });
-            elements.push(line);
-            
-            // Left arrow (pointing left, outward)
+            // Outward pointing arrows
+            // Left arrow (pointing left)
             const leftArrow = new paper.Path([
                 [Math.min(x1, x2), yPos],
                 [Math.min(x1, x2) - arrowSize, yPos - arrowSize/2],
@@ -1670,7 +1806,7 @@ class TimingGenApp {
             leftArrow.fillColor = '#FF0000';
             elements.push(leftArrow);
             
-            // Right arrow (pointing right, outward)
+            // Right arrow (pointing right)
             const rightArrow = new paper.Path([
                 [Math.max(x1, x2), yPos],
                 [Math.max(x1, x2) + arrowSize, yPos - arrowSize/2],
@@ -1692,80 +1828,6 @@ class TimingGenApp {
         const relativeY = yPos - this.config.headerHeight;
         const rowIndex = Math.floor(relativeY / this.config.rowHeight);
         return rowIndex;
-    }
-    
-    getGapIndexAtY(yPos) {
-        // Returns the index of the gap (between-row space) at the given Y position
-        // Gap -1: above first signal (between header and first signal)
-        // Gap 0: between signal 0 and signal 1
-        // Gap N: between signal N and signal N+1
-        // 
-        // This function needs to account for existing measure rows when determining
-        // which gap the Y position corresponds to
-        
-        if (yPos < this.config.headerHeight) {
-            return -1; // Above all signals
-        }
-        
-        const relativeY = yPos - this.config.headerHeight;
-        
-        // We need to iterate through the visual layout to find which gap this Y position is in
-        // Start with gap -1 (above first signal)
-        let currentY = 0;
-        const sortedMeasureRows = this.measureRows ? Array.from(this.measureRows).sort((a, b) => a - b) : [];
-        let measureRowIndex = 0;
-        
-        for (let gapIndex = -1; gapIndex <= this.signals.length; gapIndex++) {
-            // Check if there's a measure row at this gap index
-            if (measureRowIndex < sortedMeasureRows.length && sortedMeasureRows[measureRowIndex] === gapIndex) {
-                // There's a measure row here
-                const measureRowTop = currentY;
-                const measureRowBottom = currentY + this.config.rowHeight;
-                
-                // Check if click is in this measure row
-                if (relativeY >= measureRowTop && relativeY < measureRowBottom) {
-                    return gapIndex;
-                }
-                
-                currentY += this.config.rowHeight;
-                measureRowIndex++;
-            }
-            
-            // Check if there's a signal row after this gap (except for the last gap which is below all signals)
-            if (gapIndex < this.signals.length - 1) {
-                // There's a signal row here (signal at index gapIndex + 1)
-                const signalRowTop = currentY;
-                const signalRowBottom = currentY + this.config.rowHeight;
-                
-                // If click is in the top half of the signal row, it's closer to the gap above
-                // If click is in the bottom half, it's closer to the gap below
-                if (relativeY >= signalRowTop && relativeY < signalRowTop + this.config.rowHeight / 2) {
-                    return gapIndex;
-                } else if (relativeY >= signalRowTop + this.config.rowHeight / 2 && relativeY < signalRowBottom) {
-                    // Check if we're not at the end
-                    if (gapIndex + 1 < this.signals.length) {
-                        return gapIndex + 1;
-                    }
-                }
-                
-                currentY += this.config.rowHeight;
-            } else if (gapIndex === this.signals.length - 1) {
-                // Last signal row
-                const signalRowTop = currentY;
-                const signalRowBottom = currentY + this.config.rowHeight;
-                
-                if (relativeY >= signalRowTop && relativeY < signalRowTop + this.config.rowHeight / 2) {
-                    return gapIndex;
-                } else if (relativeY >= signalRowTop + this.config.rowHeight / 2) {
-                    return this.signals.length; // Below last signal
-                }
-                
-                currentY += this.config.rowHeight;
-            }
-        }
-        
-        // If we get here, return the last gap (below all signals)
-        return this.signals.length;
     }
     
     // New drawing helper methods for measure feature
@@ -1845,46 +1907,14 @@ class TimingGenApp {
         return line;
     }
     
-    getRowIndicatorY(gapIndex) {
-        // Get the Y position for the row indicator (red line) for a given gap index
-        // The line should appear AT the visual position of the gap (or measure row)
-        // This accounts for all measure rows before this position
-        
-        // Simply return the gap position, which already accounts for measure rows
-        return this.getGapYPosition(gapIndex);
-    }
-    
-    getGapYPosition(gapIndex) {
-        // Calculate the Y position for a gap index, accounting for measure rows
-        // Returns the Y position at the boundary line of the gap
-        // Gap -1 is at headerHeight, Gap 0 is after first signal, etc.
-        
-        // Count how many measure rows are at or before this gap
-        let measureRowsBefore = 0;
-        if (this.measureRows) {
-            for (const gi of this.measureRows) {
-                if (gi <= gapIndex) {
-                    measureRowsBefore++;
-                }
-            }
-        }
-        
-        // The visual position accounts for signals before this gap plus measure rows
-        // Gap N is after signal N (so N+1 signals are before it)
-        const signalsBeforeGap = gapIndex + 1;
-        return this.config.headerHeight + (signalsBeforeGap + measureRowsBefore) * this.config.rowHeight;
-    }
-    
-    drawRowIndicator(gapIndex) {
+    drawRowIndicator(rowIndex) {
         // Draw horizontal line indicator for row selection
-        // gapIndex represents which gap between signals this is
-        const yPos = this.getRowIndicatorY(gapIndex);
-        
+        const yPos = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
         const indicator = new paper.Path.Line({
             from: [0, yPos],
             to: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, yPos],
             strokeColor: '#FF0000',
-            strokeWidth: 2,
+            strokeWidth: 1,
             dashArray: [5, 3]
         });
         
@@ -1953,9 +1983,9 @@ class TimingGenApp {
         
         // Get coordinates for first point
         const coords = this.getMeasureCoordinates({
-            signal1Index: this.currentMeasure.signal1Index,
+            signal1Row: this.currentMeasure.signal1Row,
             cycle1: this.currentMeasure.cycle1,
-            signal2Index: this.currentMeasure.signal1Index,
+            signal2Row: this.currentMeasure.signal1Row,
             cycle2: this.currentMeasure.cycle1
         });
         
@@ -2019,8 +2049,8 @@ class TimingGenApp {
         this.tempMeasureGraphics.push(line2);
         
         // Draw double-headed arrow at a default position (middle row between the two points)
-        const defaultRow = Math.floor((this.currentMeasure.signal1Index + this.currentMeasure.signal2Index) / 2);
-        const arrowY = TimingGenRendering.getSignalYPosition(this, defaultRow) + this.config.rowHeight / 2;
+        const defaultRow = Math.floor((this.currentMeasure.signal1Row + this.currentMeasure.signal2Row) / 2);
+        const arrowY = this.rowManager.getRowYPosition(defaultRow) + this.config.rowHeight / 2;
         const arrows = this.drawMeasureArrows(
             coords.x1,
             coords.x2,
@@ -2035,10 +2065,22 @@ class TimingGenApp {
         // Finalize measure with actual blank row insertion
         this.currentMeasure.text = ''; // No text for now
         
-        // Insert blank row at the selected position
-        this.insertBlankRowAtPosition(this.currentMeasure.measureRow);
+        // Add measure to unified row system
+        const measureRowIndex = this.currentMeasure.measureRow;
         
-        // Add measure to list
+        // Check if a measure row already exists at this position
+        if (measureRowIndex < this.rows.length && this.rows[measureRowIndex].type === 'measure') {
+            // Add to existing measure row
+            this.rows[measureRowIndex].data.push(this.currentMeasure);
+        } else {
+            // Insert new measure row
+            this.rowManager.insertRow(measureRowIndex, {
+                type: 'measure',
+                data: [this.currentMeasure]
+            });
+        }
+        
+        // Also add to legacy measures array for backward compatibility
         this.measures.push(this.currentMeasure);
         
         // Clean up
@@ -2065,16 +2107,31 @@ class TimingGenApp {
         this.render();
     }
     
-    insertBlankRowAtPosition(gapIndex) {
-        // Insert a measure row at the specified gap index
-        // gapIndex can be:
-        // -1: above all signals
-        // 0: between signal 0 and 1
-        // N: between signal N and N+1
-        // signals.length: below all signals
+    insertBlankRowAtPosition(rowIndex) {
+        // Insert a blank row by shifting signals down
+        // rowIndex can be negative (above all signals), between signals, or after all signals
         
-        // Add this gap index to the set of measure rows
-        this.measureRows.add(gapIndex);
+        if (rowIndex < 0) {
+            // Insert above all signals - no signal moving needed
+            return;
+        }
+        
+        if (rowIndex >= this.signals.length) {
+            // Insert below all signals - no signal moving needed
+            return;
+        }
+        
+        // Insert between signals - shift signals at rowIndex and below down by one row
+        // We do this by adjusting the rendering, not by actually moving signal data
+        // The measure will be drawn in the blank space
+        
+        // For now, we'll mark that a blank row exists at this position
+        // The rendering will handle spacing appropriately
+        if (!this.blankRows) {
+            this.blankRows = [];
+        }
+        this.blankRows.push(rowIndex);
+        this.blankRows.sort((a, b) => a - b);
     }
     
     finalizeMeasureWithoutText() {
@@ -2203,7 +2260,7 @@ window.addEventListener('DOMContentLoaded', () => {
     printData = function() {
         const app = window.timingGenApp;
         const data = {
-            version: '3.0.3',
+            version: '3.0.1',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,

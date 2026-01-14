@@ -1,11 +1,12 @@
 // Timing Gen 3 - Data Management Module
-// Version 3.0.3
+// Version 3.1.0
 // Handles save/load functionality and data import/export
 
 class TimingGenData {
     static saveToJSON(app) {
+        // Save in unified row-based format (v3.1.0)
         const data = {
-            version: '3.0.3',
+            version: '3.1.0',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,
@@ -15,8 +16,7 @@ class TimingGenData {
                 delayMax: app.config.delayMax,
                 delayColor: app.config.delayColor
             },
-            signals: app.signals,
-            measures: app.measures
+            rows: app.rows
         };
         
         const jsonStr = JSON.stringify(data, null, 2);
@@ -37,9 +37,10 @@ class TimingGenData {
         
         const reader = new FileReader();
         reader.onload = (event) => {
-            //try {
+            try {
                 const data = JSON.parse(event.target.result);
                 
+                // Load configuration
                 if (data.config) {
                     if (data.config.cycles) {
                         app.config.cycles = data.config.cycles;
@@ -70,43 +71,47 @@ class TimingGenData {
                     if (data.config.delayColor !== undefined) {
                         app.config.delayColor = data.config.delayColor;
                     }
-                    // Ignore old delayUnit field for backward compatibility
                 }
                 
-                if (data.signals) {
-                    app.signals = data.signals;
-                    // Ensure all bit and bus signals have base_clock
-                    app.signals.forEach(signal => {
-                        if ((signal.type === 'bit' || signal.type === 'bus') && !signal.base_clock) {
-                            const clockSignal = app.signals.find(sg => sg.type === 'clock');
-                            signal.base_clock = clockSignal ? clockSignal.name : 'clk';
-                        }
-                    });
-                }
-                
-                if (data.measures) {
-                    app.measures = data.measures;
-                    // Reconstruct measureRows Set from measures
-                    app.measureRows = new Set();
-                    data.measures.forEach(measure => {
-                        if (measure.measureRow !== undefined) {
-                            app.measureRows.add(measure.measureRow);
-                        }
-                    });
+                // Load unified row data (v3.1.0 format only)
+                if (data.rows) {
+                    app.rows = data.rows;
+                    // Extract signals and measures for legacy array access
+                    TimingGenData.extractLegacyData(app);
                 } else {
-                    app.measures = [];
-                    app.measureRows = new Set();
+                    alert('Old file format not supported. This version requires v3.1.0 format.');
+                    return;
                 }
                 
                 app.initializeCanvas();
                 app.render();
-                //            } catch (err) {
-                //alert('Error loading file: ' + err.message);
-                //}
+            } catch (err) {
+                alert('Error loading file: ' + err.message);
+                console.error('Load error:', err);
+            }
         };
         
         reader.readAsText(file);
         ev.target.value = ''; // Reset file input
+    }
+    
+    /**
+     * Extract legacy signals and measures arrays from rows
+     * For compatibility with code that still uses these arrays
+     */
+    static extractLegacyData(app) {
+        app.signals = [];
+        app.measures = [];
+        
+        if (!app.rows) return;
+        
+        app.rows.forEach(row => {
+            if (row.type === 'signal') {
+                app.signals.push(row.data);
+            } else if (row.type === 'measure' && Array.isArray(row.data)) {
+                app.measures.push(...row.data);
+            }
+        });
     }
     
     static exportToSVG(app) {
@@ -123,7 +128,5 @@ class TimingGenData {
         
         URL.revokeObjectURL(url);
     }
-
-
 }
 

@@ -1,5 +1,5 @@
 // Timing Gen 3 - Rendering Module
-// Version 3.0.3
+// Version 3.1.0
 // Handles all waveform rendering functionality using Paper.js
 
 class TimingGenRendering {
@@ -25,48 +25,56 @@ class TimingGenRendering {
         // Draw header with cycle numbers
         TimingGenRendering.drawHeader(app);
         
-        // Draw signals
-        app.signalLayer.activate();
-        app.signals.forEach((signal, index) => {
-            TimingGenRendering.drawSignal(app, signal, index);
-        });
-        
-        // Draw measures
-        app.measureLayer.activate();
-        app.measures.forEach((measure, index) => {
-            TimingGenRendering.drawMeasure(app, measure, index);
-        });
+        // Draw rows (signals and measures) from unified rows array
+        if (app.rows && app.rows.length > 0) {
+            app.rows.forEach((row, rowIndex) => {
+                if (row.type === 'signal') {
+                    // Draw signal
+                    app.signalLayer.activate();
+                    const signalIndex = app.rowManager.rowIndexToSignalIndex(rowIndex);
+                    if (signalIndex >= 0) {
+                        TimingGenRendering.drawSignal(app, row.data, signalIndex);
+                    }
+                } else if (row.type === 'measure') {
+                    // Draw measure row name in name column
+                    app.gridLayer.activate();
+                    TimingGenRendering.drawMeasureRowName(app, rowIndex, row.data.length);
+                    
+                    // Draw measures in this row
+                    app.measureLayer.activate();
+                    row.data.forEach((measure) => {
+                        TimingGenRendering.drawMeasure(app, measure, rowIndex);
+                    });
+                }
+            });
+        } else {
+            // Fallback to old system (signals + measures arrays)
+            app.signalLayer.activate();
+            app.signals.forEach((signal, index) => {
+                TimingGenRendering.drawSignal(app, signal, index);
+            });
+            
+            app.measureLayer.activate();
+            app.measures.forEach((measure, index) => {
+                TimingGenRendering.drawMeasure(app, measure, index);
+            });
+        }
         
         paper.view.draw();
     }
     
     static drawGrid(app) {
-        // Calculate total rows including measure rows
-        const measureRowCount = app.measureRows ? app.measureRows.size : 0;
-        const totalRows = app.signals.length + measureRowCount;
-        const maxHeight = app.config.headerHeight + totalRows * app.config.rowHeight;
-        
-        // Draw background for measure rows with a different color
-        if (app.measureRows && app.measureRows.size > 0) {
-            const sortedGapIndices = Array.from(app.measureRows).sort((a, b) => a - b);
-            
-            for (let i = 0; i < sortedGapIndices.length; i++) {
-                const gapIndex = sortedGapIndices[i];
-                // Calculate visual Y position for this measure row
-                // measureRowsBefore is simply the index in the sorted array
-                const measureRowsBefore = i;
-                // The visual position is: header + (gapIndex + 1 + measureRowsBefore) * rowHeight
-                const yPos = app.config.headerHeight + (gapIndex + 1 + measureRowsBefore) * app.config.rowHeight;
-                
-                // Draw a light gray background for the measure row
-                const background = new paper.Path.Rectangle({
-                    point: [0, yPos],
-                    size: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, app.config.rowHeight],
-                    fillColor: app.config.measureRowColor || '#f5f5f5',
-                    strokeColor: null
-                });
-            }
+        // Calculate total rows
+        let totalRows;
+        if (app.rowManager && app.rowManager.isUsingNewSystem()) {
+            totalRows = app.rowManager.getTotalRows();
+        } else {
+            // Old system: signals + blank rows
+            const blankRowCount = app.blankRows ? app.blankRows.length : 0;
+            totalRows = app.signals.length + blankRowCount;
         }
+        
+        const maxHeight = app.config.headerHeight + totalRows * app.config.rowHeight;
         
         // Vertical lines (cycle dividers) - draw to max height based on signals
         for (let idx = 0; idx <= app.config.cycles; idx++) {
@@ -79,19 +87,17 @@ class TimingGenRendering {
             });
         }
         
-        // Horizontal lines - draw at every row boundary (signals and measures)
-        // Draw line above first signal
-        let line = new paper.Path.Line({
-            from: [0, app.config.headerHeight],
-            to: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, app.config.headerHeight],
-            strokeColor: app.config.gridColor,
-            strokeWidth: 1
-        });
-        
-        // Draw lines for each signal row
-        for (let idx = 0; idx < app.signals.length; idx++) {
-            const yPos = TimingGenRendering.getSignalYPosition(app, idx) + app.config.rowHeight;
-            line = new paper.Path.Line({
+        // Horizontal lines (row dividers)
+        for (let idx = 0; idx <= totalRows; idx++) {
+            let yPos;
+            if (app.rowManager && app.rowManager.isUsingNewSystem()) {
+                yPos = app.rowManager.getRowYPosition(idx);
+            } else {
+                // Old system
+                yPos = TimingGenRendering.getSignalYPosition(app, idx);
+            }
+            
+            const line = new paper.Path.Line({
                 from: [0, yPos],
                 to: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, yPos],
                 strokeColor: app.config.gridColor,
@@ -701,36 +707,54 @@ class TimingGenRendering {
         });
     }
     
-    static drawMeasure(app, measure, index) {
-        // Get coordinates from measure data (signal indices + cycles)
+    static drawMeasureRowName(app, rowIndex, measureCount) {
+        // Draw name column for measure row
+        const yPos = app.rowManager.getRowYPosition(rowIndex);
+        
+        // Highlight if selected
+        if (app.selectedMeasureRows && app.selectedMeasureRows.has(rowIndex)) {
+            const highlightRect = new paper.Path.Rectangle({
+                point: [0, yPos],
+                size: [app.config.nameColumnWidth, app.config.rowHeight],
+                fillColor: '#e74c3c'  // Red to distinguish from signal selection
+            });
+        }
+        
+        // Draw measure row label
+        const nameColor = (app.selectedMeasureRows && app.selectedMeasureRows.has(rowIndex)) ? 'white' : '#666';
+        const label = measureCount > 1 ? `Measures (${measureCount})` : 'Measure';
+        const nameText = new paper.PointText({
+            point: [app.config.nameColumnWidth - 10, yPos + app.config.rowHeight / 2 + 5],
+            content: label,
+            fillColor: nameColor,
+            fontFamily: 'Arial',
+            fontSize: 12,
+            fontStyle: 'italic',
+            justification: 'right'
+        });
+    }
+    
+    static drawMeasure(app, measure, measureRowIndex) {
+        // Get coordinates from measure data (signal row indices + cycles)
         const coords = app.getMeasureCoordinates(measure);
         
         const rowHeight = app.config.rowHeight;
         const headerHeight = app.config.headerHeight;
         
-        // Calculate row boundaries based on signal positions
-        const row1Pos = TimingGenRendering.getSignalYPosition(app, measure.signal1Index);
-        const row2Pos = TimingGenRendering.getSignalYPosition(app, measure.signal2Index);
+        // Calculate row positions for signal1, signal2, and measure row
+        const row1Pos = app.rowManager.getRowYPosition(measure.signal1Row);
+        const row2Pos = app.rowManager.getRowYPosition(measure.signal2Row);
+        const measureRowPos = app.rowManager.getRowYPosition(measure.measureRow);
         
-        // Calculate arrow Y position based on measureRow (gap index)
-        let visualGapIndex = measure.measureRow;
-        if (app.measureRows) {
-            // Count measure rows before this gap to get the visual position
-            const measureRowsBefore = Array.from(app.measureRows).filter(gi => gi < measure.measureRow).length;
-            visualGapIndex = measure.measureRow + measureRowsBefore;
-        }
-        // Arrow is drawn at 1/3 from top of measure row (2/3 of row height)
-        const arrowY = headerHeight + (visualGapIndex + 1) * rowHeight + rowHeight / 3;
-        const measureRowY = headerHeight + (visualGapIndex + 1) * rowHeight;
-        
-        // Determine the extent of vertical lines - from minimum Y among signal1, signal2, and measure row
-        const minY = Math.min(row1Pos, row2Pos, measureRowY);
-        const maxY = Math.max(row1Pos, row2Pos, measureRowY) + rowHeight;
+        // Determine the extent of vertical lines
+        // Lines should span from the minimum to maximum among signal1, signal2, and measure row
+        const lineStart = Math.min(row1Pos, row2Pos, measureRowPos);
+        const lineEnd = Math.max(row1Pos, row2Pos, measureRowPos) + rowHeight;
         
         // Draw first vertical line
         const line1 = new paper.Path.Line({
-            from: [coords.x1, minY],
-            to: [coords.x1, maxY],
+            from: [coords.x1, lineStart],
+            to: [coords.x1, lineEnd],
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
@@ -740,8 +764,8 @@ class TimingGenRendering {
         
         // Draw second vertical line
         const line2 = new paper.Path.Line({
-            from: [coords.x2, minY],
-            to: [coords.x2, maxY],
+            from: [coords.x2, lineStart],
+            to: [coords.x2, lineEnd],
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
@@ -749,111 +773,39 @@ class TimingGenRendering {
         // Draw small cross at second point
         const cross2 = TimingGenRendering.drawSmallCross(coords.x2, coords.y2);
         
+        // Calculate arrow Y position based on measureRow
+        // Use the measure row index directly from unified system
+        const arrowY = measureRowPos + rowHeight / 2;
+        
         // Draw double-headed arrows
         const arrowSize = 8;
         const spacing = Math.abs(coords.x2 - coords.x1);
         // Default to outward arrows, only use inward if spacing is too small (< 30px for arrow heads)
         const isInward = spacing < 30;
         
-        // For inward arrows, draw horizontal lines extending outward from each vertical line
-        // For outward arrows, draw a single horizontal line between the vertical lines
+        // Horizontal line connecting the arrows
+        const hLine = new paper.Path.Line({
+            from: [Math.min(coords.x1, coords.x2), arrowY],
+            to: [Math.max(coords.x1, coords.x2), arrowY],
+            strokeColor: '#FF0000',
+            strokeWidth: 2
+        });
+        
+        // Draw arrow heads using the helper function
         if (isInward) {
-            // Inward arrows: horizontal line segments extend outward from each vertical line
-            const extensionLength = arrowSize * 2; // Length of line segment outside vertical line
-            
-            // Left segment (extends left from left vertical line)
-            const leftSegment = new paper.Path.Line({
-                from: [Math.min(coords.x1, coords.x2) - extensionLength, arrowY],
-                to: [Math.min(coords.x1, coords.x2), arrowY],
-                strokeColor: '#FF0000',
-                strokeWidth: 2
-            });
-            
-            // Right segment (extends right from right vertical line)
-            const rightSegment = new paper.Path.Line({
-                from: [Math.max(coords.x1, coords.x2), arrowY],
-                to: [Math.max(coords.x1, coords.x2) + extensionLength, arrowY],
-                strokeColor: '#FF0000',
-                strokeWidth: 2
-            });
-            
-            // Draw arrow heads pointing inward (towards each other)
+            // Arrows pointing inward (towards each other)
             TimingGenRendering.drawArrowHead(Math.min(coords.x1, coords.x2), arrowY, 'right', arrowSize);
             TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'left', arrowSize);
         } else {
-            // Outward arrows: single horizontal line between vertical lines
-            const hLine = new paper.Path.Line({
-                from: [Math.min(coords.x1, coords.x2), arrowY],
-                to: [Math.max(coords.x1, coords.x2), arrowY],
-                strokeColor: '#FF0000',
-                strokeWidth: 2
-            });
-            
-            // Draw arrow heads pointing outward (away from each other)
+            // Arrows pointing outward (away from each other)
             TimingGenRendering.drawArrowHead(Math.min(coords.x1, coords.x2), arrowY, 'left', arrowSize);
             TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'right', arrowSize);
         }
         
-        // Draw measure label in name column for all measures in this row
-        // Get all measures in the same row
-        const measuresInRow = app.measures.filter(m => m.measureRow === measure.measureRow);
-        const measureIndexInRow = measuresInRow.findIndex(m => m === measure);
-        
-        // Create label text - show index if multiple measures in row, or text if available
-        let labelContent = measure.text || `M${index + 1}`;
-        if (measuresInRow.length > 1) {
-            labelContent = `M${index + 1}`;
-        }
-        
-        // Draw label background in name column
-        const labelY = measureRowY;
-        const labelX = 10 + (measureIndexInRow * 40); // Offset multiple labels horizontally
-        
-        const labelBg = new paper.Path.Rectangle({
-            point: [labelX - 5, labelY + 5],
-            size: [35, 20],
-            fillColor: '#FFE6E6',
-            strokeColor: '#FF0000',
-            strokeWidth: 1
-        });
-        
-        // Store measure index for interaction
-        labelBg.data = { measureIndex: index, type: 'measureLabel' };
-        labelBg.onMouseDown = function(event) {
-            if (event.event.button === 0) {
-                // Left click - start dragging measure
-                app.startDragMeasure(this.data.measureIndex, event);
-            } else if (event.event.button === 2) {
-                // Right click - context menu
-                app.currentEditingMeasure = this.data.measureIndex;
-            }
-        };
-        
-        const labelText = new paper.PointText({
-            point: [labelX, labelY + 20],
-            content: labelContent,
-            fillColor: '#FF0000',
-            fontFamily: 'Arial',
-            fontSize: 11,
-            fontWeight: 'bold'
-        });
-        
-        // Store measure index in text for interaction
-        labelText.data = { measureIndex: index, type: 'measureLabel' };
-        labelText.onMouseDown = function(event) {
-            if (event.event.button === 0) {
-                // Left click - start dragging measure
-                app.startDragMeasure(this.data.measureIndex, event);
-            } else if (event.event.button === 2) {
-                // Right click - context menu
-                app.currentEditingMeasure = this.data.measureIndex;
-            }
-        };
-        
-        // Draw text label on the waveform if it exists
+        // Draw text label if it exists
         if (measure.text) {
             const textX = Math.max(coords.x1, coords.x2) + 10;
-            const waveformText = new paper.PointText({
+            const text = new paper.PointText({
                 point: [textX, arrowY + 5],
                 content: measure.text,
                 fillColor: '#FF0000',
@@ -863,10 +815,10 @@ class TimingGenRendering {
             });
             
             // Store measure index in text for right-click handling
-            waveformText.data = { measureIndex: index };
+            text.data = { measureIndex: index };
             
             // Make text interactive for right-click
-            waveformText.onMouseDown = function(event) {
+            text.onMouseDown = function(event) {
                 if (event.event.button === 2) {
                     app.currentEditingMeasure = this.data.measureIndex;
                 }
@@ -939,19 +891,17 @@ class TimingGenRendering {
     }
     
     static getSignalYPosition(app, signalIndex) {
-        // Calculate Y position accounting for measure rows
-        // Count how many measure rows are above this signal
-        let measureRowsAbove = 0;
-        if (app.measureRows) {
-            // A measure row at gap index N is between signal N and N+1
-            // So it's above signal N+1, N+2, etc.
-            // Gap index -1 is above signal 0, so affects all signals
-            for (const gapIndex of app.measureRows) {
-                if (gapIndex < signalIndex) {
-                    measureRowsAbove++;
-                }
-            }
+        // Use row manager for unified row system
+        if (app.rowManager && app.rowManager.isUsingNewSystem()) {
+            const rowIndex = app.rowManager.signalIndexToRowIndex(signalIndex);
+            return app.rowManager.getRowYPosition(rowIndex);
         }
-        return app.config.headerHeight + (signalIndex + measureRowsAbove) * app.config.rowHeight;
+        
+        // Fallback to old system: Calculate Y position accounting for blank rows
+        let blankRowsAbove = 0;
+        if (app.blankRows) {
+            blankRowsAbove = app.blankRows.filter(rowIndex => rowIndex <= signalIndex).length;
+        }
+        return app.config.headerHeight + (signalIndex + blankRowsAbove) * app.config.rowHeight;
     }
 }
