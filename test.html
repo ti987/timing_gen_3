@@ -10,11 +10,18 @@
 <body>
     <div id="app">
         <div id="menu-bar">
+            <div class="menu-dropdown">
+                <button id="add-menu-btn" class="menu-btn">Add widget</button>
+                <div id="add-submenu" class="submenu" style="display: none;">
+                    <div class="menu-item" id="add-measure-menu">Measure</div>
+                </div>
+            </div>
             <button id="add-signal-btn" class="menu-btn">Add Signal</button>
+            <button id="global-option-btn" class="menu-btn">Global Option</button>
             <button id="save-btn" class="menu-btn">Save</button>
             <button id="load-btn" class="menu-btn">Load</button>
             <button id="export-svg-btn" class="menu-btn">Export SVG</button>
-            <input type="file" id="file-input" accept=".json" style="display: none;">
+            <input type="file" id="file-input" accept=".td3,.json" style="display: none;">
             <label>Cycles: </label>
             <input type="number" id="cycles-input" value="20" min="5" max="100" style="width: 60px;">
         </div>
@@ -24,7 +31,8 @@
         <div id="signal-names"></div>
     </div>
 
-    <!-- Dialogs (same as index.html) -->
+
+    <!-- Add Signal Dialog -->
     <div id="add-signal-dialog" class="dialog" style="display: none;">
         <div class="dialog-content">
             <h3>Add Signal</h3>
@@ -43,6 +51,7 @@
         </div>
     </div>
 
+    <!-- Edit Signal Dialog -->
     <div id="edit-signal-dialog" class="dialog" style="display: none;">
         <div class="dialog-content">
             <h3>Edit Signal</h3>
@@ -61,6 +70,7 @@
         </div>
     </div>
 
+    <!-- Bus Value Dialog -->
     <div id="bus-value-dialog" class="dialog" style="display: none;">
         <div class="dialog-content">
             <h3>Set Bus Value</h3>
@@ -81,16 +91,201 @@
         </div>
     </div>
 
+    <!-- Context Menu for Signal -->
     <div id="signal-context-menu" class="context-menu" style="display: none;">
         <div class="menu-item" id="edit-signal-menu">Edit</div>
+        <div class="menu-item" id="signal-options-menu">Signal Options</div>
         <div class="menu-item" id="delete-signal-menu">Delete</div>
+        <div class="menu-item" id="cancel-signal-menu">Cancel</div>
     </div>
 
+    <!-- Context Menu for Bit Signal Cycle -->
     <div id="bit-cycle-context-menu" class="context-menu" style="display: none;">
         <div class="menu-item" data-value="0">0 (Low)</div>
         <div class="menu-item" data-value="1">1 (High)</div>
         <div class="menu-item" data-value="X">X (Unknown)</div>
         <div class="menu-item" data-value="Z">Z (High-Z)</div>
+        <div class="menu-item" id="bit-cycle-options-menu">Cycle Options</div>
+        <div class="menu-item" id="remove-bit-change-menu">Remove Change</div>
+        <div class="menu-item" id="insert-cycles-bit-menu">Insert Cycles</div>
+        <div class="menu-item" id="delete-cycles-bit-menu">Delete Cycles</div>
+        <div class="menu-item" id="cancel-bit-cycle-menu">Cancel</div>
+    </div>
+
+    <!-- Context Menu for Bus Signal Cycle -->
+    <div id="bus-cycle-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="set-bus-value-menu">Set Value</div>
+        <div class="menu-item" id="bus-cycle-options-menu">Cycle Options</div>
+        <div class="menu-item" id="remove-bus-change-menu">Remove Change</div>
+        <div class="menu-item" id="insert-cycles-bus-menu">Insert Cycles</div>
+        <div class="menu-item" id="delete-cycles-bus-menu">Delete Cycles</div>
+        <div class="menu-item" id="cancel-bus-cycle-menu">Cancel</div>
+    </div>
+
+    <!-- Context Menu for Cycle Header -->
+    <div id="cycle-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="insert-cycles-global-menu">Insert Cycles</div>
+        <div class="menu-item" id="delete-cycles-global-menu">Delete Cycles</div>
+        <div class="menu-item" id="cancel-cycle-menu">Cancel</div>
+    </div>
+
+    <!-- Global Option Dialog -->
+    <div id="global-option-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content" style="min-width: 400px;">
+            <h3>Global Options</h3>
+            
+            <label>Clock Period:</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <input type="number" id="clock-period-input" value="10" min="0.001" step="0.001" style="flex: 1;">
+                <select id="clock-period-unit-select" style="flex: 0 0 80px;">
+                    <option value="ps">ps</option>
+                    <option value="ns" selected>ns</option>
+                    <option value="us">μs</option>
+                    <option value="ms">ms</option>
+                </select>
+            </div>
+            
+            <label>Slew (transition pixels):</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                <input type="number" id="slew-input" value="4" min="0" max="50" style="flex: 1;">
+                <span style="flex: 0 0 30px;">px</span>
+            </div>
+            
+            <label>Delay Min:</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <input type="number" id="delay-min-input" value="0" min="0" step="0.001" style="flex: 1;">
+                <span id="delay-min-unit-label" style="flex: 0 0 60px;">ns</span>
+            </div>
+            
+            <label>Delay Max:</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <input type="number" id="delay-max-input" value="0" min="0" step="0.001" style="flex: 1;">
+                <span id="delay-max-unit-label" style="flex: 0 0 60px;">ns</span>
+            </div>
+            
+            <label>Delay Uncertainty Color:</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <input type="color" id="delay-color-input" value="#0000FF" style="flex: 1;">
+            </div>
+            
+            <button id="global-option-ok-btn" class="dialog-btn">OK</button>
+            <button id="global-option-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Signal Options Dialog -->
+    <div id="signal-options-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content" style="min-width: 400px;">
+            <h3>Signal Options</h3>
+            
+            <label>Slew (transition pixels):</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                <input type="number" id="signal-slew-input" min="0" max="50" placeholder="Use global" style="flex: 1;">
+                <span style="flex: 0 0 30px;">px</span>
+            </div>
+            
+            <label>Delay Min:</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                <input type="number" id="signal-delay-min-input" min="0" step="0.001" placeholder="Use global" style="flex: 1;">
+                <span id="signal-delay-min-unit-label" style="flex: 0 0 60px;">ns</span>
+            </div>
+            
+            <label>Delay Max:</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                <input type="number" id="signal-delay-max-input" min="0" step="0.001" placeholder="Use global" style="flex: 1;">
+                <span id="signal-delay-max-unit-label" style="flex: 0 0 60px;">ns</span>
+            </div>
+            
+            <label>Delay Uncertainty Color:</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                <input type="color" id="signal-delay-color-input" placeholder="Use global" style="flex: 1;">
+            </div>
+            
+            <button id="signal-options-ok-btn" class="dialog-btn">OK</button>
+            <button id="signal-options-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Cycle Options Dialog -->
+    <div id="cycle-options-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content" style="min-width: 400px;">
+            <h3>Cycle Options</h3>
+            
+            <label>Slew (transition pixels):</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                <input type="number" id="cycle-slew-input" min="0" max="50" placeholder="Use signal/global" style="flex: 1;">
+                <span style="flex: 0 0 30px;">px</span>
+            </div>
+            
+            <label>Delay Min:</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                <input type="number" id="cycle-delay-min-input" min="0" step="0.001" placeholder="Use signal/global" style="flex: 1;">
+                <span id="cycle-delay-min-unit-label" style="flex: 0 0 60px;">ns</span>
+            </div>
+            
+            <label>Delay Max:</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                <input type="number" id="cycle-delay-max-input" min="0" step="0.001" placeholder="Use signal/global" style="flex: 1;">
+                <span id="cycle-delay-max-unit-label" style="flex: 0 0 60px;">ns</span>
+            </div>
+            
+            <label>Delay Uncertainty Color:</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                <input type="color" id="cycle-delay-color-input" placeholder="Use signal/global" style="flex: 1;">
+            </div>
+            
+            <button id="cycle-options-ok-btn" class="dialog-btn">OK</button>
+            <button id="cycle-options-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Insert Cycles Dialog -->
+    <div id="insert-cycles-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Insert Cycles</h3>
+            <label>Number of Cycles:</label>
+            <input type="number" id="insert-cycles-input" value="1" min="1" max="50" style="width: 100px;">
+            <br><br>
+            <button id="insert-cycles-ok-btn" class="dialog-btn">OK</button>
+            <button id="insert-cycles-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Delete Cycles Dialog -->
+    <div id="delete-cycles-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Delete Cycles</h3>
+            <label>Number of Cycles:</label>
+            <input type="number" id="delete-cycles-input" value="1" min="1" max="50" style="width: 100px;">
+            <br><br>
+            <button id="delete-cycles-ok-btn" class="dialog-btn">OK</button>
+            <button id="delete-cycles-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Instruction Box (no buttons, auto-dismisses) -->
+    <div id="instruction-box" class="instruction-box" style="display: none;">
+        <div class="instruction-content">
+            <p id="instruction-text"></p>
+        </div>
+    </div>
+
+    <!-- Measure Text Dialog -->
+    <div id="measure-text-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Enter Measure Text</h3>
+            <label>Label:</label>
+            <input type="text" id="measure-text-input" placeholder="Enter label text">
+            <br><br>
+            <button id="measure-text-ok-btn" class="dialog-btn">OK</button>
+            <button id="measure-text-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Context Menu for Measure -->
+    <div id="measure-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="delete-measure-menu">Delete</div>
+        <div class="menu-item" id="cancel-measure-menu">Cancel</div>
     </div>
 
     <!-- Load JavaScript modules in correct order -->
