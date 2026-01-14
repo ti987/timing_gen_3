@@ -47,17 +47,6 @@ class TimingGenRendering {
                     });
                 }
             });
-            
-            // Also draw measures from the measures array (for signal-name based measures)
-            if (app.measures && app.measures.length > 0) {
-                app.measureLayer.activate();
-                app.measures.forEach((measure, index) => {
-                    // Only draw if measure has signal names (new format)
-                    if (measure.signal1Name && measure.signal2Name) {
-                        TimingGenRendering.drawMeasure(app, measure, index);
-                    }
-                });
-            }
         } else {
             // Fallback to old system (signals + measures arrays)
             app.signalLayer.activate();
@@ -745,21 +734,22 @@ class TimingGenRendering {
         });
     }
     
-    static drawMeasure(app, measure, index) {
-        // Get coordinates from measure data (signal names + cycles)
+    static drawMeasure(app, measure, measureRowIndex) {
+        // Get coordinates from measure data (signal row indices + cycles)
         const coords = app.getMeasureCoordinates(measure);
         
-        // Check if coordinates are valid
-        if (!coords || coords.signal1Index < 0 || coords.signal2Index < 0) {
-            console.warn('Invalid measure coordinates, skipping draw:', measure);
-            return;
-        }
-        
         const rowHeight = app.config.rowHeight;
+        const headerHeight = app.config.headerHeight;
         
-        // Determine the extent of vertical lines based on signal positions
-        const lineStart = Math.min(coords.y1, coords.y2) - rowHeight / 2;
-        const lineEnd = Math.max(coords.y1, coords.y2) + rowHeight / 2;
+        // Calculate row positions for signal1, signal2, and measure row
+        const row1Pos = app.rowManager.getRowYPosition(measure.signal1Row);
+        const row2Pos = app.rowManager.getRowYPosition(measure.signal2Row);
+        const measureRowPos = app.rowManager.getRowYPosition(measure.measureRow);
+        
+        // Determine the extent of vertical lines
+        // Lines should span from the minimum to maximum among signal1, signal2, and measure row
+        const lineStart = Math.min(row1Pos, row2Pos, measureRowPos);
+        const lineEnd = Math.max(row1Pos, row2Pos, measureRowPos) + rowHeight;
         
         // Draw first vertical line
         const line1 = new paper.Path.Line({
@@ -783,8 +773,9 @@ class TimingGenRendering {
         // Draw small cross at second point
         const cross2 = TimingGenRendering.drawSmallCross(coords.x2, coords.y2);
         
-        // Calculate arrow Y position at the midpoint between signals
-        const arrowY = (coords.y1 + coords.y2) / 2;
+        // Calculate arrow Y position based on measureRow
+        // Use the measure row index directly from unified system
+        const arrowY = measureRowPos + rowHeight / 2;
         
         // Draw double-headed arrows
         const arrowSize = 8;

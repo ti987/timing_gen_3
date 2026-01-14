@@ -4,9 +4,9 @@
 
 class TimingGenData {
     static saveToJSON(app) {
-        // Save in signal name-based format (v3.0.3)
+        // Save in unified row-based format (v3.1.0)
         const data = {
-            version: '3.0.3',
+            version: '3.1.0',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,
@@ -16,8 +16,7 @@ class TimingGenData {
                 delayMax: app.config.delayMax,
                 delayColor: app.config.delayColor
             },
-            signals: app.signals,
-            measures: app.measures
+            rows: app.rows
         };
         
         const jsonStr = JSON.stringify(data, null, 2);
@@ -74,32 +73,13 @@ class TimingGenData {
                     }
                 }
                 
-                // Check file version and load accordingly
-                if (data.version === '3.0.3' || data.signals) {
-                    // New format with signal names
-                    app.signals = data.signals || [];
-                    app.measures = data.measures || [];
-                } else if (data.rows) {
-                    // Old unified row format (v3.1.0) - extract data
+                // Load unified row data (v3.1.0 format only)
+                if (data.rows) {
                     app.rows = data.rows;
+                    // Extract signals and measures for legacy array access
                     TimingGenData.extractLegacyData(app);
-                    
-                    // Migrate old measures to use signal names if needed
-                    app.measures.forEach(measure => {
-                        // If measure uses old row-based format, convert to signal name format
-                        if (measure.signal1Row !== undefined && !measure.signal1Name) {
-                            const signal1Index = app.rowManager.rowIndexToSignalIndex(measure.signal1Row);
-                            const signal2Index = app.rowManager.rowIndexToSignalIndex(measure.signal2Row);
-                            if (signal1Index >= 0 && signal1Index < app.signals.length) {
-                                measure.signal1Name = app.signals[signal1Index].name;
-                            }
-                            if (signal2Index >= 0 && signal2Index < app.signals.length) {
-                                measure.signal2Name = app.signals[signal2Index].name;
-                            }
-                        }
-                    });
                 } else {
-                    alert('Unsupported file format.');
+                    alert('Old file format not supported. This version requires v3.1.0 format.');
                     return;
                 }
                 
