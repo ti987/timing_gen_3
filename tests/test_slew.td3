@@ -1,5 +1,5 @@
 {
-  "version": "3.0.1",
+  "version": "3.1.0",
   "config": {
     "cycles": 20,
     "clockPeriod": 10,
@@ -7,60 +7,44 @@
     "slew": 14,
     "delayMin": 2,
     "delayMax": 5,
-    "delayColor": "#0000ff"
+    "delayColor": "#0000FF"
   },
-  "signals": [
+  "rows": [
     {
-      "name": "clk",
-      "type": "clock",
-      "values": {}
+      "type": "signal",
+      "data": {
+        "name": "clk",
+        "type": "clock",
+        "values": {}
+      }
     },
     {
-      "name": "cs#",
-      "type": "bit",
-      "base_clock": "clk",
-      "values": {
-        "0": 1,
-        "1": 0,
-        "3": 1,
-        "6": 0,
-        "8": 1,
-        "9": 0,
-        "10": "X",
-        "11": 0,
-        "13": "Z",
-        "14": "X",
-        "15": "Z",
-        "17": 1
-      },
-      "cycleOptions": {
-        "3": {
-          "slew": 12
-        }
-      },
-      "delay": 0,
-      "delayMin": 2,
-      "delayMax": 3,
-      "delayColor": "#0000ff"
+      "type": "signal",
+      "data": {
+        "name": "wr",
+        "type": "bit",
+        "values": {
+          "0": 0,
+          "1": 1,
+          "4": 0,
+          "7": 1,
+          "10": 0
+        },
+        "base_clock": "clk"
+      }
     },
     {
-      "name": "data",
-      "type": "bus",
-      "base_clock": "clk",
-      "values": {
-        "0": "X",
-        "3": "0xAB",
-        "6": "00",
-        "8": "Z",
-        "9": "X",
-        "10": "Z",
-        "12": "0xCD",
-        "17": "X"
-      },
-      "delay": 0,
-      "delayMin": 3,
-      "delayMax": 5,
-      "delayColor": "#0000ff"
+      "type": "signal",
+      "data": {
+        "name": "data",
+        "type": "bus",
+        "values": {
+          "0": "X",
+          "1": "0x8000",
+          "7": "0x8010"
+        },
+        "base_clock": "clk"
+      }
     }
   ]
 }
