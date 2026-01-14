@@ -1592,9 +1592,6 @@ class TimingGenApp {
         paper.view.draw();
     }
     
-    // Note: drawSecondPointVisuals is no longer needed since we finalize immediately after second click
-
-    
     finalizeMeasure() {
         // Finalize measure without text input (text can be edited separately)
         this.currentMeasure.text = ''; // No text by default

@@ -789,10 +789,7 @@ class TimingGenRendering {
         // Store measure index for interaction
         labelBg.data = { measureIndex: index, type: 'measureLabel' };
         labelBg.onMouseDown = function(event) {
-            if (event.event.button === 0) {
-                // Left click - start dragging measure (if implemented)
-                // app.startDragMeasure(this.data.measureIndex, event);
-            } else if (event.event.button === 2) {
+            if (event.event.button === 2) {
                 // Right click - context menu
                 app.currentEditingMeasure = this.data.measureIndex;
             }
@@ -810,10 +807,7 @@ class TimingGenRendering {
         // Store measure index in text for interaction
         labelText.data = { measureIndex: index, type: 'measureLabel' };
         labelText.onMouseDown = function(event) {
-            if (event.event.button === 0) {
-                // Left click - start dragging measure (disabled since no dedicated rows)
-                // app.startDragMeasure(this.data.measureIndex, event);
-            } else if (event.event.button === 2) {
+            if (event.event.button === 2) {
                 // Right click - context menu
                 app.currentEditingMeasure = this.data.measureIndex;
             }
