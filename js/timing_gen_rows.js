@@ -276,14 +276,8 @@ class RowManager {
         this.app.rows.forEach(row => {
             if (row.type === 'measure' && Array.isArray(row.data)) {
                 row.data.forEach(measure => {
-                    // Update signal row references
-                    if (measure.signal1Row !== undefined && measure.signal1Row >= insertIndex) {
-                        measure.signal1Row++;
-                    }
-                    if (measure.signal2Row !== undefined && measure.signal2Row >= insertIndex) {
-                        measure.signal2Row++;
-                    }
-                    // Update measure row reference (this was missing!)
+                    // Update measure row reference (row indices are for rendering only)
+                    // Signal names are the primary identifiers and don't need updating
                     if (measure.measureRow !== undefined && measure.measureRow >= insertIndex) {
                         measure.measureRow++;
                     }
@@ -302,26 +296,11 @@ class RowManager {
         this.app.rows.forEach(row => {
             if (row.type === 'measure' && Array.isArray(row.data)) {
                 row.data.forEach(measure => {
-                    // Update signal row references
-                    if (measure.signal1Row !== undefined) {
-                        if (measure.signal1Row === deleteIndex) {
-                            // Signal was deleted - mark measure as invalid
-                            measure.invalid = true;
-                        } else if (measure.signal1Row > deleteIndex) {
-                            measure.signal1Row--;
-                        }
-                    }
-                    if (measure.signal2Row !== undefined) {
-                        if (measure.signal2Row === deleteIndex) {
-                            measure.invalid = true;
-                        } else if (measure.signal2Row > deleteIndex) {
-                            measure.signal2Row--;
-                        }
-                    }
-                    // Update measure row reference (this was missing!)
+                    // Update measure row reference (row indices are for rendering only)
+                    // Signal names are the primary identifiers
+                    // If measure row was deleted, mark as invalid
                     if (measure.measureRow !== undefined) {
                         if (measure.measureRow === deleteIndex) {
-                            // Measure row was deleted - mark as invalid
                             measure.invalid = true;
                         } else if (measure.measureRow > deleteIndex) {
                             measure.measureRow--;

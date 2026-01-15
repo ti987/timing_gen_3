@@ -247,6 +247,10 @@ class TimingGenApp {
                 this.hideAllMenus();
                 // Cancel selection and dragging
                 this.cancelSelection();
+                // Cancel measure mode if active
+                if (this.measureMode) {
+                    this.cancelMeasure();
+                }
             }
         });
     }
@@ -418,11 +422,9 @@ class TimingGenApp {
                 const transition = this.findNearestTransition(xPos, yPos);
                 
                 if (transition) {
-                    // DESIGN RULE: Store signal NAME as primary identifier, row index for rendering
+                    // DESIGN RULE: Store signal NAME as primary identifier
                     // Signal names ensure measures remain valid when signals are reordered
                     const signal = this.signals[transition.signalIndex];
-                    const signalRow = this.rowManager.signalIndexToRowIndex(transition.signalIndex);
-                    this.currentMeasure.signal1Row = signalRow;
                     this.currentMeasure.signal1Name = signal.name;  // Primary identifier
                     this.currentMeasure.cycle1 = transition.cycle;
                     this.measureState = 'second-point';
@@ -442,11 +444,9 @@ class TimingGenApp {
                 const transition = this.findNearestTransition(xPos, yPos);
                 
                 if (transition) {
-                    // DESIGN RULE: Store signal NAME as primary identifier, row index for rendering
+                    // DESIGN RULE: Store signal NAME as primary identifier
                     // Signal names ensure measures remain valid when signals are reordered
                     const signal = this.signals[transition.signalIndex];
-                    const signalRow = this.rowManager.signalIndexToRowIndex(transition.signalIndex);
-                    this.currentMeasure.signal2Row = signalRow;
                     this.currentMeasure.signal2Name = signal.name;  // Primary identifier
                     this.currentMeasure.cycle2 = transition.cycle;
                     this.measureState = 'placing-row';
@@ -1183,40 +1183,8 @@ class TimingGenApp {
     }
     
     rebuildAfterSignalRowMove() {
-        // After moving signals in the unified row system, update all measure references
-        // Build a map of signal data objects to their new row indices
-        const signalDataToRow = new Map();
-        const signalDataToIndex = new Map();
-        let signalIdx = 0;
-        
-        this.rows.forEach((row, rowIndex) => {
-            if (row.type === 'signal') {
-                signalDataToRow.set(row.data, rowIndex);
-                signalDataToIndex.set(row.data, signalIdx);
-                signalIdx++;
-            }
-        });
-        
-        // Update all measures to reference the correct row indices
-        this.rows.forEach(row => {
-            if (row.type === 'measure' && Array.isArray(row.data)) {
-                row.data.forEach(measure => {
-                    // Find signal by name and update row reference
-                    if (measure.signal1Name) {
-                        const signal1 = this.signals.find(s => s.name === measure.signal1Name);
-                        if (signal1 && signalDataToRow.has(signal1)) {
-                            measure.signal1Row = signalDataToRow.get(signal1);
-                        }
-                    }
-                    if (measure.signal2Name) {
-                        const signal2 = this.signals.find(s => s.name === measure.signal2Name);
-                        if (signal2 && signalDataToRow.has(signal2)) {
-                            measure.signal2Row = signalDataToRow.get(signal2);
-                        }
-                    }
-                });
-            }
-        });
+        // After moving signals in the unified row system, update measureRow references
+        // Signal names remain valid since they're the primary identifiers
         
         // Rebuild measure row indices
         this.rows.forEach((row, rowIndex) => {
@@ -1679,38 +1647,47 @@ class TimingGenApp {
     }
     
     getMeasureCoordinates(measure) {
-        // Convert measure data (signal row indices + cycles) to screen coordinates
+        // Convert measure data (signal names + cycles) to screen coordinates
         // This allows measures to stay aligned with signals even when rows change
         //
         // DESIGN RULE: Measures are identified by signal NAMES (signal1Name, signal2Name).
-        // Row indices are maintained for rendering but signal names are the primary reference.
+        // Signal names are the primary identifiers. Row indices are computed on-the-fly.
         // This ensures measures survive signal reordering and row rearrangement.
         
-        // Convert row indices back to signal indices for transition calculation
-        const signal1Index = this.rowManager.rowIndexToSignalIndex(measure.signal1Row);
-        const signal2Index = this.rowManager.rowIndexToSignalIndex(measure.signal2Row);
+        // Find signals by name and get their current row indices
+        const signal1 = this.signals.find(s => s.name === measure.signal1Name);
+        const signal2 = this.signals.find(s => s.name === measure.signal2Name);
         
-        // Validate signal indices
-        if (signal1Index < 0 || signal2Index < 0) {
-            console.error('Invalid signal row indices in measure:', measure);
+        if (!signal1 || !signal2) {
+            console.error('Signal not found for measure:', measure);
             // Return default coordinates
             return {
                 x1: this.config.nameColumnWidth,
                 y1: this.config.headerHeight,
                 x2: this.config.nameColumnWidth,
-                y2: this.config.headerHeight
+                y2: this.config.headerHeight,
+                signal1Index: -1,
+                signal2Index: -1
             };
         }
+        
+        // Get signal indices
+        const signal1Index = this.signals.indexOf(signal1);
+        const signal2Index = this.signals.indexOf(signal2);
+        
+        // Get current row indices for the signals
+        const signal1Row = this.rowManager.signalIndexToRowIndex(signal1Index);
+        const signal2Row = this.rowManager.signalIndexToRowIndex(signal2Index);
         
         // Calculate X positions accounting for signal transitions, delay, and slew
         const x1 = this.getTransitionMidpointX(signal1Index, measure.cycle1);
         const x2 = this.getTransitionMidpointX(signal2Index, measure.cycle2);
         
-        // Get Y positions directly from row indices
-        const y1 = this.rowManager.getRowYPosition(measure.signal1Row) + this.config.rowHeight / 2;
-        const y2 = this.rowManager.getRowYPosition(measure.signal2Row) + this.config.rowHeight / 2;
+        // Get Y positions from computed row indices
+        const y1 = this.rowManager.getRowYPosition(signal1Row) + this.config.rowHeight / 2;
+        const y2 = this.rowManager.getRowYPosition(signal2Row) + this.config.rowHeight / 2;
         
-        return { x1, y1, x2, y2 };
+        return { x1, y1, x2, y2, signal1Index, signal2Index };
     }
     
     getTransitionMidpointX(signalIndex, cycle) {
@@ -1961,12 +1938,12 @@ class TimingGenApp {
             }
         }
         
-        if (this.measureState === 'second-point' && this.currentMeasure.signal1Row !== null) {
+        if (this.measureState === 'second-point' && this.currentMeasure.signal1Name) {
             // After first click: show first line + cross, and dynamic line to mouse
             const coords = this.getMeasureCoordinates({
-                signal1Row: this.currentMeasure.signal1Row,
+                signal1Name: this.currentMeasure.signal1Name,
                 cycle1: this.currentMeasure.cycle1,
-                signal2Row: this.currentMeasure.signal1Row,
+                signal2Name: this.currentMeasure.signal1Name,
                 cycle2: this.currentMeasure.cycle1
             });
             
@@ -1988,7 +1965,7 @@ class TimingGenApp {
                 yPos
             );
             this.tempMeasureGraphics.push(dynamicLine);
-        } else if (this.measureState === 'placing-row' && this.currentMeasure.signal1Row !== null && this.currentMeasure.signal2Row !== null) {
+        } else if (this.measureState === 'placing-row' && this.currentMeasure.signal1Name && this.currentMeasure.signal2Name) {
             // After second click: show both lines + crosses, and drag arrow to mouse position
             const coords = this.getMeasureCoordinates(this.currentMeasure);
             
@@ -2272,9 +2249,9 @@ class TimingGenApp {
         
         // Get coordinates for first point
         const coords = this.getMeasureCoordinates({
-            signal1Row: this.currentMeasure.signal1Row,
+            signal1Name: this.currentMeasure.signal1Name,
             cycle1: this.currentMeasure.cycle1,
-            signal2Row: this.currentMeasure.signal1Row,
+            signal2Name: this.currentMeasure.signal1Name,
             cycle2: this.currentMeasure.cycle1
         });
         
@@ -2337,9 +2314,9 @@ class TimingGenApp {
         );
         this.tempMeasureGraphics.push(line2);
         
-        // Draw double-headed arrow at a default position (middle row between the two points)
-        const defaultRow = Math.floor((this.currentMeasure.signal1Row + this.currentMeasure.signal2Row) / 2);
-        const arrowY = this.rowManager.getRowYPosition(defaultRow) + this.config.rowHeight / 2;
+        // Draw double-headed arrow at a default position (middle between the two signal rows)
+        const coords2 = this.getMeasureCoordinates(this.currentMeasure);
+        const arrowY = (coords.y1 + coords.y2) / 2;  // Midpoint between the two signals
         const arrows = this.drawMeasureArrows(
             coords.x1,
             coords.x2,
@@ -2523,10 +2500,47 @@ class TimingGenApp {
         this.render();
     }
     
+    showMeasureContextMenu(event, measureIndex) {
+        // Store the measure index being edited
+        this.currentEditingMeasure = measureIndex;
+        
+        // Get the context menu element
+        const menu = document.getElementById('measure-context-menu');
+        
+        // Position the menu at the mouse location
+        menu.style.left = event.clientX + 'px';
+        menu.style.top = event.clientY + 'px';
+        menu.style.display = 'block';
+        
+        // Prevent default context menu
+        event.preventDefault();
+    }
+    
     deleteMeasure() {
         // Delete measure based on currentEditingMeasure
         if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < this.measures.length) {
+            const measureToDelete = this.measures[this.currentEditingMeasure];
+            
+            // Remove from measures array
             this.measures.splice(this.currentEditingMeasure, 1);
+            
+            // Remove from rows array
+            if (this.rows && measureToDelete.measureRow !== undefined) {
+                // Find the measure row and remove this measure from it
+                const measureRow = this.rows[measureToDelete.measureRow];
+                if (measureRow && measureRow.type === 'measure' && Array.isArray(measureRow.data)) {
+                    const measureIndex = measureRow.data.indexOf(measureToDelete);
+                    if (measureIndex >= 0) {
+                        measureRow.data.splice(measureIndex, 1);
+                    }
+                    
+                    // If the measure row is now empty, remove the entire row
+                    if (measureRow.data.length === 0) {
+                        this.rowManager.deleteRow(measureToDelete.measureRow);
+                    }
+                }
+            }
+            
             this.currentEditingMeasure = null;
             this.hideAllMenus();
             this.render();

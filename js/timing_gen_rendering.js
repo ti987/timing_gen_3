@@ -734,22 +734,44 @@ class TimingGenRendering {
         });
     }
     
-    static drawMeasure(app, measure, measureRowIndex) {
-        // Get coordinates from measure data (signal row indices + cycles)
+    static drawMeasure(app, measure, index) {
+        // Get coordinates from measure data (signal names + cycles)
         const coords = app.getMeasureCoordinates(measure);
         
-        const rowHeight = app.config.rowHeight;
-        const headerHeight = app.config.headerHeight;
+        // Check if coordinates are valid
+        if (!coords || coords.signal1Index < 0 || coords.signal2Index < 0) {
+            console.warn('Invalid measure coordinates, skipping draw:', measure);
+            return;
+        }
         
-        // Calculate row positions for signal1, signal2, and measure row
-        const row1Pos = app.rowManager.getRowYPosition(measure.signal1Row);
-        const row2Pos = app.rowManager.getRowYPosition(measure.signal2Row);
-        const measureRowPos = app.rowManager.getRowYPosition(measure.measureRow);
+        const rowHeight = app.config.rowHeight;
+        
+        // Get row positions dynamically from signal names
+        const signal1 = app.signals.find(s => s.name === measure.signal1Name);
+        const signal2 = app.signals.find(s => s.name === measure.signal2Name);
+        
+        if (!signal1 || !signal2) {
+            console.warn('Signal not found for measure:', measure);
+            return;
+        }
+        
+        const signal1Idx = app.signals.indexOf(signal1);
+        const signal2Idx = app.signals.indexOf(signal2);
+        const row1 = app.rowManager.signalIndexToRowIndex(signal1Idx);
+        const row2 = app.rowManager.signalIndexToRowIndex(signal2Idx);
+        const measureRow = measure.measureRow;
+        
+        const row1Pos = app.rowManager.getRowYPosition(row1);
+        const row2Pos = app.rowManager.getRowYPosition(row2);
+        const measureRowPos = app.rowManager.getRowYPosition(measureRow);
         
         // Determine the extent of vertical lines
-        // Lines should span from the minimum to maximum among signal1, signal2, and measure row
         const lineStart = Math.min(row1Pos, row2Pos, measureRowPos);
         const lineEnd = Math.max(row1Pos, row2Pos, measureRowPos) + rowHeight;
+        
+        // Create a group for all measure elements for easier interaction
+        const measureGroup = new paper.Group();
+        measureGroup.data = { measureIndex: index, type: 'measure' };
         
         // Draw first vertical line
         const line1 = new paper.Path.Line({
@@ -758,9 +780,12 @@ class TimingGenRendering {
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
+        measureGroup.addChild(line1);
         
         // Draw small cross at first point
         const cross1 = TimingGenRendering.drawSmallCross(coords.x1, coords.y1);
+        measureGroup.addChild(cross1.hLine);
+        measureGroup.addChild(cross1.vLine);
         
         // Draw second vertical line
         const line2 = new paper.Path.Line({
@@ -769,18 +794,19 @@ class TimingGenRendering {
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
+        measureGroup.addChild(line2);
         
         // Draw small cross at second point
         const cross2 = TimingGenRendering.drawSmallCross(coords.x2, coords.y2);
+        measureGroup.addChild(cross2.hLine);
+        measureGroup.addChild(cross2.vLine);
         
         // Calculate arrow Y position based on measureRow
-        // Use the measure row index directly from unified system
         const arrowY = measureRowPos + rowHeight / 2;
         
         // Draw double-headed arrows
         const arrowSize = 8;
         const spacing = Math.abs(coords.x2 - coords.x1);
-        // Default to outward arrows, only use inward if spacing is too small (< 30px for arrow heads)
         const isInward = spacing < 30;
         
         // Horizontal line connecting the arrows
@@ -790,16 +816,19 @@ class TimingGenRendering {
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
+        measureGroup.addChild(hLine);
         
-        // Draw arrow heads using the helper function
+        // Draw arrow heads
         if (isInward) {
-            // Arrows pointing inward (towards each other)
-            TimingGenRendering.drawArrowHead(Math.min(coords.x1, coords.x2), arrowY, 'right', arrowSize);
-            TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'left', arrowSize);
+            const arrow1 = TimingGenRendering.drawArrowHead(Math.min(coords.x1, coords.x2), arrowY, 'right', arrowSize);
+            const arrow2 = TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'left', arrowSize);
+            measureGroup.addChild(arrow1);
+            measureGroup.addChild(arrow2);
         } else {
-            // Arrows pointing outward (away from each other)
-            TimingGenRendering.drawArrowHead(Math.min(coords.x1, coords.x2), arrowY, 'left', arrowSize);
-            TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'right', arrowSize);
+            const arrow1 = TimingGenRendering.drawArrowHead(Math.min(coords.x1, coords.x2), arrowY, 'left', arrowSize);
+            const arrow2 = TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'right', arrowSize);
+            measureGroup.addChild(arrow1);
+            measureGroup.addChild(arrow2);
         }
         
         // Draw text label if it exists
@@ -813,17 +842,16 @@ class TimingGenRendering {
                 fontSize: 12,
                 fontWeight: 'bold'
             });
-            
-            // Store measure index in text for right-click handling
-            text.data = { measureIndex: index };
-            
-            // Make text interactive for right-click
-            text.onMouseDown = function(event) {
-                if (event.event.button === 2) {
-                    app.currentEditingMeasure = this.data.measureIndex;
-                }
-            };
+            measureGroup.addChild(text);
         }
+        
+        // Make the entire group interactive for right-click
+        measureGroup.onMouseDown = function(event) {
+            if (event.event.button === 2) { // Right-click
+                event.preventDefault();
+                app.showMeasureContextMenu(event.event, this.data.measureIndex);
+            }
+        };
     }
     
     static drawSmallCross(xPos, yPos) {
