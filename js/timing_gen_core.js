@@ -11,6 +11,12 @@
 // - SVG export for documentation
 // - Configurable cycles and timing parameters
 // - Unified row system for signals and measures
+//
+// IMPORTANT DESIGN RULE:
+// Measure data format: Measure points are defined by signal NAMES, not row numbers.
+// This ensures measures remain valid when signals are reordered or rows are rearranged.
+// Row indices (signal1Row, signal2Row, measureRow) are maintained for the unified row
+// system but signal names (signal1Name, signal2Name) are the primary identifiers.
 
 class TimingGenApp {
     constructor() {
@@ -412,11 +418,12 @@ class TimingGenApp {
                 const transition = this.findNearestTransition(xPos, yPos);
                 
                 if (transition) {
-                    // Store both signal name and row index for compatibility
+                    // DESIGN RULE: Store signal NAME as primary identifier, row index for rendering
+                    // Signal names ensure measures remain valid when signals are reordered
                     const signal = this.signals[transition.signalIndex];
                     const signalRow = this.rowManager.signalIndexToRowIndex(transition.signalIndex);
                     this.currentMeasure.signal1Row = signalRow;
-                    this.currentMeasure.signal1Name = signal.name;
+                    this.currentMeasure.signal1Name = signal.name;  // Primary identifier
                     this.currentMeasure.cycle1 = transition.cycle;
                     this.measureState = 'second-point';
                     this.hideInstruction();
@@ -435,11 +442,12 @@ class TimingGenApp {
                 const transition = this.findNearestTransition(xPos, yPos);
                 
                 if (transition) {
-                    // Store both signal name and row index for compatibility
+                    // DESIGN RULE: Store signal NAME as primary identifier, row index for rendering
+                    // Signal names ensure measures remain valid when signals are reordered
                     const signal = this.signals[transition.signalIndex];
                     const signalRow = this.rowManager.signalIndexToRowIndex(transition.signalIndex);
                     this.currentMeasure.signal2Row = signalRow;
-                    this.currentMeasure.signal2Name = signal.name;
+                    this.currentMeasure.signal2Name = signal.name;  // Primary identifier
                     this.currentMeasure.cycle2 = transition.cycle;
                     this.measureState = 'placing-row';
                     this.hideInstruction();
@@ -1673,6 +1681,10 @@ class TimingGenApp {
     getMeasureCoordinates(measure) {
         // Convert measure data (signal row indices + cycles) to screen coordinates
         // This allows measures to stay aligned with signals even when rows change
+        //
+        // DESIGN RULE: Measures are identified by signal NAMES (signal1Name, signal2Name).
+        // Row indices are maintained for rendering but signal names are the primary reference.
+        // This ensures measures survive signal reordering and row rearrangement.
         
         // Convert row indices back to signal indices for transition calculation
         const signal1Index = this.rowManager.rowIndexToSignalIndex(measure.signal1Row);
