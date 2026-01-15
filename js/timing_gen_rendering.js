@@ -29,22 +29,27 @@ class TimingGenRendering {
         if (app.rows && app.rows.length > 0) {
             app.rows.forEach((row, rowIndex) => {
                 if (row.type === 'signal') {
-                    // Draw signal
+                    // Draw signal - get data from Map
                     app.signalLayer.activate();
-                    const signalIndex = app.rowManager.rowIndexToSignalIndex(rowIndex);
-                    if (signalIndex >= 0) {
-                        TimingGenRendering.drawSignal(app, row.data, signalIndex);
+                    const signal = app.signalsData.get(row.name);
+                    if (signal) {
+                        const signalIndex = app.rowManager.rowIndexToSignalIndex(rowIndex);
+                        if (signalIndex >= 0) {
+                            TimingGenRendering.drawSignal(app, signal, signalIndex);
+                        }
                     }
                 } else if (row.type === 'measure') {
-                    // Draw measure row name in name column
-                    app.gridLayer.activate();
-                    TimingGenRendering.drawMeasureRowName(app, rowIndex, row.data.length);
-                    
-                    // Draw measures in this row
-                    app.measureLayer.activate();
-                    row.data.forEach((measure) => {
+                    // Draw measure - get data from Map
+                    const measure = app.measuresData.get(row.name);
+                    if (measure) {
+                        // Draw measure row name in name column
+                        app.gridLayer.activate();
+                        TimingGenRendering.drawMeasureRowName(app, rowIndex, 1);
+                        
+                        // Draw measure
+                        app.measureLayer.activate();
                         TimingGenRendering.drawMeasure(app, measure, rowIndex);
-                    });
+                    }
                 }
             });
         } else {
