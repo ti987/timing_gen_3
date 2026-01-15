@@ -43,13 +43,16 @@ class TimingGenApp {
             backgroundColor: '#ffffff'
         };
         
-        // Data model (unified row system)
-        this.rows = []; // Array of row objects: {type: 'signal'|'measure', data: ...}
+        // Data model v3.2.0 - Simplified single source of truth
+        // rows: defines order only - Array of {type: 'signal'|'measure', name: string}
+        // signalsData: Map<name, signalObject> - actual signal data
+        // measuresData: Map<name, measureObject> - actual measure data
+        this.rows = [];
+        this.signalsData = new Map();  // Key: signal name, Value: signal object
+        this.measuresData = new Map(); // Key: measure name (auto-generated), Value: measure object
         
-        // Legacy data model (for backward compatibility during migration)
-        this.signals = [];
-        this.measures = []; // Array of measure objects
-        this.blankRows = []; // Array of blank row indices for measures
+        // Counter for auto-generating unique measure names
+        this.measureCounter = 0;
         
         // Row manager for unified row system
         this.rowManager = new RowManager(this);
@@ -255,6 +258,60 @@ class TimingGenApp {
         });
     }
     
+    // ========================================
+    // Data Access Helpers (v3.2.0)
+    // ========================================
+    
+    /**
+     * Get all signals in row order
+     * @returns {Array} Array of signal objects
+     */
+    getSignals() {
+        return this.rows
+            .filter(row => row.type === 'signal')
+            .map(row => this.signalsData.get(row.name))
+            .filter(signal => signal !== undefined);
+    }
+    
+    /**
+     * Get all measures in row order
+     * @returns {Array} Array of measure objects  
+     */
+    getMeasures() {
+        return this.rows
+            .filter(row => row.type === 'measure')
+            .map(row => this.measuresData.get(row.name))
+            .filter(measure => measure !== undefined);
+    }
+    
+    /**
+     * Get signal by name
+     * @param {string} name Signal name
+     * @returns {Object|undefined} Signal object or undefined
+     */
+    getSignalByName(name) {
+        return this.signalsData.get(name);
+    }
+    
+    /**
+     * Get measure by name
+     * @param {string} name Measure name
+     * @returns {Object|undefined} Measure object or undefined
+     */
+    getMeasureByName(name) {
+        return this.measuresData.get(name);
+    }
+    
+    /**
+     * Find signal index in row order
+     * @param {string} name Signal name
+     * @returns {number} Index in signals list or -1
+     */
+    getSignalIndex(name) {
+        const signals = this.getSignals();
+        return signals.findIndex(s => s.name === name);
+    }
+    
     hideAllMenus() {
         document.getElementById('signal-context-menu').style.display = 'none';
         document.getElementById('bit-cycle-context-menu').style.display = 'none';
@@ -272,6 +329,12 @@ class TimingGenApp {
             return;
         }
         
+        // Check if signal name already exists
+        if (this.signalsData.has(name)) {
+            alert(`Signal "${name}" already exists`);
+            return;
+        }
+        
         const signal = {
             name: name,
             type: type,
@@ -281,7 +344,8 @@ class TimingGenApp {
         // Add base_clock for bit and bus signals
         if (type === 'bit' || type === 'bus') {
             // Find the first clock signal, or use 'clk' as default
-            const clockSignal = this.signals.find(sg => sg.type === 'clock');
+            const signals = this.getSignals();
+            const clockSignal = signals.find(sg => sg.type === 'clock');
             signal.base_clock = clockSignal ? clockSignal.name : 'clk';
         }
         
@@ -296,25 +360,14 @@ class TimingGenApp {
             signal.values[0] = 'X';
         }
         
-        // Add to legacy signals array for backward compatibility
-        this.signals.push(signal);
+        // Add to data store
+        this.signalsData.set(name, signal);
         
-        // Add to unified row system
-        if (this.rowManager && this.rowManager.isUsingNewSystem()) {
-            this.rowManager.insertRow(this.rows.length, {
-                type: 'signal',
-                data: signal
-            });
-        } else {
-            // Initialize rows array if not present
-            if (!this.rows) {
-                this.rows = [];
-            }
-            this.rows.push({
-                type: 'signal',
-                data: signal
-            });
-        }
+        // Add to rows array
+        this.rows.push({
+            type: 'signal',
+            name: name
+        });
         
         TimingGenUI.hideAddSignalDialog();
         this.render();
