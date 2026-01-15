@@ -312,6 +312,26 @@ class TimingGenApp {
         return signals.findIndex(s => s.name === name);
     }
     
+    /**
+     * Get signal by index in row order
+     * @param {number} index Signal index in row order
+     * @returns {Object|undefined} Signal object or undefined
+     */
+    getSignalByIndex(index) {
+        const signals = this.getSignals();
+        return signals[index];
+    }
+    
+    /**
+     * Get measure by index in row order
+     * @param {number} index Measure index in row order
+     * @returns {Object|undefined} Measure object or undefined
+     */
+    getMeasureByIndex(index) {
+        const measures = this.getMeasures();
+        return measures[index];
+    }
+    
     hideAllMenus() {
         document.getElementById('signal-context-menu').style.display = 'none';
         document.getElementById('bit-cycle-context-menu').style.display = 'none';
@@ -383,7 +403,7 @@ class TimingGenApp {
                 return;
             }
             
-            const signal = this.signals[this.currentEditingSignal];
+            const signal = this.getSignalByIndex(this.currentEditingSignal);
             const oldType = signal.type;
             signal.name = name;
             signal.type = type;
@@ -394,12 +414,12 @@ class TimingGenApp {
                 if (type === 'bit') {
                     signal.values[0] = 0;
                     // Add base_clock for bit signals
-                    const clockSignal = this.signals.find(sg => sg.type === 'clock');
+                    const clockSignal = this.getSignals().find(sg => sg.type === 'clock');
                     signal.base_clock = clockSignal ? clockSignal.name : 'clk';
                 } else if (type === 'bus') {
                     signal.values[0] = 'X';
                     // Add base_clock for bus signals
-                    const clockSignal = this.signals.find(sg => sg.type === 'clock');
+                    const clockSignal = this.getSignals().find(sg => sg.type === 'clock');
                     signal.base_clock = clockSignal ? clockSignal.name : 'clk';
                 } else if (type === 'clock') {
                     // Remove base_clock for clock signals
@@ -415,16 +435,15 @@ class TimingGenApp {
     deleteSignal() {
         this.hideAllMenus();
         if (this.currentEditingSignal !== null) {
-            if (confirm(`Delete signal "${this.signals[this.currentEditingSignal].name}"?`)) {
-                // Delete from legacy signals array
-                this.signals.splice(this.currentEditingSignal, 1);
+            const signal = this.getSignalByIndex(this.currentEditingSignal);
+            if (signal && confirm(`Delete signal "${signal.name}"?`)) {
+                // Delete from Maps
+                this.signalsData.delete(signal.name);
                 
-                // Delete from unified row system
-                if (this.rowManager && this.rowManager.isUsingNewSystem()) {
-                    const rowIndex = this.rowManager.signalIndexToRowIndex(this.currentEditingSignal);
-                    if (rowIndex >= 0) {
-                        this.rowManager.deleteRow(rowIndex);
-                    }
+                // Delete from rows array
+                const rowIndex = this.rows.findIndex(row => row.type === 'signal' && row.name === signal.name);
+                if (rowIndex >= 0) {
+                    this.rows.splice(rowIndex, 1);
                 }
                 
                 this.currentEditingSignal = null;
@@ -438,7 +457,7 @@ class TimingGenApp {
             const radix = document.getElementById('bus-radix-select').value;
             const value = document.getElementById('bus-value-input').value.trim();
             
-            const signal = this.signals[this.currentEditingSignal];
+            const signal = this.getSignalByIndex(this.currentEditingSignal);
             
             if (radix === 'X' || radix === 'Z') {
                 signal.values[this.currentEditingCycle] = radix;
@@ -477,7 +496,7 @@ class TimingGenApp {
                 if (transition) {
                     // DESIGN RULE: Store signal NAME as primary identifier
                     // Signal names ensure measures remain valid when signals are reordered
-                    const signal = this.signals[transition.signalIndex];
+                    const signal = this.getSignalByIndex(transition.signalIndex);
                     this.currentMeasure.signal1Name = signal.name;  // Primary identifier
                     this.currentMeasure.cycle1 = transition.cycle;
                     this.measureState = 'second-point';
@@ -499,7 +518,7 @@ class TimingGenApp {
                 if (transition) {
                     // DESIGN RULE: Store signal NAME as primary identifier
                     // Signal names ensure measures remain valid when signals are reordered
-                    const signal = this.signals[transition.signalIndex];
+                    const signal = this.getSignalByIndex(transition.signalIndex);
                     this.currentMeasure.signal2Name = signal.name;  // Primary identifier
                     this.currentMeasure.cycle2 = transition.cycle;
                     this.measureState = 'placing-row';
@@ -578,7 +597,7 @@ class TimingGenApp {
         const signalIndex = this.getSignalIndexAtY(yPos);
         
         if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
-            const signal = this.signals[signalIndex];
+            const signal = this.getSignalByIndex(signalIndex);
             
             if (signal.type === 'bit') {
                 this.toggleBitSignal(signalIndex, cycle);
@@ -621,7 +640,7 @@ class TimingGenApp {
         const signalIndex = this.getSignalIndexAtY(yPos);
         
         if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
-            const signal = this.signals[signalIndex];
+            const signal = this.getSignalByIndex(signalIndex);
             
             // Show appropriate cycle context menu based on signal type
             if (signal.type === 'bit') {
@@ -637,7 +656,7 @@ class TimingGenApp {
     }
     
     toggleBitSignal(signalIndex, cycle) {
-        const signal = this.signals[signalIndex];
+        const signal = this.getSignalByIndex(signalIndex);
         const currentValue = this.getBitValueAtCycle(signal, cycle);
         const newValue = (currentValue === 0 || currentValue === 'X' || currentValue === 'Z') ? 1 : 0;
         signal.values[cycle] = newValue;
@@ -646,7 +665,7 @@ class TimingGenApp {
     
     setBitValue(signalIndex, cycle, value) {
         if (signalIndex !== null && cycle !== null) {
-            const signal = this.signals[signalIndex];
+            const signal = this.getSignalByIndex(signalIndex);
             if (value === 'X' || value === 'Z') {
                 signal.values[cycle] = value;
             } else {
@@ -658,7 +677,7 @@ class TimingGenApp {
     
     removeBitChange() {
         if (this.currentEditingSignal !== null && this.currentEditingCycle !== null) {
-            const signal = this.signals[this.currentEditingSignal];
+            const signal = this.getSignalByIndex(this.currentEditingSignal);
             delete signal.values[this.currentEditingCycle];
             // Also remove cycle options if they exist
             if (signal.cycleOptions && signal.cycleOptions[this.currentEditingCycle]) {
@@ -674,7 +693,7 @@ class TimingGenApp {
     
     removeBusChange() {
         if (this.currentEditingSignal !== null && this.currentEditingCycle !== null) {
-            const signal = this.signals[this.currentEditingSignal];
+            const signal = this.getSignalByIndex(this.currentEditingSignal);
             delete signal.values[this.currentEditingCycle];
             // Also remove cycle options if they exist
             if (signal.cycleOptions && signal.cycleOptions[this.currentEditingCycle]) {
@@ -843,7 +862,8 @@ class TimingGenApp {
         // Account for blank rows - we need to map visual row to signal index
         if (!this.blankRows || this.blankRows.length === 0) {
             // No blank rows, direct mapping
-            return (visualRow >= 0 && visualRow < this.signals.length) ? visualRow : -1;
+            const signals = this.getSignals();
+            return (visualRow >= 0 && visualRow < signals.length) ? visualRow : -1;
         }
         
         // Count how many blank rows are before this visual row
@@ -858,7 +878,8 @@ class TimingGenApp {
         
         // The actual signal index is visual row minus blank rows before it
         const signalIndex = visualRow - blankRowsBeforeThis;
-        return (signalIndex >= 0 && signalIndex < this.signals.length) ? signalIndex : -1;
+        const signals = this.getSignals();
+        return (signalIndex >= 0 && signalIndex < signals.length) ? signalIndex : -1;
     }
     
     getRowAtY(yPos) {
@@ -902,9 +923,10 @@ class TimingGenApp {
         // Select all signals between minSelected and signalIndex or maxSelected and signalIndex
         const start = Math.min(minSelected, signalIndex);
         const end = Math.max(maxSelected, signalIndex);
+        const signals = this.getSignals();
         
         for (let i = start; i <= end; i++) {
-            if (i < this.signals.length) {
+            if (i < signals.length) {
                 this.selectedSignals.add(i);
             }
         }
@@ -1013,20 +1035,13 @@ class TimingGenApp {
     }
     
     rebuildAfterMeasureRowMove() {
-        // After moving a measure row, update measureRow field in all measures
+        // After moving a measure row, update measureRow field in measures Map
         this.rows.forEach((row, rowIndex) => {
             if (row.type === 'measure') {
-                row.data.forEach(measure => {
+                const measure = this.measuresData.get(row.name);
+                if (measure) {
                     measure.measureRow = rowIndex;
-                });
-            }
-        });
-        
-        // Rebuild legacy measures array
-        this.measures = [];
-        this.rows.forEach(row => {
-            if (row.type === 'measure' && Array.isArray(row.data)) {
-                this.measures.push(...row.data);
+                }
             }
         });
     }
@@ -1150,11 +1165,10 @@ class TimingGenApp {
             );
             
             // Extract selected signals data
-            const selectedSignalsData = selectedIndices.map(idx => this.signals[idx]);
+            const selectedSignalsData = selectedIndices.map(idx => this.getSignalByIndex(idx));
             
-            // Remove selected signals from both signals array and rows array
+            // Remove selected signal rows from rows array
             for (let i = selectedIndices.length - 1; i >= 0; i--) {
-                this.signals.splice(selectedIndices[i], 1);
                 this.rows.splice(selectedSignalRows[i], 1);
                 
                 // Adjust insert position if we removed rows before it
@@ -1163,12 +1177,11 @@ class TimingGenApp {
                 }
             }
             
-            // Insert signals back at new position
+            // Insert signals back at new position in rows array
             for (let i = 0; i < selectedSignalsData.length; i++) {
-                this.signals.splice(insertRowIndex + i, 0, selectedSignalsData[i]);
                 this.rows.splice(insertRowIndex + i, 0, {
                     type: 'signal',
-                    data: selectedSignalsData[i]
+                    name: selectedSignalsData[i].name
                 });
             }
             
@@ -1207,24 +1220,35 @@ class TimingGenApp {
         }
         
         // Extract selected signals
-        const selectedSignalsData = selectedIndices.map(idx => this.signals[idx]);
+        const selectedSignalsData = selectedIndices.map(idx => this.getSignalByIndex(idx));
         
         // Determine insertion point
         const targetYStart = this.config.headerHeight + targetIndex * this.config.rowHeight;
         const targetYMid = targetYStart + this.config.rowHeight / 2;
         let insertIndex = (yPos < targetYMid) ? targetIndex : targetIndex + 1;
         
-        // Remove selected signals from the array (in reverse order to preserve indices)
-        for (let i = selectedIndices.length - 1; i >= 0; i--) {
-            this.signals.splice(selectedIndices[i], 1);
-            // Adjust insertIndex if we removed signals before it
-            if (selectedIndices[i] < insertIndex) {
+        // Find row indices for selected signals
+        const selectedRowIndices = selectedIndices.map(signalIdx => {
+            const signal = this.getSignalByIndex(signalIdx);
+            return this.rows.findIndex(row => row.type === 'signal' && row.name === signal.name);
+        }).filter(idx => idx >= 0).sort((a, b) => a - b);
+        
+        // Remove selected signal rows from rows array (in reverse order)
+        for (let i = selectedRowIndices.length - 1; i >= 0; i--) {
+            this.rows.splice(selectedRowIndices[i], 1);
+            // Adjust insertIndex if we removed rows before it
+            if (selectedRowIndices[i] < insertIndex) {
                 insertIndex--;
             }
         }
         
-        // Insert all selected signals at the new position
-        this.signals.splice(insertIndex, 0, ...selectedSignalsData);
+        // Insert signal rows back at new position
+        for (let i = 0; i < selectedSignalsData.length; i++) {
+            this.rows.splice(insertIndex + i, 0, {
+                type: 'signal',
+                name: selectedSignalsData[i].name
+            });
+        }
         
         // Update selection indices to reflect new positions
         this.selectedSignals.clear();
@@ -1247,14 +1271,6 @@ class TimingGenApp {
                 });
             }
         });
-        
-        // Rebuild legacy measures array
-        this.measures = [];
-        this.rows.forEach(row => {
-            if (row.type === 'measure' && Array.isArray(row.data)) {
-                this.measures.push(...row.data);
-            }
-        });
     }
     
     rebuildRowsAfterSignalMove(movedIndices, insertIndex) {
@@ -1272,11 +1288,12 @@ class TimingGenApp {
         // Build signal rows array first
         const signalRows = [];
         const newSignalDataToRow = new Map();
+        const signals = this.getSignals();
         
-        this.signals.forEach((signal, idx) => {
+        signals.forEach((signal, idx) => {
             signalRows.push({
                 type: 'signal',
-                data: signal
+                name: signal.name
             });
             newSignalDataToRow.set(signal, idx);
         });
@@ -1395,19 +1412,12 @@ class TimingGenApp {
         });
         
         this.rows = newRows;
-        
-        // Also rebuild the legacy measures array
-        this.measures = [];
-        newRows.forEach(row => {
-            if (row.type === 'measure' && Array.isArray(row.data)) {
-                this.measures.push(...row.data);
-            }
-        });
     }
     
     insertCyclesGlobal(startCycle, numCycles) {
         // Insert cycles for all signals after startCycle
-        this.signals.forEach(signal => {
+        const signals = this.getSignals();
+        signals.forEach(signal => {
             this.insertCyclesForSignal(signal, startCycle, numCycles);
         });
         
@@ -1423,7 +1433,8 @@ class TimingGenApp {
     
     deleteCyclesGlobal(startCycle, numCycles) {
         // Delete cycles for all signals starting from startCycle
-        this.signals.forEach(signal => {
+        const signals = this.getSignals();
+        signals.forEach(signal => {
             this.deleteCyclesForSignal(signal, startCycle, numCycles);
         });
         
@@ -1437,14 +1448,14 @@ class TimingGenApp {
     
     insertCyclesSignal(signalIndex, startCycle, numCycles) {
         // Insert cycles for a specific signal only
-        const signal = this.signals[signalIndex];
+        const signal = this.getSignalByIndex(signalIndex);
         this.insertCyclesForSignal(signal, startCycle, numCycles);
         this.render();
     }
     
     deleteCyclesSignal(signalIndex, startCycle, numCycles) {
         // Delete cycles for a specific signal only
-        const signal = this.signals[signalIndex];
+        const signal = this.getSignalByIndex(signalIndex);
         this.deleteCyclesForSignal(signal, startCycle, numCycles);
         this.render();
     }
@@ -1523,7 +1534,8 @@ class TimingGenApp {
     
     updateMeasureCyclesAfterInsertion(startCycle, numCycles) {
         // Update cycle references in all measures after cycles are inserted
-        this.measures.forEach(measure => {
+        const measures = this.getMeasures();
+        measures.forEach(measure => {
             // Update cycle1 if it's after the insertion point
             if (measure.cycle1 !== undefined && measure.cycle1 > startCycle) {
                 measure.cycle1 += numCycles;
@@ -1554,12 +1566,15 @@ class TimingGenApp {
     
     updateMeasureCyclesAfterDeletion(startCycle, numCycles) {
         // Update cycle references in all measures after cycles are deleted
-        this.measures.forEach(measure => {
+        const measures = this.getMeasures();
+        const measuresToDelete = [];
+        
+        measures.forEach(measure => {
             // Update cycle1 if it's after the deletion point
             if (measure.cycle1 !== undefined) {
                 if (measure.cycle1 >= startCycle && measure.cycle1 < startCycle + numCycles) {
-                    // Cycle was deleted - mark measure as invalid
-                    measure.invalid = true;
+                    // Cycle was deleted - mark for deletion
+                    measuresToDelete.push(measure.name);
                 } else if (measure.cycle1 >= startCycle + numCycles) {
                     // Shift left by numCycles
                     measure.cycle1 -= numCycles;
@@ -1569,8 +1584,10 @@ class TimingGenApp {
             // Update cycle2 if it's after the deletion point
             if (measure.cycle2 !== undefined) {
                 if (measure.cycle2 >= startCycle && measure.cycle2 < startCycle + numCycles) {
-                    // Cycle was deleted - mark measure as invalid
-                    measure.invalid = true;
+                    // Cycle was deleted - mark for deletion
+                    if (!measuresToDelete.includes(measure.name)) {
+                        measuresToDelete.push(measure.name);
+                    }
                 } else if (measure.cycle2 >= startCycle + numCycles) {
                     // Shift left by numCycles
                     measure.cycle2 -= numCycles;
@@ -1578,43 +1595,14 @@ class TimingGenApp {
             }
         });
         
-        // Remove invalid measures
-        this.measures = this.measures.filter(m => !m.invalid);
-        
-        // Also update in the rows array
-        if (this.rows) {
-            this.rows.forEach(row => {
-                if (row.type === 'measure' && Array.isArray(row.data)) {
-                    row.data.forEach(measure => {
-                        if (measure.cycle1 !== undefined) {
-                            if (measure.cycle1 >= startCycle && measure.cycle1 < startCycle + numCycles) {
-                                measure.invalid = true;
-                            } else if (measure.cycle1 >= startCycle + numCycles) {
-                                measure.cycle1 -= numCycles;
-                            }
-                        }
-                        if (measure.cycle2 !== undefined) {
-                            if (measure.cycle2 >= startCycle && measure.cycle2 < startCycle + numCycles) {
-                                measure.invalid = true;
-                            } else if (measure.cycle2 >= startCycle + numCycles) {
-                                measure.cycle2 -= numCycles;
-                            }
-                        }
-                    });
-                    
-                    // Remove invalid measures from this row
-                    row.data = row.data.filter(m => !m.invalid);
-                }
-            });
-            
-            // Remove empty measure rows
-            this.rows = this.rows.filter(row => {
-                if (row.type === 'measure') {
-                    return row.data && row.data.length > 0;
-                }
-                return true;
-            });
-        }
+        // Remove invalid measures from Map and rows
+        measuresToDelete.forEach(measureName => {
+            this.measuresData.delete(measureName);
+            const rowIndex = this.rows.findIndex(row => row.type === 'measure' && row.name === measureName);
+            if (rowIndex >= 0) {
+                this.rows.splice(rowIndex, 1);
+            }
+        });
     }
     
     handleInsertCycles() {
@@ -1669,7 +1657,12 @@ class TimingGenApp {
     startMeasureMode() {
         this.measureMode = true;
         this.measureState = 'first-point';
+        // Generate unique measure name
+        const measureName = `M${this.measureCounter}`;
+        this.measureCounter++;
+        
         this.currentMeasure = {
+            name: measureName,
             signal1Row: null,  // Changed from signal1Index to signal1Row
             cycle1: null,
             signal2Row: null,  // Changed from signal2Index to signal2Row
@@ -1708,8 +1701,8 @@ class TimingGenApp {
         // This ensures measures survive signal reordering and row rearrangement.
         
         // Find signals by name and get their current row indices
-        const signal1 = this.signals.find(s => s.name === measure.signal1Name);
-        const signal2 = this.signals.find(s => s.name === measure.signal2Name);
+        const signal1 = this.getSignalByName(measure.signal1Name);
+        const signal2 = this.getSignalByName(measure.signal2Name);
         
         if (!signal1 || !signal2) {
             console.error('Signal not found for measure:', measure);
@@ -1725,8 +1718,9 @@ class TimingGenApp {
         }
         
         // Get signal indices
-        const signal1Index = this.signals.indexOf(signal1);
-        const signal2Index = this.signals.indexOf(signal2);
+        const signals = this.getSignals();
+        const signal1Index = signals.indexOf(signal1);
+        const signal2Index = signals.indexOf(signal2);
         
         // Get current row indices for the signals
         const signal1Row = this.rowManager.signalIndexToRowIndex(signal1Index);
@@ -1747,14 +1741,15 @@ class TimingGenApp {
         // Calculate the X coordinate for the middle of a transition at the given cycle
         // Accounts for delay and slew
         // For clock signals, negative cycle numbers represent falling edges
+        const signals = this.getSignals();
         
-        if (signalIndex < 0 || signalIndex >= this.signals.length) {
+        if (signalIndex < 0 || signalIndex >= signals.length) {
             // Invalid signal, fall back to cycle boundary
             const absCycle = Math.abs(cycle);
             return this.config.nameColumnWidth + absCycle * this.config.cycleWidth;
         }
         
-        const signal = this.signals[signalIndex];
+        const signal = this.getSignalByIndex(signalIndex);
         
         // Safety check: if signal is undefined, fall back to cycle boundary
         if (!signal) {
@@ -1814,23 +1809,24 @@ class TimingGenApp {
     findNearestTransition(xPos, yPos) {
         // Find the nearest signal transition to the click position
         // Returns { signalIndex, cycle }
+        const signals = this.getSignals();
         
         // First, check if we have any signals at all
-        if (!this.signals || this.signals.length === 0) {
+        if (!signals || signals.length === 0) {
             // No signals loaded - can't create measure
             console.warn('Cannot create measure: no signals loaded');
             return null;
         }
         
         const signalIndex = this.getSignalIndexAtY(yPos);
-        if (signalIndex === -1 || signalIndex >= this.signals.length) {
+        if (signalIndex === -1 || signalIndex >= signals.length) {
             // No valid signal at this Y position, just use the clicked cycle
             const cycle = this.getCycleAtX(xPos);
             // Return default to first signal or cycle 0 if no signals
             return { signalIndex: 0, cycle: cycle !== null ? cycle : 0 };
         }
         
-        const signal = this.signals[signalIndex];
+        const signal = this.getSignalByIndex(signalIndex);
         if (!signal) {
             // Signal doesn't exist, use fallback
             const cycle = this.getCycleAtX(xPos);
@@ -2066,9 +2062,10 @@ class TimingGenApp {
     }
     
     drawMeasureBar(xPos, color) {
+        const signals = this.getSignals();
         const bar = new paper.Path.Line({
             from: [xPos, 0],
-            to: [xPos, this.config.headerHeight + this.signals.length * this.config.rowHeight],
+            to: [xPos, this.config.headerHeight + signals.length * this.config.rowHeight],
             strokeColor: color,
             strokeWidth: 2
         });
@@ -2384,23 +2381,27 @@ class TimingGenApp {
         // Finalize measure with actual blank row insertion
         this.currentMeasure.text = ''; // No text for now
         
-        // Add measure to unified row system
+        const measureName = this.currentMeasure.name;
         const measureRowIndex = this.currentMeasure.measureRow;
         
+        // Store measure in Map
+        this.measuresData.set(measureName, this.currentMeasure);
+        
         // Check if a measure row already exists at this position
-        if (measureRowIndex < this.rows.length && this.rows[measureRowIndex].type === 'measure') {
-            // Add to existing measure row
-            this.rows[measureRowIndex].data.push(this.currentMeasure);
+        const existingRowIndex = this.rows.findIndex((row, idx) => 
+            idx === measureRowIndex && row.type === 'measure'
+        );
+        
+        if (existingRowIndex >= 0) {
+            // Measure row already exists at this position - should not happen in current implementation
+            // but keep for safety
         } else {
             // Insert new measure row
-            this.rowManager.insertRow(measureRowIndex, {
+            this.rows.splice(measureRowIndex, 0, {
                 type: 'measure',
-                data: [this.currentMeasure]
+                name: measureName
             });
         }
-        
-        // Also add to legacy measures array for backward compatibility
-        this.measures.push(this.currentMeasure);
         
         // Clean up
         this.hideInstruction();
@@ -2434,8 +2435,9 @@ class TimingGenApp {
             // Insert above all signals - no signal moving needed
             return;
         }
+        const signals = this.getSignals();
         
-        if (rowIndex >= this.signals.length) {
+        if (rowIndex >= signals.length) {
             // Insert below all signals - no signal moving needed
             return;
         }
@@ -2457,11 +2459,20 @@ class TimingGenApp {
         // Finalize measure without text input (as requested - text is separate operation)
         this.currentMeasure.text = ''; // No text for now
         
-        // Insert blank row if needed at the selected row
-        this.insertBlankRowForMeasure(this.currentMeasure.measureRow);
+        const measureName = this.currentMeasure.name;
+        const measureRowIndex = this.currentMeasure.measureRow;
         
-        // Add measure to list
-        this.measures.push(this.currentMeasure);
+        // Store measure in Map
+        this.measuresData.set(measureName, this.currentMeasure);
+        
+        // Insert blank row if needed at the selected row
+        this.insertBlankRowForMeasure(measureRowIndex);
+        
+        // Add measure row to rows array
+        this.rows.splice(measureRowIndex, 0, {
+            type: 'measure',
+            name: measureName
+        });
         
         // Clean up
         this.hideInstruction();
@@ -2502,7 +2513,14 @@ class TimingGenApp {
         }
         
         this.currentMeasure.text = text;
-        this.measures.push(this.currentMeasure);
+        
+        const measureName = this.currentMeasure.name;
+        
+        // Store measure in Map
+        this.measuresData.set(measureName, this.currentMeasure);
+        
+        // Add measure row to rows array if not already added
+        // (This might be from an alternative path)
         
         document.getElementById('measure-text-dialog').style.display = 'none';
         this.hideInstruction();
@@ -2570,28 +2588,19 @@ class TimingGenApp {
     }
     
     deleteMeasure() {
-        // Delete measure based on currentEditingMeasure
-        if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < this.measures.length) {
-            const measureToDelete = this.measures[this.currentEditingMeasure];
+        // Delete measure based on currentEditingMeasure (measure index)
+        const measures = this.getMeasures();
+        if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+            const measureToDelete = measures[this.currentEditingMeasure];
+            const measureName = measureToDelete.name;
             
-            // Remove from measures array
-            this.measures.splice(this.currentEditingMeasure, 1);
+            // Remove from Map
+            this.measuresData.delete(measureName);
             
             // Remove from rows array
-            if (this.rows && measureToDelete.measureRow !== undefined) {
-                // Find the measure row and remove this measure from it
-                const measureRow = this.rows[measureToDelete.measureRow];
-                if (measureRow && measureRow.type === 'measure' && Array.isArray(measureRow.data)) {
-                    const measureIndex = measureRow.data.indexOf(measureToDelete);
-                    if (measureIndex >= 0) {
-                        measureRow.data.splice(measureIndex, 1);
-                    }
-                    
-                    // If the measure row is now empty, remove the entire row
-                    if (measureRow.data.length === 0) {
-                        this.rowManager.deleteRow(measureToDelete.measureRow);
-                    }
-                }
+            const rowIndex = this.rows.findIndex(row => row.type === 'measure' && row.name === measureName);
+            if (rowIndex >= 0) {
+                this.rows.splice(rowIndex, 1);
             }
             
             this.currentEditingMeasure = null;
@@ -2616,7 +2625,7 @@ window.addEventListener('DOMContentLoaded', () => {
     printData = function() {
         const app = window.timingGenApp;
         const data = {
-            version: '3.0.1',
+            version: '3.2.0',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,
@@ -2626,7 +2635,8 @@ window.addEventListener('DOMContentLoaded', () => {
                 delayMax: app.config.delayMax,
                 delayColor: app.config.delayColor
             },
-            signals: app.signals
+            signals: app.getSignals(),
+            measures: app.getMeasures()
         };
         console.log(data);
     }

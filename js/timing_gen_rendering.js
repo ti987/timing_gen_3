@@ -1,5 +1,5 @@
 // Timing Gen 3 - Rendering Module
-// Version 3.1.0
+// Version 3.2.0
 // Handles all waveform rendering functionality using Paper.js
 
 class TimingGenRendering {
@@ -48,14 +48,16 @@ class TimingGenRendering {
                 }
             });
         } else {
-            // Fallback to old system (signals + measures arrays)
+            // Fallback to old system - use helper methods to get signals/measures
             app.signalLayer.activate();
-            app.signals.forEach((signal, index) => {
+            const signals = app.getSignals();
+            signals.forEach((signal, index) => {
                 TimingGenRendering.drawSignal(app, signal, index);
             });
             
             app.measureLayer.activate();
-            app.measures.forEach((measure, index) => {
+            const measures = app.getMeasures();
+            measures.forEach((measure, index) => {
                 TimingGenRendering.drawMeasure(app, measure, index);
             });
         }
@@ -70,8 +72,9 @@ class TimingGenRendering {
             totalRows = app.rowManager.getTotalRows();
         } else {
             // Old system: signals + blank rows
+            const signals = app.getSignals();
             const blankRowCount = app.blankRows ? app.blankRows.length : 0;
-            totalRows = app.signals.length + blankRowCount;
+            totalRows = signals.length + blankRowCount;
         }
         
         const maxHeight = app.config.headerHeight + totalRows * app.config.rowHeight;
@@ -747,16 +750,17 @@ class TimingGenRendering {
         const rowHeight = app.config.rowHeight;
         
         // Get row positions dynamically from signal names
-        const signal1 = app.signals.find(s => s.name === measure.signal1Name);
-        const signal2 = app.signals.find(s => s.name === measure.signal2Name);
+        const signal1 = app.getSignalByName(measure.signal1Name);
+        const signal2 = app.getSignalByName(measure.signal2Name);
         
         if (!signal1 || !signal2) {
             console.warn('Signal not found for measure:', measure);
             return;
         }
         
-        const signal1Idx = app.signals.indexOf(signal1);
-        const signal2Idx = app.signals.indexOf(signal2);
+        const signals = app.getSignals();
+        const signal1Idx = signals.indexOf(signal1);
+        const signal2Idx = signals.indexOf(signal2);
         const row1 = app.rowManager.signalIndexToRowIndex(signal1Idx);
         const row2 = app.rowManager.signalIndexToRowIndex(signal2Idx);
         const measureRow = measure.measureRow;

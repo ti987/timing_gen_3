@@ -1,12 +1,32 @@
 // Timing Gen 3 - Data Management Module
-// Version 3.1.0
+// Version 3.2.0
 // Handles save/load functionality and data import/export
 
 class TimingGenData {
     static saveToJSON(app) {
-        // Save in unified row-based format (v3.1.0)
+        // Save in unified row-based format (v3.2.0)
+        // Embed actual data from Maps into rows for serialization
+        const rowsWithData = app.rows.map(row => {
+            if (row.type === 'signal') {
+                const signalData = app.signalsData.get(row.name);
+                return {
+                    type: 'signal',
+                    name: row.name,
+                    data: signalData
+                };
+            } else if (row.type === 'measure') {
+                const measureData = app.measuresData.get(row.name);
+                return {
+                    type: 'measure',
+                    name: row.name,
+                    data: measureData
+                };
+            }
+            return row;
+        });
+        
         const data = {
-            version: '3.1.0',
+            version: '3.2.0',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,
@@ -16,7 +36,7 @@ class TimingGenData {
                 delayMax: app.config.delayMax,
                 delayColor: app.config.delayColor
             },
-            rows: app.rows
+            rows: rowsWithData
         };
         
         const jsonStr = JSON.stringify(data, null, 2);
@@ -73,13 +93,41 @@ class TimingGenData {
                     }
                 }
                 
-                // Load unified row data (v3.1.0 format only)
+                // Load unified row data (v3.2.0+ format)
                 if (data.rows) {
-                    app.rows = data.rows;
-                    // Extract signals and measures for legacy array access
-                    TimingGenData.extractLegacyData(app);
+                    // Clear existing data
+                    app.rows = [];
+                    app.signalsData.clear();
+                    app.measuresData.clear();
+                    app.measureCounter = 0;
+                    
+                    // Populate Maps and rows array from saved data
+                    data.rows.forEach(row => {
+                        if (row.type === 'signal' && row.data) {
+                            // Store signal data in Map
+                            app.signalsData.set(row.name, row.data);
+                            // Add to rows array (ordering only)
+                            app.rows.push({
+                                type: 'signal',
+                                name: row.name
+                            });
+                        } else if (row.type === 'measure' && row.data) {
+                            // Store measure data in Map
+                            app.measuresData.set(row.name, row.data);
+                            // Add to rows array (ordering only)
+                            app.rows.push({
+                                type: 'measure',
+                                name: row.name
+                            });
+                            // Update measure counter for future measures
+                            const measureNum = parseInt(row.name.replace('M', ''));
+                            if (!isNaN(measureNum) && measureNum >= app.measureCounter) {
+                                app.measureCounter = measureNum + 1;
+                            }
+                        }
+                    });
                 } else {
-                    alert('Old file format not supported. This version requires v3.1.0 format.');
+                    alert('Old file format not supported. This version requires v3.2.0 format.');
                     return;
                 }
                 
@@ -93,25 +141,6 @@ class TimingGenData {
         
         reader.readAsText(file);
         ev.target.value = ''; // Reset file input
-    }
-    
-    /**
-     * Extract legacy signals and measures arrays from rows
-     * For compatibility with code that still uses these arrays
-     */
-    static extractLegacyData(app) {
-        app.signals = [];
-        app.measures = [];
-        
-        if (!app.rows) return;
-        
-        app.rows.forEach(row => {
-            if (row.type === 'signal') {
-                app.signals.push(row.data);
-            } else if (row.type === 'measure' && Array.isArray(row.data)) {
-                app.measures.push(...row.data);
-            }
-        });
     }
     
     static exportToSVG(app) {
