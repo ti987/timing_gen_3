@@ -1,5 +1,5 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Version 3.2.1
+// Version 3.3.0
 // Main JavaScript Application using Paper.js
 //
 // Key Features:
@@ -43,16 +43,22 @@ class TimingGenApp {
             backgroundColor: '#ffffff'
         };
         
-        // Data model v3.2.0 - Simplified single source of truth
-        // rows: defines order only - Array of {type: 'signal'|'measure', name: string}
+        // Data model v3.3.0 - Extended with text and counter widgets
+        // rows: defines order only - Array of {type: 'signal'|'measure'|'text'|'counter', name: string}
         // signalsData: Map<name, signalObject> - actual signal data
         // measuresData: Map<name, measureObject> - actual measure data
+        // textData: Map<name, textObject> - actual text data
+        // counterData: Map<name, counterObject> - actual counter data
         this.rows = [];
         this.signalsData = new Map();  // Key: signal name, Value: signal object
         this.measuresData = new Map(); // Key: measure name (auto-generated), Value: measure object
+        this.textData = new Map();     // Key: text name (auto-generated), Value: text object
+        this.counterData = new Map();  // Key: counter name (auto-generated), Value: counter object
         
         // Counter for auto-generating unique measure names
         this.measureCounter = 0;
+        this.textCounter = 0;
+        this.counterCounter = 0;
         
         // Row manager for unified row system
         this.rowManager = new RowManager(this);
@@ -122,6 +128,14 @@ class TimingGenApp {
             document.getElementById('add-submenu').style.display = 'none';
             this.startMeasureMode();
         });
+        document.getElementById('add-text-menu').addEventListener('click', () => {
+            document.getElementById('add-submenu').style.display = 'none';
+            this.showAddTextDialog();
+        });
+        document.getElementById('add-counter-menu').addEventListener('click', () => {
+            document.getElementById('add-submenu').style.display = 'none';
+            this.showAddCounterDialog();
+        });
         
         // Help menu and submenu
         document.getElementById('help-menu-btn').addEventListener('click', (e) => {
@@ -157,6 +171,14 @@ class TimingGenApp {
         // Measure text dialog
         document.getElementById('measure-text-ok-btn').addEventListener('click', () => this.finalizeMeasure());
         document.getElementById('measure-text-cancel-btn').addEventListener('click', () => this.cancelMeasure());
+        
+        // Text row dialog
+        document.getElementById('text-dialog-ok-btn').addEventListener('click', () => this.addTextRow());
+        document.getElementById('text-dialog-cancel-btn').addEventListener('click', () => this.hideAddTextDialog());
+        
+        // Counter row dialog
+        document.getElementById('counter-dialog-ok-btn').addEventListener('click', () => this.addCounterRow());
+        document.getElementById('counter-dialog-cancel-btn').addEventListener('click', () => this.hideAddCounterDialog());
         
         // Measure context menu
         document.getElementById('delete-measure-menu').addEventListener('click', () => this.deleteMeasure());
@@ -372,6 +394,85 @@ class TimingGenApp {
         document.getElementById('about-dialog').style.display = 'none';
     }
     
+    showAddTextDialog() {
+        document.getElementById('text-row-input').value = '';
+        document.getElementById('add-text-dialog').style.display = 'flex';
+    }
+    
+    hideAddTextDialog() {
+        document.getElementById('add-text-dialog').style.display = 'none';
+    }
+    
+    showAddCounterDialog() {
+        document.getElementById('counter-start-value-input').value = '1';
+        document.getElementById('counter-start-cycle-input').value = '0';
+        document.getElementById('add-counter-dialog').style.display = 'flex';
+    }
+    
+    hideAddCounterDialog() {
+        document.getElementById('add-counter-dialog').style.display = 'none';
+    }
+    
+    addTextRow() {
+        const text = document.getElementById('text-row-input').value;
+        
+        // Generate unique name
+        const name = `T${this.textCounter}`;
+        this.textCounter++;
+        
+        // Create text data object
+        const textData = {
+            text: text
+        };
+        
+        // Add to data store
+        this.textData.set(name, textData);
+        
+        // Add to rows array at the bottom
+        this.rows.push({
+            type: 'text',
+            name: name
+        });
+        
+        this.hideAddTextDialog();
+        this.render();
+    }
+    
+    addCounterRow() {
+        const startValue = document.getElementById('counter-start-value-input').value.trim();
+        const startCycle = parseInt(document.getElementById('counter-start-cycle-input').value);
+        
+        if (!startValue) {
+            alert('Please enter a start value');
+            return;
+        }
+        
+        // Generate unique name
+        const name = `C${this.counterCounter}`;
+        this.counterCounter++;
+        
+        // Create counter data object
+        // Format: [{cycle: N, value: "label"}]
+        const counterData = {
+            values: [{
+                cycle: startCycle,
+                value: startValue
+            }]
+        };
+        
+        // Add to data store
+        this.counterData.set(name, counterData);
+        
+        // Add to rows array at the bottom
+        this.rows.push({
+            type: 'counter',
+            name: name
+        });
+        
+        this.hideAddCounterDialog();
+        this.render();
+    }
+    
     addSignal() {
         const name = document.getElementById('signal-name-input').value.trim();
         const type = document.getElementById('signal-type-select').value;
@@ -566,9 +667,20 @@ class TimingGenApp {
                 }
                 return;
             } else if (this.measureState === 'placing-row') {
-                // Third click: finalize row and create measure with blank row insertion
-                const rowIndex = this.getRowIndexAtY(yPos);
-                this.currentMeasure.measureRow = rowIndex;
+                // Third click: finalize row and create measure with proper placement
+                // Calculate placement Y and determine insertion index
+                const placementY = this.getMeasurePlacementY(yPos);
+                
+                // Calculate row index for insertion based on placement Y
+                // If placementY is at a row boundary, we need to determine which index to use
+                const relativeY = placementY - this.config.headerHeight;
+                let insertIndex = Math.round(relativeY / this.config.rowHeight);
+                
+                // Clamp to valid range
+                const totalRows = this.rowManager.getTotalRows();
+                insertIndex = Math.max(0, Math.min(insertIndex, totalRows));
+                
+                this.currentMeasure.measureRow = insertIndex;
                 
                 // Finalize measure with actual blank row insertion
                 this.finalizeMeasureWithBlankRow();
@@ -2015,14 +2127,18 @@ class TimingGenApp {
             this.tempMeasureGraphics.push(line2);
             
             // Determine row from mouse position and draw arrow at that position
-            const rowIndex = this.getRowIndexAtY(yPos);
-            const arrowY = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
+            // For measure placement, we want to snap to row boundaries:
+            // - Above top row
+            // - Below bottom row
+            // - Between rows
+            // - Middle of measure rows (if there are multiple measures)
+            const placementY = this.getMeasurePlacementY(yPos);
             
-            // Draw the double-headed arrow at the current mouse row
+            // Draw the double-headed arrow at the placement position
             const arrows = this.drawMeasureArrows(
                 coords.x1,
                 coords.x2,
-                arrowY
+                placementY
             );
             this.tempMeasureGraphics.push(...arrows);
             
@@ -2117,6 +2233,50 @@ class TimingGenApp {
         const relativeY = yPos - this.config.headerHeight;
         const rowIndex = Math.floor(relativeY / this.config.rowHeight);
         return rowIndex;
+    }
+    
+    getMeasurePlacementY(yPos) {
+        // Calculates Y position for measure placement based on mouse position
+        // Snaps to:
+        // - Above top row (y = headerHeight)
+        // - Below bottom row
+        // - Between adjacent rows (at row boundaries)
+        // - Middle of measure rows (if clicking within a measure row area)
+        
+        const totalRows = this.rowManager.getTotalRows();
+        
+        if (yPos < this.config.headerHeight) {
+            // Above header - place above top row
+            return this.config.headerHeight;
+        }
+        
+        const relativeY = yPos - this.config.headerHeight;
+        const rowIndex = Math.floor(relativeY / this.config.rowHeight);
+        
+        if (rowIndex >= totalRows) {
+            // Below all rows - place below bottom row
+            return this.config.headerHeight + totalRows * this.config.rowHeight;
+        }
+        
+        // Check if mouse is in a measure row
+        const row = this.rows[rowIndex];
+        if (row && row.type === 'measure') {
+            // In a measure row - place in the middle
+            return this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
+        }
+        
+        // In a signal, text, or counter row
+        // Determine if closer to top or bottom of the row
+        const rowStartY = this.config.headerHeight + rowIndex * this.config.rowHeight;
+        const posInRow = yPos - rowStartY;
+        
+        if (posInRow < this.config.rowHeight / 2) {
+            // Closer to top - snap to top boundary (above current row)
+            return rowStartY;
+        } else {
+            // Closer to bottom - snap to bottom boundary (below current row)
+            return rowStartY + this.config.rowHeight;
+        }
     }
     
     // New drawing helper methods for measure feature

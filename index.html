@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<!-- Version 3.2.1 -->
+<!-- Version 3.3.0 -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,6 +18,8 @@
                 <button id="add-menu-btn" class="menu-btn">Add widget</button>
                 <div id="add-submenu" class="submenu" style="display: none;">
                     <div class="menu-item" id="add-measure-menu">Measure</div>
+                    <div class="menu-item" id="add-text-menu">Text</div>
+                    <div class="menu-item" id="add-counter-menu">Counter</div>
                 </div>
             </div>
             <button id="add-signal-btn" class="menu-btn">Add Signal</button>
@@ -282,7 +284,7 @@
             <h3>About Timing Gen 3</h3>
             <p><strong>Timing Gen 3</strong></p>
             <p>Interactive Digital Logic Waveform Editor</p>
-            <p>Version: <strong>3.2.1</strong></p>
+            <p>Version: <strong>3.3.0</strong></p>
             <br>
             <button id="about-ok-btn" class="dialog-btn">OK</button>
         </div>
@@ -304,6 +306,33 @@
             <br><br>
             <button id="measure-text-ok-btn" class="dialog-btn">OK</button>
             <button id="measure-text-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Add Text Row Dialog -->
+    <div id="add-text-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Add Text Row</h3>
+            <label>Text:</label>
+            <input type="text" id="text-row-input" placeholder="Enter text (or leave empty for blank row)">
+            <br><br>
+            <button id="text-dialog-ok-btn" class="dialog-btn">OK</button>
+            <button id="text-dialog-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Add Counter Row Dialog -->
+    <div id="add-counter-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Add Counter Row</h3>
+            <label>Start Value:</label>
+            <input type="text" id="counter-start-value-input" placeholder="e.g., t1 or 1" value="1">
+            <br><br>
+            <label>Start Cycle:</label>
+            <input type="number" id="counter-start-cycle-input" value="0" min="0">
+            <br><br>
+            <button id="counter-dialog-ok-btn" class="dialog-btn">OK</button>
+            <button id="counter-dialog-cancel-btn" class="dialog-btn">Cancel</button>
         </div>
     </div>
 

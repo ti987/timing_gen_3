@@ -1,5 +1,5 @@
 // Timing Gen 3 - Rendering Module
-// Version 3.2.1
+// Version 3.3.0
 // Handles all waveform rendering functionality using Paper.js
 
 class TimingGenRendering {
@@ -25,7 +25,7 @@ class TimingGenRendering {
         // Draw header with cycle numbers
         TimingGenRendering.drawHeader(app);
         
-        // Draw rows (signals and measures) from unified rows array
+        // Draw rows (signals, measures, text, counter) from unified rows array
         if (app.rows && app.rows.length > 0) {
             app.rows.forEach((row, rowIndex) => {
                 if (row.type === 'signal') {
@@ -49,6 +49,20 @@ class TimingGenRendering {
                         // Draw measure
                         app.measureLayer.activate();
                         TimingGenRendering.drawMeasure(app, measure, rowIndex);
+                    }
+                } else if (row.type === 'text') {
+                    // Draw text widget - get data from Map
+                    app.signalLayer.activate();
+                    const textData = app.textData.get(row.name);
+                    if (textData) {
+                        TimingGenRendering.drawTextRow(app, textData, rowIndex);
+                    }
+                } else if (row.type === 'counter') {
+                    // Draw counter widget - get data from Map
+                    app.signalLayer.activate();
+                    const counterData = app.counterData.get(row.name);
+                    if (counterData) {
+                        TimingGenRendering.drawCounterRow(app, counterData, rowIndex);
                     }
                 }
             });
@@ -95,6 +109,13 @@ class TimingGenRendering {
     }
     
     static drawHeader(app) {
+        // Skip drawing header if hideHeader flag is set (for SVG export)
+        // or if there are counter rows
+        const hasCounter = app.rows && app.rows.some(row => row.type === 'counter');
+        if (app.hideHeader || hasCounter) {
+            return;
+        }
+        
         for (let idx = 0; idx < app.config.cycles; idx++) {
             const xPos = app.config.nameColumnWidth + idx * app.config.cycleWidth + app.config.cycleWidth / 2;
             const yPos = 30;
@@ -903,5 +924,106 @@ class TimingGenRendering {
         // Use unified row system
         const rowIndex = app.rowManager.signalIndexToRowIndex(signalIndex);
         return app.rowManager.getRowYPosition(rowIndex);
+    }
+    
+    // ========================================
+    // Text and Counter Row Rendering
+    // ========================================
+    
+    static drawTextRow(app, textData, rowIndex) {
+        const yPos = app.rowManager.getRowYPosition(rowIndex);
+        
+        // Draw text in the waveform area (centered vertically in the row)
+        if (textData.text) {
+            const textObj = new paper.PointText({
+                point: [app.config.nameColumnWidth + 10, yPos + app.config.rowHeight / 2 + 5],
+                content: textData.text,
+                fillColor: 'black',
+                fontFamily: 'Arial',
+                fontSize: 14,
+                justification: 'left'
+            });
+        }
+        // If text is empty, row remains blank
+    }
+    
+    static drawCounterRow(app, counterData, rowIndex) {
+        const yPos = app.rowManager.getRowYPosition(rowIndex);
+        
+        // Parse counter values and generate labels for each cycle
+        const labels = TimingGenRendering.generateCounterLabels(counterData, app.config.cycles);
+        
+        // Draw each label in its corresponding cycle
+        for (let cycle = 0; cycle < app.config.cycles; cycle++) {
+            const label = labels[cycle];
+            if (label !== null && label !== undefined && label !== '') {
+                const xPos = app.config.nameColumnWidth + cycle * app.config.cycleWidth + app.config.cycleWidth / 2;
+                const text = new paper.PointText({
+                    point: [xPos, yPos + app.config.rowHeight / 2 + 5],
+                    content: String(label),
+                    fillColor: 'black',
+                    fontFamily: 'Arial',
+                    fontSize: 14,
+                    justification: 'center'
+                });
+            }
+        }
+    }
+    
+    static generateCounterLabels(counterData, totalCycles) {
+        // Initialize all cycles with empty string
+        const labels = new Array(totalCycles).fill('');
+        
+        if (!counterData.values || counterData.values.length === 0) {
+            return labels;
+        }
+        
+        // Sort values by cycle
+        const sorted = [...counterData.values].sort((a, b) => a.cycle - b.cycle);
+        
+        // Process each value entry
+        for (let i = 0; i < sorted.length; i++) {
+            const entry = sorted[i];
+            const startCycle = entry.cycle;
+            const startValue = entry.value;
+            
+            // Check if value is null/undefined (means stop counting)
+            if (startValue === null || startValue === undefined || startValue === 'null' || startValue === 'undef') {
+                // Stop counting - leave empty
+                if (startCycle >= 0 && startCycle < totalCycles) {
+                    labels[startCycle] = '';
+                }
+                continue;
+            }
+            
+            // Determine end cycle (either next entry or end of cycles)
+            const endCycle = (i < sorted.length - 1) ? sorted[i + 1].cycle : totalCycles;
+            
+            // Check if value is numeric or alphanumeric
+            const match = String(startValue).match(/^([a-zA-Z]*)(\d+)$/);
+            
+            if (match) {
+                // Alphanumeric format: extract prefix and number
+                const prefix = match[1];
+                let num = parseInt(match[2]);
+                
+                // Generate incremental labels
+                for (let cycle = startCycle; cycle < endCycle && cycle < totalCycles; cycle++) {
+                    if (cycle >= 0) {
+                        labels[cycle] = prefix + num;
+                        num++;
+                    }
+                }
+            } else {
+                // Not numeric - just repeat the value
+                for (let cycle = startCycle; cycle < endCycle && cycle < totalCycles; cycle++) {
+                    if (cycle >= 0) {
+                        labels[cycle] = startValue;
+                    }
+                }
+            }
+        }
+        
+        return labels;
     }
 }
