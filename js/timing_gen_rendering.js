@@ -22,8 +22,10 @@ class TimingGenRendering {
         app.gridLayer.activate();
         TimingGenRendering.drawGrid(app);
         
-        // Draw header with cycle numbers
-        TimingGenRendering.drawHeader(app);
+        // Draw header with cycle numbers (if header should be visible)
+        if (TimingGenRendering.shouldShowHeader(app)) {
+            TimingGenRendering.drawHeader(app);
+        }
         
         // Draw rows (signals, measures, text, counter) from unified rows array
         if (app.rows && app.rows.length > 0) {
@@ -108,14 +110,19 @@ class TimingGenRendering {
         });
     }
     
-    static drawHeader(app) {
-        // Skip drawing header if hideHeader flag is set (for SVG export)
-        // or if there are counter rows
-        const hasCounter = app.rows && app.rows.some(row => row.type === 'counter');
-        if (app.hideHeader || hasCounter) {
-            return;
+    static shouldShowHeader(app) {
+        // Determine if the cycle reference header should be shown
+        // Hide if:
+        // 1. hideHeader flag is set (for SVG export)
+        // 2. There are counter rows present
+        if (app.hideHeader) {
+            return false;
         }
-        
+        const hasCounter = app.rows && app.rows.some(row => row.type === 'counter');
+        return !hasCounter;
+    }
+    
+    static drawHeader(app) {
         for (let idx = 0; idx < app.config.cycles; idx++) {
             const xPos = app.config.nameColumnWidth + idx * app.config.cycleWidth + app.config.cycleWidth / 2;
             const yPos = 30;
@@ -988,7 +995,14 @@ class TimingGenRendering {
             const startValue = entry.value;
             
             // Check if value is null/undefined (means stop counting)
-            if (startValue === null || startValue === undefined || startValue === 'null' || startValue === 'undef') {
+            // Note: We support both actual null/undefined and string representations
+            // for backward compatibility with user-entered data
+            const isStopValue = startValue === null || 
+                               startValue === undefined || 
+                               startValue === 'null' || 
+                               startValue === 'undef';
+            
+            if (isStopValue) {
                 // Stop counting - leave empty
                 if (startCycle >= 0 && startCycle < totalCycles) {
                     labels[startCycle] = '';

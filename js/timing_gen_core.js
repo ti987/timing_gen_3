@@ -442,7 +442,7 @@ class TimingGenApp {
         const startValue = document.getElementById('counter-start-value-input').value.trim();
         const startCycle = parseInt(document.getElementById('counter-start-cycle-input').value);
         
-        if (!startValue) {
+        if (startValue === '') {
             alert('Please enter a start value');
             return;
         }

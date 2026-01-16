@@ -185,39 +185,40 @@ class TimingGenData {
         // Store current selection state
         const savedSelection = new Set(app.selectedSignals);
         const savedMeasureSelection = new Set(app.selectedMeasureRows);
+        const savedHideHeader = app.hideHeader;
         
-        // Clear selections to turn off signal highlight
-        app.selectedSignals.clear();
-        app.selectedMeasureRows.clear();
-        
-        // Set flag to hide header (cycle reference counter)
-        app.hideHeader = true;
-        
-        // Re-render with hidden header and no highlights
-        app.render();
-        
-        // Export using Paper.js
-        const svg = paper.project.exportSVG({ asString: true });
-        
-        // Restore selections
-        app.selectedSignals = savedSelection;
-        app.selectedMeasureRows = savedMeasureSelection;
-        
-        // Restore header flag
-        app.hideHeader = false;
-        
-        // Re-render to restore state
-        app.render();
-        
-        const blob = new Blob([svg], { type: 'image/svg+xml' });
-        const url = URL.createObjectURL(blob);
-        
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = 'timing_diagram.svg';
-        anchor.click();
-        
-        URL.revokeObjectURL(url);
+        try {
+            // Clear selections to turn off signal highlight
+            app.selectedSignals.clear();
+            app.selectedMeasureRows.clear();
+            
+            // Set flag to hide header (cycle reference counter)
+            app.hideHeader = true;
+            
+            // Re-render with hidden header and no highlights
+            app.render();
+            
+            // Export using Paper.js
+            const svg = paper.project.exportSVG({ asString: true });
+            
+            const blob = new Blob([svg], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = 'timing_diagram.svg';
+            anchor.click();
+            
+            URL.revokeObjectURL(url);
+        } finally {
+            // Restore selections and header state
+            app.selectedSignals = savedSelection;
+            app.selectedMeasureRows = savedMeasureSelection;
+            app.hideHeader = savedHideHeader;
+            
+            // Re-render to restore state
+            app.render();
+        }
     }
 }
 
