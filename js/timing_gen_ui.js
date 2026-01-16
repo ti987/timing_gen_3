@@ -16,7 +16,7 @@ class TimingGenUI {
     static showEditSignalDialog(app) {
         app.hideAllMenus();
         if (app.currentEditingSignal !== null) {
-            const signal = app.signals[app.currentEditingSignal];
+            const signal = app.getSignalByIndex(app.currentEditingSignal);
             document.getElementById('edit-signal-name-input').value = signal.name;
             document.getElementById('edit-signal-type-select').value = signal.type;
             document.getElementById('edit-signal-dialog').style.display = 'flex';
@@ -31,7 +31,7 @@ class TimingGenUI {
     static showBusValueDialog(app, signalIndex, cycle) {
         app.currentEditingSignal = signalIndex;
         app.currentEditingCycle = cycle;
-        const signal = app.signals[signalIndex];
+        const signal = app.getSignalByIndex(signalIndex);
         const currentValue = signal.values[cycle];
         
         document.getElementById('bus-value-input').value = currentValue !== undefined ? currentValue : '';
@@ -129,7 +129,7 @@ class TimingGenUI {
     
     static showSignalOptionsDialog(app) {
         if (app.currentEditingSignal !== null) {
-            const signal = app.signals[app.currentEditingSignal];
+            const signal = app.getSignalByIndex(app.currentEditingSignal);
             // Populate with signal-specific values if they exist
             document.getElementById('signal-slew-input').value = signal.slew !== undefined ? signal.slew : '';
             document.getElementById('signal-delay-min-input').value = signal.delayMin !== undefined ? signal.delayMin : '';
@@ -151,7 +151,7 @@ class TimingGenUI {
     
     static saveSignalOptions(app) {
         if (app.currentEditingSignal !== null) {
-            const signal = app.signals[app.currentEditingSignal];
+            const signal = app.getSignalByIndex(app.currentEditingSignal);
             const slewValue = document.getElementById('signal-slew-input').value;
             const delayMinValue = document.getElementById('signal-delay-min-input').value;
             const delayMaxValue = document.getElementById('signal-delay-max-input').value;
@@ -204,7 +204,7 @@ class TimingGenUI {
     
     static showCycleOptionsDialog(app) {
         if (app.currentEditingSignal !== null && app.currentEditingCycle !== null) {
-            const signal = app.signals[app.currentEditingSignal];
+            const signal = app.getSignalByIndex(app.currentEditingSignal);
             const cycle = app.currentEditingCycle;
             
             // Initialize cycle options if not exists
@@ -233,7 +233,7 @@ class TimingGenUI {
     
     static saveCycleOptions(app) {
         if (app.currentEditingSignal !== null && app.currentEditingCycle !== null) {
-            const signal = app.signals[app.currentEditingSignal];
+            const signal = app.getSignalByIndex(app.currentEditingSignal);
             const cycle = app.currentEditingCycle;
             
             if (!signal.cycleOptions) {
