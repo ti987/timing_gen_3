@@ -1,5 +1,5 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Version 3.2.0
+// Version 3.2.1
 // Main JavaScript Application using Paper.js
 //
 // Key Features:
@@ -115,20 +115,44 @@ class TimingGenApp {
             e.stopPropagation();
             const submenu = document.getElementById('add-submenu');
             submenu.style.display = submenu.style.display === 'none' ? 'block' : 'none';
+            // Close other submenus
+            document.getElementById('help-submenu').style.display = 'none';
         });
         document.getElementById('add-measure-menu').addEventListener('click', () => {
             document.getElementById('add-submenu').style.display = 'none';
             this.startMeasureMode();
         });
         
-        // Close submenu when clicking outside
+        // Help menu and submenu
+        document.getElementById('help-menu-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const submenu = document.getElementById('help-submenu');
+            submenu.style.display = submenu.style.display === 'none' ? 'block' : 'none';
+            // Close other submenus
+            document.getElementById('add-submenu').style.display = 'none';
+        });
+        document.getElementById('about-menu').addEventListener('click', () => {
+            document.getElementById('help-submenu').style.display = 'none';
+            this.showAboutDialog();
+        });
+        
+        // Close submenus when clicking outside
         document.addEventListener('click', (e) => {
-            const submenu = document.getElementById('add-submenu');
+            const addSubmenu = document.getElementById('add-submenu');
             const addBtn = document.getElementById('add-menu-btn');
-            if (!addBtn.contains(e.target) && !submenu.contains(e.target)) {
-                submenu.style.display = 'none';
+            const helpSubmenu = document.getElementById('help-submenu');
+            const helpBtn = document.getElementById('help-menu-btn');
+            
+            if (!addBtn.contains(e.target) && !addSubmenu.contains(e.target)) {
+                addSubmenu.style.display = 'none';
+            }
+            if (!helpBtn.contains(e.target) && !helpSubmenu.contains(e.target)) {
+                helpSubmenu.style.display = 'none';
             }
         });
+        
+        // About dialog
+        document.getElementById('about-ok-btn').addEventListener('click', () => this.hideAboutDialog());
         
         // Measure text dialog
         document.getElementById('measure-text-ok-btn').addEventListener('click', () => this.finalizeMeasure());
@@ -338,6 +362,14 @@ class TimingGenApp {
         document.getElementById('bus-cycle-context-menu').style.display = 'none';
         document.getElementById('cycle-context-menu').style.display = 'none';
         document.getElementById('measure-context-menu').style.display = 'none';
+    }
+    
+    showAboutDialog() {
+        document.getElementById('about-dialog').style.display = 'flex';
+    }
+    
+    hideAboutDialog() {
+        document.getElementById('about-dialog').style.display = 'none';
     }
     
     addSignal() {
@@ -1222,9 +1254,10 @@ class TimingGenApp {
         // Rebuild measure row indices
         this.rows.forEach((row, rowIndex) => {
             if (row.type === 'measure') {
-                row.data.forEach(measure => {
+                const measure = this.measuresData.get(row.name);
+                if (measure) {
                     measure.measureRow = rowIndex;
-                });
+                }
             }
         });
     }
@@ -1502,22 +1535,6 @@ class TimingGenApp {
                 measure.cycle2 += numCycles;
             }
         });
-        
-        // Also update in the rows array
-        if (this.rows) {
-            this.rows.forEach(row => {
-                if (row.type === 'measure' && Array.isArray(row.data)) {
-                    row.data.forEach(measure => {
-                        if (measure.cycle1 !== undefined && measure.cycle1 > startCycle) {
-                            measure.cycle1 += numCycles;
-                        }
-                        if (measure.cycle2 !== undefined && measure.cycle2 > startCycle) {
-                            measure.cycle2 += numCycles;
-                        }
-                    });
-                }
-            });
-        }
     }
     
     updateMeasureCyclesAfterDeletion(startCycle, numCycles) {

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<!-- Version 3.1.0 -->
+<!-- Version 3.2.1 -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,6 +26,12 @@
             <button id="load-btn" class="menu-btn">Load</button>
             <button id="export-svg-btn" class="menu-btn">Export SVG</button>
             <input type="file" id="file-input" accept=".td3,.json" style="display: none;">
+            <div class="menu-dropdown">
+                <button id="help-menu-btn" class="menu-btn">Help</button>
+                <div id="help-submenu" class="submenu" style="display: none;">
+                    <div class="menu-item" id="about-menu">About</div>
+                </div>
+            </div>
             <label>Cycles: </label>
             <input type="number" id="cycles-input" value="20" min="5" max="100" style="width: 60px;">
         </div>
@@ -267,6 +273,18 @@
             <br><br>
             <button id="delete-cycles-ok-btn" class="dialog-btn">OK</button>
             <button id="delete-cycles-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- About Dialog -->
+    <div id="about-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>About Timing Gen 3</h3>
+            <p><strong>Timing Gen 3</strong></p>
+            <p>Interactive Digital Logic Waveform Editor</p>
+            <p>Version: <strong>3.2.1</strong></p>
+            <br>
+            <button id="about-ok-btn" class="dialog-btn">OK</button>
         </div>
     </div>
 

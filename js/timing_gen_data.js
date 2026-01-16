@@ -1,5 +1,5 @@
 // Timing Gen 3 - Data Management Module
-// Version 3.2.0
+// Version 3.2.1
 // Handles save/load functionality and data import/export
 
 class TimingGenData {
@@ -26,7 +26,7 @@ class TimingGenData {
         });
         
         const data = {
-            version: '3.2.0',
+            version: '3.2.1',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,
@@ -121,7 +121,7 @@ class TimingGenData {
                         }
                     });
                 } else {
-                    alert('Old file format not supported. This version requires v3.2.0 format.');
+                    alert('Old file format not supported. This version requires v3.2.x format.');
                     return;
                 }
                 

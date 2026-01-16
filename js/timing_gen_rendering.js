@@ -1,5 +1,5 @@
 // Timing Gen 3 - Rendering Module
-// Version 3.2.0
+// Version 3.2.1
 // Handles all waveform rendering functionality using Paper.js
 
 class TimingGenRendering {
