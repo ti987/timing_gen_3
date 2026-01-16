@@ -5,8 +5,11 @@ An interactive web-based digital logic waveform editor for creating and editing 
 ## Features
 
 - **Multiple Signal Types**: Clock, Bit, and Bus signals
+- **Widget Rows**: Text labels and Counter displays for documentation
 - **Interactive Editing**:
   - Add signals with custom names and types
+  - Add text rows for labels and annotations
+  - Add counter rows for cycle numbering (with custom formats like "t1", "t2", etc.)
   - Toggle bit signal states by clicking
   - Set bus values with radix support (hex, dec, string, X, Z)
   - Right-click context menus for editing
@@ -15,9 +18,15 @@ An interactive web-based digital logic waveform editor for creating and editing 
   - Clock signals with square waves
   - Bit signals with transitions, X (unknown), and Z (high-impedance) states
   - Bus signals with slew transitions and value labels
+  - Text rows for annotations in waveform area
+  - Counter rows with incremental or custom numbering
+- **Measurement Tools**:
+  - Add timing measurements between signal transitions
+  - Visual indicators with double-headed arrows
+  - Flexible placement (above, below, or between rows)
 - **File Operations**:
   - Save/Load diagrams in JSON format
-  - Export to SVG for documentation
+  - Export to SVG for documentation (with proper handling of text/counter widgets)
 - **Configurable**: Adjustable number of cycles
 
 ## Setup
@@ -54,6 +63,28 @@ The application uses Paper.js from CDN, so no manual download is required. Howev
 3. Select signal type (Clock, Bit, or Bus)
 4. Click "OK"
 
+### Adding Widgets
+
+**Text Rows:**
+1. Click "Add Widget" → "Text" in the top menu
+2. Enter text for the row (or leave empty for a blank row)
+3. Click "OK"
+4. Text appears in the waveform area, not in the name column
+
+**Counter Rows:**
+1. Click "Add Widget" → "Counter" in the top menu
+2. Enter a start value (e.g., "1", "t1", "ts1")
+3. Enter the start cycle number
+4. Click "OK"
+5. The counter automatically increments for each cycle
+6. Supports formats like "t1", "t2", "t3" or "1", "2", "3"
+
+**Measurements:**
+1. Click "Add Widget" → "Measure" in the top menu
+2. Click on the first signal transition point
+3. Click on the second signal transition point
+4. Click where you want the measurement displayed (above rows, below rows, or between rows)
+
 ### Editing Signals
 
 - **Edit Signal Name/Type**: Right-click on signal name → "Edit"
@@ -82,10 +113,41 @@ The application uses Paper.js from CDN, so no manual download is required. Howev
 - **Save**: Click "Save" to download the current diagram as a JSON file
 - **Load**: Click "Load" to open a previously saved JSON file
 - **Export SVG**: Click "Export SVG" to download the diagram as an SVG image
+  - Text and counter rows are included in the SVG
+  - Signal highlights are automatically turned off
+  - Cycle reference numbers are hidden in SVG when counter rows are present
 
 ### Configuration
 
 - **Cycles**: Use the number input in the top menu to change the number of cycles displayed
+
+## Widget Types
+
+### Text Rows
+- Display text annotations in the waveform area
+- Can be empty for spacing/blank rows
+- Movable and reorderable like signals
+- Included in SVG exports
+
+### Counter Rows
+- Display incremental cycle counters
+- Support alphanumeric formats: "t1", "t2", "ts1", "ts2", etc.
+- Support purely numeric formats: "1", "2", "3", etc.
+- Can start and stop at specific cycles
+- Automatically hides the default cycle reference counter
+- Included in SVG exports
+
+Example counter configuration:
+```json
+{
+  "values": [
+    {"cycle": 1, "value": "4"},      // Start at cycle 1 with value "4"
+    {"cycle": 4, "value": null},     // Stop counting at cycle 4
+    {"cycle": 6, "value": "ts1"}     // Resume at cycle 6 with "ts1"
+  ]
+}
+```
+This produces: "", "4", "5", "6", "", "", "ts1", "ts2", ...
 
 ## Signal Types
 
@@ -124,23 +186,47 @@ The application uses Paper.js from CDN, so no manual download is required. Howev
 The JSON file format contains:
 ```json
 {
-  "version": "3.0",
+  "version": "3.3.0",
   "config": {
     "cycles": 20
   },
-  "signals": [
+  "rows": [
     {
+      "type": "signal",
       "name": "clk",
-      "type": "clock",
-      "values": {}
+      "data": {
+        "name": "clk",
+        "type": "clock",
+        "values": {}
+      }
     },
     {
+      "type": "text",
+      "name": "T0",
+      "data": {
+        "text": "Data Phase"
+      }
+    },
+    {
+      "type": "counter",
+      "name": "C0",
+      "data": {
+        "values": [
+          {"cycle": 0, "value": "t1"}
+        ]
+      }
+    },
+    {
+      "type": "signal",
       "name": "data",
-      "type": "bus",
-      "values": {
-        "0": "X",
-        "3": "0xAB",
-        "8": "Z"
+      "data": {
+        "name": "data",
+        "type": "bus",
+        "values": {
+          "0": "X",
+          "3": "0xAB",
+          "8": "Z"
+        }
       }
     }
   ]
