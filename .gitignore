@@ -27,3 +27,6 @@ Thumbs.db
 
 # Test files
 test_signals.json
+playwright-report/
+test-results/
+playwright/.cache/
