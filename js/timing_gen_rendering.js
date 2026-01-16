@@ -52,36 +52,14 @@ class TimingGenRendering {
                     }
                 }
             });
-        } else {
-            // Fallback to old system - use helper methods to get signals/measures
-            app.signalLayer.activate();
-            const signals = app.getSignals();
-            signals.forEach((signal, index) => {
-                TimingGenRendering.drawSignal(app, signal, index);
-            });
-            
-            app.measureLayer.activate();
-            const measures = app.getMeasures();
-            measures.forEach((measure, index) => {
-                TimingGenRendering.drawMeasure(app, measure, index);
-            });
         }
         
         paper.view.draw();
     }
     
     static drawGrid(app) {
-        // Calculate total rows
-        let totalRows;
-        if (app.rowManager && app.rowManager.isUsingNewSystem()) {
-            totalRows = app.rowManager.getTotalRows();
-        } else {
-            // Old system: signals + blank rows
-            const signals = app.getSignals();
-            const blankRowCount = app.blankRows ? app.blankRows.length : 0;
-            totalRows = signals.length + blankRowCount;
-        }
-        
+        // Calculate total rows from unified row system
+        const totalRows = app.rowManager.getTotalRows();
         const maxHeight = app.config.headerHeight + totalRows * app.config.rowHeight;
         
         // Vertical lines (cycle dividers) - draw to max height based on signals
@@ -97,13 +75,7 @@ class TimingGenRendering {
         
         // Horizontal lines (row dividers)
         for (let idx = 0; idx <= totalRows; idx++) {
-            let yPos;
-            if (app.rowManager && app.rowManager.isUsingNewSystem()) {
-                yPos = app.rowManager.getRowYPosition(idx);
-            } else {
-                // Old system
-                yPos = TimingGenRendering.getSignalYPosition(app, idx);
-            }
+            const yPos = app.rowManager.getRowYPosition(idx);
             
             const line = new paper.Path.Line({
                 from: [0, yPos],
@@ -928,17 +900,8 @@ class TimingGenRendering {
     }
     
     static getSignalYPosition(app, signalIndex) {
-        // Use row manager for unified row system
-        if (app.rowManager && app.rowManager.isUsingNewSystem()) {
-            const rowIndex = app.rowManager.signalIndexToRowIndex(signalIndex);
-            return app.rowManager.getRowYPosition(rowIndex);
-        }
-        
-        // Fallback to old system: Calculate Y position accounting for blank rows
-        let blankRowsAbove = 0;
-        if (app.blankRows) {
-            blankRowsAbove = app.blankRows.filter(rowIndex => rowIndex <= signalIndex).length;
-        }
-        return app.config.headerHeight + (signalIndex + blankRowsAbove) * app.config.rowHeight;
+        // Use unified row system
+        const rowIndex = app.rowManager.signalIndexToRowIndex(signalIndex);
+        return app.rowManager.getRowYPosition(rowIndex);
     }
 }

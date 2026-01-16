@@ -112,101 +112,44 @@ class RowManager {
     }
     
     // ========================================
-    // Conversion Helpers (for migration)
+    // Conversion Helpers
     // ========================================
     
     /**
-     * Convert signal index to row index (old system → new system)
-     * During migration, this accounts for blank rows
+     * Convert signal index to row index
      * @param {number} signalIndex - Signal array index
      * @returns {number} Row index in unified system
      */
     signalIndexToRowIndex(signalIndex) {
-        // During migration phase, we need to check if using old or new system
-        if (this.app.rows) {
-            // New system: find the row where signal is located
-            for (let i = 0; i < this.app.rows.length; i++) {
-                if (this.app.rows[i].type === 'signal') {
-                    if (signalIndex === 0) return i;
-                    signalIndex--;
-                }
+        // Find the row where signal is located
+        for (let i = 0; i < this.app.rows.length; i++) {
+            if (this.app.rows[i].type === 'signal') {
+                if (signalIndex === 0) return i;
+                signalIndex--;
             }
-            return -1;
-        } else {
-            // Old system: account for blank rows
-            if (!this.app.blankRows || this.app.blankRows.length === 0) {
-                return signalIndex;
-            }
-            
-            let rowIndex = signalIndex;
-            for (const blankRowIndex of this.app.blankRows) {
-                if (blankRowIndex <= signalIndex) {
-                    rowIndex++;
-                } else {
-                    break;
-                }
-            }
-            return rowIndex;
         }
+        return -1;
     }
     
     /**
-     * Convert row index to signal index (new system → old system)
+     * Convert row index to signal index
      * @param {number} rowIndex - Row index in unified system
      * @returns {number} Signal array index (-1 if not a signal row)
      */
     rowIndexToSignalIndex(rowIndex) {
-        if (this.app.rows) {
-            // New system: count signals before this row
-            let signalCount = 0;
-            for (let i = 0; i < rowIndex && i < this.app.rows.length; i++) {
-                if (this.app.rows[i].type === 'signal') {
-                    signalCount++;
-                }
+        // Count signals before this row
+        let signalCount = 0;
+        for (let i = 0; i < rowIndex && i < this.app.rows.length; i++) {
+            if (this.app.rows[i].type === 'signal') {
+                signalCount++;
             }
-            
-            // Check if the row at rowIndex is a signal
-            if (rowIndex < this.app.rows.length && this.app.rows[rowIndex].type === 'signal') {
-                return signalCount;
-            }
-            return -1;
-        } else {
-            // Old system: account for blank rows
-            if (!this.app.blankRows || this.app.blankRows.length === 0) {
-                return rowIndex;
-            }
-            
-            let signalIndex = rowIndex;
-            for (const blankRowIndex of this.app.blankRows) {
-                if (blankRowIndex <= rowIndex) {
-                    signalIndex--;
-                } else {
-                    break;
-                }
-            }
-            return signalIndex >= 0 ? signalIndex : -1;
         }
-    }
-    
-    /**
-     * Get signal data by signal index
-     * Works with both old and new systems
-     * @param {number} signalIndex - Signal array index
-     * @returns {Object|null} Signal data
-     */
-    getSignalByIndex(signalIndex) {
-        if (this.app.rows) {
-            // New system: find in rows array
-            const rowIndex = this.signalIndexToRowIndex(signalIndex);
-            if (rowIndex >= 0) {
-                const row = this.app.rows[rowIndex];
-                return row && row.type === 'signal' ? row.data : null;
-            }
-            return null;
-        } else {
-            // Old system: direct access
-            return this.app.signals[signalIndex] || null;
+        
+        // Check if the row at rowIndex is a signal
+        if (rowIndex < this.app.rows.length && this.app.rows[rowIndex].type === 'signal') {
+            return signalCount;
         }
+        return -1;
     }
     
     // ========================================
@@ -318,82 +261,11 @@ class RowManager {
         });
     }
     
-    // ========================================
-    // System Detection & Migration
-    // ========================================
-    
     /**
-     * Check if app is using new row-based system
-     * @returns {boolean} True if using new system
+     * Check if app is using row-based system
+     * @returns {boolean} True if using unified row system
      */
     isUsingNewSystem() {
         return this.app.rows !== undefined && Array.isArray(this.app.rows);
-    }
-    
-    /**
-     * Migrate from old gap-based system to new row-based system
-     */
-    migrateToNewSystem() {
-        if (this.isUsingNewSystem()) {
-            return; // Already migrated
-        }
-        
-        const rows = [];
-        
-        // Convert signals to rows, tracking signal index to row index mapping
-        const signalToRowMap = new Map();
-        
-        for (let i = 0; i < this.app.signals.length; i++) {
-            // Record mapping before adding
-            signalToRowMap.set(i, rows.length);
-            
-            rows.push({
-                type: 'signal',
-                data: this.app.signals[i]
-            });
-            
-            // Check if there's a blank row (measure row) after this signal
-            // In old system, measureRow represents gap index
-            if (this.app.blankRows && this.app.blankRows.includes(i)) {
-                // Find measures at this gap index
-                const measuresAtGap = this.app.measures.filter(m => m.measureRow === i);
-                
-                if (measuresAtGap.length > 0) {
-                    // Convert measure signal references to row indices using our map
-                    measuresAtGap.forEach(measure => {
-                        // Use signal1Index and signal2Index if they exist
-                        if (measure.signal1Index !== undefined && signalToRowMap.has(measure.signal1Index)) {
-                            measure.signal1Row = signalToRowMap.get(measure.signal1Index);
-                        } else {
-                            // Fallback to previous signal row
-                            measure.signal1Row = rows.length - 1;
-                        }
-                        
-                        if (measure.signal2Index !== undefined && signalToRowMap.has(measure.signal2Index)) {
-                            measure.signal2Row = signalToRowMap.get(measure.signal2Index);
-                        } else {
-                            measure.signal2Row = rows.length - 1;
-                        }
-                        
-                        // Remove old fields
-                        delete measure.measureRow;
-                        delete measure.signal1Index;
-                        delete measure.signal2Index;
-                    });
-                    
-                    rows.push({
-                        type: 'measure',
-                        data: measuresAtGap
-                    });
-                }
-            }
-        }
-        
-        // Set new rows array
-        this.app.rows = rows;
-        
-        // Clean up old data structures
-        delete this.app.blankRows;
-        // Keep signals array for now for backward compatibility
     }
 }

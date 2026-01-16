@@ -76,12 +76,6 @@ class TimingGenData {
                     if (data.config.slew !== undefined) {
                         app.config.slew = data.config.slew;
                     }
-                    // Backward compatibility: support old single delay format
-                    if (data.config.delay !== undefined) {
-                        app.config.delayMin = data.config.delay;
-                        app.config.delayMax = data.config.delay;
-                    }
-                    // New format: support min/max delay
                     if (data.config.delayMin !== undefined) {
                         app.config.delayMin = data.config.delayMin;
                     }

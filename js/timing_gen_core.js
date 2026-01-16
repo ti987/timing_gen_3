@@ -765,13 +765,7 @@ class TimingGenApp {
         let delayMaxInTime = 0;
         let delayColor = this.config.delayColor || '#0000FF'; // Ensure we always have a color
         
-        // Backward compatibility: handle old single delay field at global level (only if new fields not set)
-        if (this.config.delay !== undefined && this.config.delayMin === undefined && this.config.delayMax === undefined) {
-            delayMinInTime = this.config.delay;
-            delayMaxInTime = this.config.delay;
-        }
-        
-        // Apply global level overrides (if defined)
+        // Apply global level settings
         if (this.config.delayMin !== undefined) {
             delayMinInTime = this.config.delayMin;
         }
@@ -789,13 +783,7 @@ class TimingGenApp {
             return { min: delayMinInPixels, max: delayMaxInPixels, color: delayColor };
         }
         
-        // Backward compatibility: handle old single delay field at signal level (only if new fields not set)
-        if (signal.delay !== undefined && signal.delayMin === undefined && signal.delayMax === undefined) {
-            delayMinInTime = signal.delay;
-            delayMaxInTime = signal.delay;
-        }
-        
-        // Apply signal level overrides (if defined)
+        // Apply signal level overrides
         if (signal.delayMin !== undefined) {
             delayMinInTime = signal.delayMin;
         }
@@ -806,15 +794,9 @@ class TimingGenApp {
             delayColor = signal.delayColor;
         }
         
-        // Apply cycle level overrides (if defined)
+        // Apply cycle level overrides
         if (signal.cycleOptions && signal.cycleOptions[cycle]) {
             const cycleOpts = signal.cycleOptions[cycle];
-            
-            // Backward compatibility: handle old single delay field at cycle level (only if new fields not set)
-            if (cycleOpts.delay !== undefined && cycleOpts.delayMin === undefined && cycleOpts.delayMax === undefined) {
-                delayMinInTime = cycleOpts.delay;
-                delayMaxInTime = cycleOpts.delay;
-            }
             
             if (cycleOpts.delayMin !== undefined) {
                 delayMinInTime = cycleOpts.delayMin;
@@ -844,7 +826,7 @@ class TimingGenApp {
     }
     
     getSignalIndexAtY(yPos) {
-        // Use unified row system if available
+        // Use unified row system
         if (this.rowManager && this.rowManager.isUsingNewSystem()) {
             const rowIndex = this.rowManager.getRowIndexAtY(yPos);
             if (rowIndex < 0) return -1;
@@ -853,33 +835,7 @@ class TimingGenApp {
             return this.rowManager.rowIndexToSignalIndex(rowIndex);
         }
         
-        // Fallback to old system
-        const relY = yPos - this.config.headerHeight;
-        if (relY < 0) return -1;
-        
-        const visualRow = Math.floor(relY / this.config.rowHeight);
-        
-        // Account for blank rows - we need to map visual row to signal index
-        if (!this.blankRows || this.blankRows.length === 0) {
-            // No blank rows, direct mapping
-            const signals = this.getSignals();
-            return (visualRow >= 0 && visualRow < signals.length) ? visualRow : -1;
-        }
-        
-        // Count how many blank rows are before this visual row
-        let blankRowsBeforeThis = 0;
-        for (const blankRowIndex of this.blankRows) {
-            if (blankRowIndex <= visualRow) {
-                blankRowsBeforeThis++;
-            } else {
-                break;
-            }
-        }
-        
-        // The actual signal index is visual row minus blank rows before it
-        const signalIndex = visualRow - blankRowsBeforeThis;
-        const signals = this.getSignals();
-        return (signalIndex >= 0 && signalIndex < signals.length) ? signalIndex : -1;
+        return -1;
     }
     
     getRowAtY(yPos) {
@@ -896,7 +852,7 @@ class TimingGenApp {
         return {
             index: rowIndex,
             type: this.rows[rowIndex].type,
-            data: this.rows[rowIndex].data
+            name: this.rows[rowIndex].name
         };
     }
     
@@ -2425,84 +2381,6 @@ class TimingGenApp {
         this.tool.onMouseMove = this.originalOnMouseMove;
         
         this.render();
-    }
-    
-    insertBlankRowAtPosition(rowIndex) {
-        // Insert a blank row by shifting signals down
-        // rowIndex can be negative (above all signals), between signals, or after all signals
-        
-        if (rowIndex < 0) {
-            // Insert above all signals - no signal moving needed
-            return;
-        }
-        const signals = this.getSignals();
-        
-        if (rowIndex >= signals.length) {
-            // Insert below all signals - no signal moving needed
-            return;
-        }
-        
-        // Insert between signals - shift signals at rowIndex and below down by one row
-        // We do this by adjusting the rendering, not by actually moving signal data
-        // The measure will be drawn in the blank space
-        
-        // For now, we'll mark that a blank row exists at this position
-        // The rendering will handle spacing appropriately
-        if (!this.blankRows) {
-            this.blankRows = [];
-        }
-        this.blankRows.push(rowIndex);
-        this.blankRows.sort((a, b) => a - b);
-    }
-    
-    finalizeMeasureWithoutText() {
-        // Finalize measure without text input (as requested - text is separate operation)
-        this.currentMeasure.text = ''; // No text for now
-        
-        const measureName = this.currentMeasure.name;
-        const measureRowIndex = this.currentMeasure.measureRow;
-        
-        // Store measure in Map
-        this.measuresData.set(measureName, this.currentMeasure);
-        
-        // Insert blank row if needed at the selected row
-        this.insertBlankRowForMeasure(measureRowIndex);
-        
-        // Add measure row to rows array
-        this.rows.splice(measureRowIndex, 0, {
-            type: 'measure',
-            name: measureName
-        });
-        
-        // Clean up
-        this.hideInstruction();
-        this.measureMode = false;
-        this.measureState = null;
-        this.currentMeasure = null;
-        this.canvas.style.cursor = 'crosshair';
-        
-        if (this.tempMeasureGraphics) {
-            this.tempMeasureGraphics.remove();
-            this.tempMeasureGraphics = null;
-        }
-        
-        // Restore original onMouseMove
-        this.tool.onMouseMove = this.originalOnMouseMove;
-        
-        this.render();
-    }
-    
-    insertBlankRowForMeasure(rowIndex) {
-        // Insert a blank row at the specified index if needed
-        // For now, we'll just note the row - actual row insertion would require
-        // moving signals down which is complex. This is a placeholder.
-        // The rendering will handle drawing measures between existing rows.
-        
-        // TODO: Implement actual signal moving to create blank rows
-        // This would involve:
-        // 1. Shifting all signals at rowIndex and below down by one row
-        // 2. Updating the canvas height
-        // 3. Re-rendering everything
     }
     
     finalizeMeasure() {
