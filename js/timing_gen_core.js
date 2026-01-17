@@ -71,10 +71,17 @@ class TimingGenApp {
         
         // Measure mode state
         this.measureMode = false;
-        this.measureState = null; // null, 'first-point', 'second-point', 'placing-text'
+        this.measureState = null; // null, 'first-point', 'second-point', 'placing-text', 'rechoose-point-1', 'rechoose-point-2'
         this.currentMeasure = null; // Current measure being created
         this.currentEditingMeasure = null; // Index of measure being edited
         this.tempMeasureGraphics = null; // Temporary graphics for measure creation
+        this.isDraggingMeasureText = false; // For dragging measure text
+        this.dragStartX = null; // Starting X position for text drag
+        this.originalTextX = null; // Original text X position
+        this.rechoosingPointIndex = null; // Which point is being rechosen (1 or 2)
+        this.isMovingMeasureRow = false; // Flag for moving measure to another row
+        this.movingMeasureRowIndex = null; // Row index of measure being moved
+        this.isMeasureTextContext = false; // Flag for measure text context menu
         
         // Insert/Delete cycle mode tracking
         this.insertCycleMode = null; // 'global' or 'signal'
@@ -412,6 +419,9 @@ class TimingGenApp {
         document.getElementById('cycle-context-menu').style.display = 'none';
         document.getElementById('measure-context-menu').style.display = 'none';
         document.getElementById('text-context-menu').style.display = 'none';
+        
+        // Reset measure text context flag
+        this.isMeasureTextContext = false;
     }
     
     showAboutDialog() {
@@ -432,7 +442,15 @@ class TimingGenApp {
     }
     
     showEditTextDialog() {
-        if (this.currentEditingText) {
+        if (this.isMeasureTextContext) {
+            // Handle measure text editing
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                const measure = measures[this.currentEditingMeasure];
+                document.getElementById('edit-text-input').value = measure.text || '';
+                document.getElementById('edit-text-dialog').style.display = 'flex';
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 document.getElementById('edit-text-input').value = textData.text || '';
@@ -447,7 +465,16 @@ class TimingGenApp {
     }
     
     showFontDialog() {
-        if (this.currentEditingText) {
+        if (this.isMeasureTextContext) {
+            // Handle measure text font
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                const measure = measures[this.currentEditingMeasure];
+                document.getElementById('font-family-select').value = measure.textFont || 'Arial';
+                document.getElementById('font-size-input').value = measure.textSize || 12;
+                document.getElementById('font-dialog').style.display = 'flex';
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 document.getElementById('font-family-select').value = textData.fontFamily || 'Arial';
@@ -463,7 +490,15 @@ class TimingGenApp {
     }
     
     showColorDialog() {
-        if (this.currentEditingText) {
+        if (this.isMeasureTextContext) {
+            // Handle measure text color
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                const measure = measures[this.currentEditingMeasure];
+                document.getElementById('text-color-input').value = measure.textColor || '#FF0000';
+                document.getElementById('color-dialog').style.display = 'flex';
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 document.getElementById('text-color-input').value = textData.color || '#000000';
@@ -478,7 +513,17 @@ class TimingGenApp {
     }
     
     updateTextRow() {
-        if (this.currentEditingText) {
+        if (this.isMeasureTextContext) {
+            // Update measure text
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                const measure = measures[this.currentEditingMeasure];
+                measure.text = document.getElementById('edit-text-input').value;
+                this.hideEditTextDialog();
+                this.isMeasureTextContext = false;
+                this.render();
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 textData.text = document.getElementById('edit-text-input').value;
@@ -489,7 +534,23 @@ class TimingGenApp {
     }
     
     updateTextFont() {
-        if (this.currentEditingText) {
+        if (this.isMeasureTextContext) {
+            // Update measure text font
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                const measure = measures[this.currentEditingMeasure];
+                measure.textFont = document.getElementById('font-family-select').value;
+                const fontSize = parseInt(document.getElementById('font-size-input').value);
+                if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
+                    measure.textSize = fontSize;
+                } else {
+                    measure.textSize = 12; // Default fallback
+                }
+                this.hideFontDialog();
+                this.isMeasureTextContext = false;
+                this.render();
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 textData.fontFamily = document.getElementById('font-family-select').value;
@@ -507,7 +568,17 @@ class TimingGenApp {
     }
     
     updateTextColor() {
-        if (this.currentEditingText) {
+        if (this.isMeasureTextContext) {
+            // Update measure text color
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                const measure = measures[this.currentEditingMeasure];
+                measure.textColor = document.getElementById('text-color-input').value;
+                this.hideColorDialog();
+                this.isMeasureTextContext = false;
+                this.render();
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 textData.color = document.getElementById('text-color-input').value;
@@ -842,6 +913,93 @@ class TimingGenApp {
                 // Clamp to valid range
                 const totalRows = this.rowManager.getTotalRows();
                 insertIndex = Math.max(0, Math.min(insertIndex, totalRows));
+                
+                this.currentMeasure.measureRow = insertIndex;
+                
+                // Finalize measure with actual blank row insertion
+                this.finalizeMeasureWithBlankRow();
+                return;
+            } else if (this.measureState === 'rechoose-point-1') {
+                // Re-choosing first point
+                const transition = this.findNearestTransition(xPos, yPos);
+                
+                if (transition) {
+                    const measures = this.getMeasures();
+                    const measure = measures[this.currentEditingMeasure];
+                    const signal = this.getSignalByIndex(transition.signalIndex);
+                    measure.signal1Name = signal.name;
+                    measure.cycle1 = transition.cycle;
+                    
+                    // Exit re-choose mode
+                    this.measureMode = false;
+                    this.measureState = null;
+                    this.rechoosingPointIndex = null;
+                    this.canvas.style.cursor = 'default';
+                    this.hideInstruction();
+                    this.render();
+                }
+                return;
+            } else if (this.measureState === 'rechoose-point-2') {
+                // Re-choosing second point
+                const transition = this.findNearestTransition(xPos, yPos);
+                
+                if (transition) {
+                    const measures = this.getMeasures();
+                    const measure = measures[this.currentEditingMeasure];
+                    const signal = this.getSignalByIndex(transition.signalIndex);
+                    measure.signal2Name = signal.name;
+                    measure.cycle2 = transition.cycle;
+                    
+                    // Exit re-choose mode
+                    this.measureMode = false;
+                    this.measureState = null;
+                    this.rechoosingPointIndex = null;
+                    this.canvas.style.cursor = 'default';
+                    this.hideInstruction();
+                    this.render();
+                }
+                return;
+            }
+        }
+        
+        // Handle moving measure to another row
+        if (this.isMovingMeasureRow) {
+            const row = this.getRowAtY(yPos);
+            if (row) {
+                const measures = this.getMeasures();
+                const measure = measures[this.currentEditingMeasure];
+                const measureName = measure.name;
+                
+                // Remove from old position
+                const oldRowIndex = this.rows.findIndex(r => r.type === 'measure' && r.name === measureName);
+                if (oldRowIndex >= 0) {
+                    this.rows.splice(oldRowIndex, 1);
+                }
+                
+                // Calculate new insertion index
+                let newRowIndex = row.index;
+                if (oldRowIndex < newRowIndex) {
+                    newRowIndex--; // Adjust for removal
+                }
+                
+                // Insert at new position
+                this.rows.splice(newRowIndex, 0, {
+                    type: 'measure',
+                    name: measureName
+                });
+                
+                // Update measure row reference
+                measure.measureRow = newRowIndex;
+                
+                // Exit moving mode
+                this.isMovingMeasureRow = false;
+                this.movingMeasureRowIndex = null;
+                this.canvas.style.cursor = 'default';
+                this.hideInstruction();
+                this.render();
+            }
+            return;
+        }
                 
                 this.currentMeasure.measureRow = insertIndex;
                 
@@ -2001,7 +2159,11 @@ class TimingGenApp {
             signal2Row: null,  // Changed from signal2Index to signal2Row
             cycle2: null,
             measureRow: null,  // Row index where measure will be placed
-            text: ''
+            text: '',
+            textX: null,       // X position of text (relative to arrow)
+            textFont: 'Arial', // Font family for text
+            textSize: 12,      // Font size for text
+            textColor: '#FF0000' // Text color
         };
         this.canvas.style.cursor = 'crosshair';
         
@@ -2759,38 +2921,16 @@ class TimingGenApp {
     }
     
     finalizeMeasureWithBlankRow() {
-        // Finalize measure with actual blank row insertion
-        this.currentMeasure.text = ''; // No text for now
-        
-        const measureName = this.currentMeasure.name;
+        // After selecting row, show text dialog to enter measure text
         const measureRowIndex = this.currentMeasure.measureRow;
         
-        // Store measure in Map
-        this.measuresData.set(measureName, this.currentMeasure);
+        // Insert new measure row immediately
+        this.rows.splice(measureRowIndex, 0, {
+            type: 'measure',
+            name: this.currentMeasure.name
+        });
         
-        // Check if a measure row already exists at this position
-        const existingRowIndex = this.rows.findIndex((row, idx) => 
-            idx === measureRowIndex && row.type === 'measure'
-        );
-        
-        if (existingRowIndex >= 0) {
-            // Measure row already exists at this position - should not happen in current implementation
-            // but keep for safety
-        } else {
-            // Insert new measure row
-            this.rows.splice(measureRowIndex, 0, {
-                type: 'measure',
-                name: measureName
-            });
-        }
-        
-        // Clean up
-        this.hideInstruction();
-        this.measureMode = false;
-        this.measureState = null;
-        this.currentMeasure = null;
-        this.canvas.style.cursor = 'crosshair';
-        
+        // Clean up temporary graphics
         if (this.tempMeasureGraphics) {
             if (Array.isArray(this.tempMeasureGraphics)) {
                 this.tempMeasureGraphics.forEach(item => {
@@ -2802,10 +2942,14 @@ class TimingGenApp {
             this.tempMeasureGraphics = null;
         }
         
-        // Restore original onMouseMove
-        this.tool.onMouseMove = this.originalOnMouseMove;
-        
+        // Render the measure row
         this.render();
+        
+        // Show text dialog to enter measure label
+        this.hideInstruction();
+        document.getElementById('measure-text-input').value = '';
+        document.getElementById('measure-text-dialog').style.display = 'block';
+        document.getElementById('measure-text-input').focus();
     }
     
     finalizeMeasure() {
@@ -2822,26 +2966,13 @@ class TimingGenApp {
         // Store measure in Map
         this.measuresData.set(measureName, this.currentMeasure);
         
-        // Add measure row to rows array if not already added
-        // (This might be from an alternative path)
-        
         document.getElementById('measure-text-dialog').style.display = 'none';
-        this.hideInstruction();
+        
+        // Clean up measure mode state
         this.measureMode = false;
         this.measureState = null;
         this.currentMeasure = null;
-        this.canvas.style.cursor = 'crosshair';
-        
-        if (this.tempMeasureGraphics) {
-            if (Array.isArray(this.tempMeasureGraphics)) {
-                this.tempMeasureGraphics.forEach(item => {
-                    if (item && item.remove) item.remove();
-                });
-            } else if (this.tempMeasureGraphics.remove) {
-                this.tempMeasureGraphics.remove();
-            }
-            this.tempMeasureGraphics = null;
-        }
+        this.canvas.style.cursor = 'default';
         
         // Restore original onMouseMove
         this.tool.onMouseMove = this.originalOnMouseMove;
@@ -2852,10 +2983,20 @@ class TimingGenApp {
     cancelMeasure() {
         document.getElementById('measure-text-dialog').style.display = 'none';
         this.hideInstruction();
+        
+        // If currentMeasure exists and was added to rows, remove it
+        if (this.currentMeasure) {
+            const measureName = this.currentMeasure.name;
+            const rowIndex = this.rows.findIndex(row => row.type === 'measure' && row.name === measureName);
+            if (rowIndex >= 0) {
+                this.rows.splice(rowIndex, 1);
+            }
+        }
+        
         this.measureMode = false;
         this.measureState = null;
         this.currentMeasure = null;
-        this.canvas.style.cursor = 'crosshair';
+        this.canvas.style.cursor = 'default';
         
         if (this.tempMeasureGraphics) {
             if (Array.isArray(this.tempMeasureGraphics)) {
@@ -2911,6 +3052,92 @@ class TimingGenApp {
             this.render();
         }
     }
+    
+    startDragMeasureText(measureIndex, event) {
+        // Start dragging measure text in X direction
+        const measures = this.getMeasures();
+        if (measureIndex < 0 || measureIndex >= measures.length) return;
+        
+        const measure = measures[measureIndex];
+        const startX = event.point.x;
+        
+        this.isDraggingMeasureText = true;
+        this.currentEditingMeasure = measureIndex;
+        this.dragStartX = startX;
+        this.originalTextX = measure.textX || null;
+        
+        const mouseMoveHandler = (e) => {
+            if (!this.isDraggingMeasureText) return;
+            
+            const deltaX = e.point.x - this.dragStartX;
+            measure.textX = (this.originalTextX || 0) + deltaX;
+            this.render();
+        };
+        
+        const mouseUpHandler = () => {
+            this.isDraggingMeasureText = false;
+            this.tool.onMouseMove = this.originalOnMouseMove;
+            this.tool.onMouseUp = null;
+        };
+        
+        this.tool.onMouseMove = mouseMoveHandler;
+        this.tool.onMouseUp = mouseUpHandler;
+    }
+    
+    showMeasureTextContextMenu(event, measureIndex) {
+        // Show context menu for measure text
+        this.currentEditingMeasure = measureIndex;
+        
+        const menu = document.getElementById('text-context-menu');
+        menu.style.left = event.clientX + 'px';
+        menu.style.top = event.clientY + 'px';
+        menu.style.display = 'block';
+        
+        event.preventDefault();
+        
+        // Update menu handlers to work with measure text
+        this.isMeasureTextContext = true;
+    }
+    
+    startRechooseMeasurePoint(measureIndex, pointIndex) {
+        // Allow user to re-choose a measure point
+        const measures = this.getMeasures();
+        if (measureIndex < 0 || measureIndex >= measures.length) return;
+        
+        const measure = measures[measureIndex];
+        this.currentEditingMeasure = measureIndex;
+        this.rechoosingPointIndex = pointIndex;
+        
+        // Enter re-choose mode
+        this.measureMode = true;
+        this.measureState = pointIndex === 1 ? 'rechoose-point-1' : 'rechoose-point-2';
+        this.canvas.style.cursor = 'crosshair';
+        
+        this.showInstruction(`Click to re-choose point ${pointIndex}`);
+    }
+    
+    startMovingMeasureRow(measureIndex, event) {
+        // Start moving measure to another row
+        const measures = this.getMeasures();
+        if (measureIndex < 0 || measureIndex >= measures.length) return;
+        
+        const measure = measures[measureIndex];
+        const measureName = measure.name;
+        
+        // Find the row index for this measure
+        const rowIndex = this.rows.findIndex(row => row.type === 'measure' && row.name === measureName);
+        if (rowIndex < 0) return;
+        
+        this.currentEditingMeasure = measureIndex;
+        this.movingMeasureRowIndex = rowIndex;
+        this.canvas.style.cursor = 'move';
+        
+        this.showInstruction('Click on a row to move the measure there');
+        
+        // Set up click handler for selecting new row
+        this.isMovingMeasureRow = true;
+    }
+    
     
     render() {
         TimingGenRendering.render(this);

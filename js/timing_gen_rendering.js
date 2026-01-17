@@ -789,10 +789,13 @@ class TimingGenRendering {
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
+        line1.data = { type: 'vbar', measureIndex: index, pointIndex: 1 };
         measureGroup.addChild(line1);
         
         // Draw small cross at first point
         const cross1 = TimingGenRendering.drawSmallCross(coords.x1, coords.y1);
+        cross1.hLine.data = { type: 'vbar', measureIndex: index, pointIndex: 1 };
+        cross1.vLine.data = { type: 'vbar', measureIndex: index, pointIndex: 1 };
         measureGroup.addChild(cross1.hLine);
         measureGroup.addChild(cross1.vLine);
         
@@ -803,10 +806,13 @@ class TimingGenRendering {
             strokeColor: '#FF0000',
             strokeWidth: 2
         });
+        line2.data = { type: 'vbar', measureIndex: index, pointIndex: 2 };
         measureGroup.addChild(line2);
         
         // Draw small cross at second point
         const cross2 = TimingGenRendering.drawSmallCross(coords.x2, coords.y2);
+        cross2.hLine.data = { type: 'vbar', measureIndex: index, pointIndex: 2 };
+        cross2.vLine.data = { type: 'vbar', measureIndex: index, pointIndex: 2 };
         measureGroup.addChild(cross2.hLine);
         measureGroup.addChild(cross2.vLine);
         
@@ -818,47 +824,152 @@ class TimingGenRendering {
         const spacing = Math.abs(coords.x2 - coords.x1);
         const isInward = spacing < 30;
         
-        // Horizontal line connecting the arrows
-        const hLine = new paper.Path.Line({
-            from: [Math.min(coords.x1, coords.x2), arrowY],
-            to: [Math.max(coords.x1, coords.x2), arrowY],
-            strokeColor: '#FF0000',
-            strokeWidth: 2
-        });
-        measureGroup.addChild(hLine);
+        // Calculate text dimensions if text exists
+        let textWidth = 0;
+        let textHeight = 0;
+        let textObject = null;
         
-        // Draw arrow heads
+        if (measure.text) {
+            // Create temporary text to measure dimensions
+            const tempText = new paper.PointText({
+                content: measure.text,
+                fontFamily: measure.textFont || 'Arial',
+                fontSize: measure.textSize || 12,
+                fontWeight: 'bold'
+            });
+            textWidth = tempText.bounds.width;
+            textHeight = tempText.bounds.height;
+            tempText.remove();
+        }
+        
+        const textGap = 10; // Gap between arrow and text
+        const minX = Math.min(coords.x1, coords.x2);
+        const maxX = Math.max(coords.x1, coords.x2);
+        
+        // Calculate text position
+        let textX;
+        if (measure.textX !== null && measure.textX !== undefined) {
+            // Use stored text position
+            textX = measure.textX;
+        } else if (isInward) {
+            // Inward arrows: place text to the right of right arrow
+            textX = maxX + textGap;
+        } else {
+            // Outward arrows: place text in the middle
+            textX = (minX + maxX) / 2 - textWidth / 2;
+        }
+        
+        // Draw horizontal line segments and arrows based on text position
         if (isInward) {
-            const arrow1 = TimingGenRendering.drawArrowHead(Math.min(coords.x1, coords.x2), arrowY, 'right', arrowSize);
-            const arrow2 = TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'left', arrowSize);
+            // Inward pointing arrows - single line, text on right
+            const hLine = new paper.Path.Line({
+                from: [minX, arrowY],
+                to: [maxX, arrowY],
+                strokeColor: '#FF0000',
+                strokeWidth: 2
+            });
+            hLine.data = { type: 'arrow', measureIndex: index };
+            measureGroup.addChild(hLine);
+            
+            const arrow1 = TimingGenRendering.drawArrowHead(minX, arrowY, 'right', arrowSize);
+            const arrow2 = TimingGenRendering.drawArrowHead(maxX, arrowY, 'left', arrowSize);
+            arrow1.data = { type: 'arrow', measureIndex: index };
+            arrow2.data = { type: 'arrow', measureIndex: index };
             measureGroup.addChild(arrow1);
             measureGroup.addChild(arrow2);
         } else {
-            const arrow1 = TimingGenRendering.drawArrowHead(Math.min(coords.x1, coords.x2), arrowY, 'left', arrowSize);
-            const arrow2 = TimingGenRendering.drawArrowHead(Math.max(coords.x1, coords.x2), arrowY, 'right', arrowSize);
-            measureGroup.addChild(arrow1);
-            measureGroup.addChild(arrow2);
+            // Outward pointing arrows - split line with text in middle
+            if (measure.text && textWidth > 0) {
+                // Left arrow segment
+                const leftLine = new paper.Path.Line({
+                    from: [minX, arrowY],
+                    to: [textX - textGap, arrowY],
+                    strokeColor: '#FF0000',
+                    strokeWidth: 2
+                });
+                leftLine.data = { type: 'arrow', measureIndex: index };
+                measureGroup.addChild(leftLine);
+                
+                // Right arrow segment
+                const rightLine = new paper.Path.Line({
+                    from: [textX + textWidth + textGap, arrowY],
+                    to: [maxX, arrowY],
+                    strokeColor: '#FF0000',
+                    strokeWidth: 2
+                });
+                rightLine.data = { type: 'arrow', measureIndex: index };
+                measureGroup.addChild(rightLine);
+                
+                // Left arrow head
+                const arrow1 = TimingGenRendering.drawArrowHead(minX, arrowY, 'left', arrowSize);
+                arrow1.data = { type: 'arrow', measureIndex: index };
+                measureGroup.addChild(arrow1);
+                
+                // Right arrow head
+                const arrow2 = TimingGenRendering.drawArrowHead(maxX, arrowY, 'right', arrowSize);
+                arrow2.data = { type: 'arrow', measureIndex: index };
+                measureGroup.addChild(arrow2);
+            } else {
+                // No text - single line with outward arrows
+                const hLine = new paper.Path.Line({
+                    from: [minX, arrowY],
+                    to: [maxX, arrowY],
+                    strokeColor: '#FF0000',
+                    strokeWidth: 2
+                });
+                hLine.data = { type: 'arrow', measureIndex: index };
+                measureGroup.addChild(hLine);
+                
+                const arrow1 = TimingGenRendering.drawArrowHead(minX, arrowY, 'left', arrowSize);
+                const arrow2 = TimingGenRendering.drawArrowHead(maxX, arrowY, 'right', arrowSize);
+                arrow1.data = { type: 'arrow', measureIndex: index };
+                arrow2.data = { type: 'arrow', measureIndex: index };
+                measureGroup.addChild(arrow1);
+                measureGroup.addChild(arrow2);
+            }
         }
         
         // Draw text label if it exists
         if (measure.text) {
-            const textX = Math.max(coords.x1, coords.x2) + 10;
             const text = new paper.PointText({
                 point: [textX, arrowY + 5],
                 content: measure.text,
-                fillColor: '#FF0000',
-                fontFamily: 'Arial',
-                fontSize: 12,
+                fillColor: measure.textColor || '#FF0000',
+                fontFamily: measure.textFont || 'Arial',
+                fontSize: measure.textSize || 12,
                 fontWeight: 'bold'
             });
+            text.data = { type: 'text', measureIndex: index };
             measureGroup.addChild(text);
         }
         
-        // Make the entire group interactive for right-click
+        // Make the entire group interactive
         measureGroup.onMouseDown = function(event) {
-            if (event.event.button === 2) { // Right-click
+            const hitItem = event.target;
+            
+            if (event.event.button === 0) { // Left-click
+                if (hitItem.data && hitItem.data.type === 'text') {
+                    // Start dragging text
+                    app.startDragMeasureText(this.data.measureIndex, event);
+                    event.stopPropagation();
+                } else if (hitItem.data && hitItem.data.type === 'vbar') {
+                    // Re-choose measure point
+                    app.startRechooseMeasurePoint(this.data.measureIndex, hitItem.data.pointIndex);
+                    event.stopPropagation();
+                } else if (hitItem.data && hitItem.data.type === 'arrow') {
+                    // Start moving measure to another row
+                    app.startMovingMeasureRow(this.data.measureIndex, event);
+                    event.stopPropagation();
+                }
+            } else if (event.event.button === 2) { // Right-click
                 event.preventDefault();
-                app.showMeasureContextMenu(event.event, this.data.measureIndex);
+                if (hitItem.data && hitItem.data.type === 'text') {
+                    // Show text context menu
+                    app.showMeasureTextContextMenu(event.event, this.data.measureIndex);
+                } else {
+                    // Show general measure context menu
+                    app.showMeasureContextMenu(event.event, this.data.measureIndex);
+                }
             }
         };
     }
