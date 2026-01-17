@@ -856,6 +856,16 @@ class TimingGenApp {
         this.render();
     }
     
+    // Helper method for hit testing (used by both click and right-click handlers)
+    getHitTestOptions() {
+        return {
+            segments: true,
+            stroke: true,
+            fill: true,
+            tolerance: 5
+        };
+    }
+    
     handleCanvasClick(event) {
         // Only handle left mouse button clicks (button 0)
         // Right clicks are handled by handleCanvasRightClick
@@ -864,12 +874,7 @@ class TimingGenApp {
         }
         
         // Check if clicking on a measure element (Paper.js tool handlers prevent item handlers from firing)
-        const hitResult = paper.project.hitTest(event.point, {
-            segments: true,
-            stroke: true,
-            fill: true,
-            tolerance: 5
-        });
+        const hitResult = paper.project.hitTest(event.point, this.getHitTestOptions());
         
         if (hitResult && hitResult.item) {
             // Check if we hit a measure element by walking up the parent chain
@@ -1206,12 +1211,7 @@ class TimingGenApp {
                 // Right-click on measure row - check what element was clicked
                 // Use Paper.js hitTest to determine if clicking on measure text or other parts
                 const point = new paper.Point(xPos, yPos);
-                const hitResult = paper.project.hitTest(point, {
-                    segments: true,
-                    stroke: true,
-                    fill: true,
-                    tolerance: 5
-                });
+                const hitResult = paper.project.hitTest(point, this.getHitTestOptions());
                 
                 if (hitResult && hitResult.item) {
                     const hitItem = hitResult.item;
