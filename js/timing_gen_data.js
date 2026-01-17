@@ -189,10 +189,11 @@ class TimingGenData {
     }
     
     static exportToSVG(app) {
-        // Store current selection state
+        // Store current selection state and header height
         const savedSelection = new Set(app.selectedSignals);
         const savedMeasureSelection = new Set(app.selectedMeasureRows);
         const savedHideHeader = app.hideHeader;
+        const savedHeaderHeight = app.config.headerHeight;
         
         try {
             // Clear selections to turn off signal highlight
@@ -202,7 +203,10 @@ class TimingGenData {
             // Set flag to hide header (cycle reference counter)
             app.hideHeader = true;
             
-            // Re-render with hidden header and no highlights
+            // Remove header space by setting headerHeight to 0 for SVG export
+            app.config.headerHeight = 0;
+            
+            // Re-render with hidden header, no highlights, and no header space
             app.render();
             
             // Export using Paper.js
@@ -218,10 +222,11 @@ class TimingGenData {
             
             URL.revokeObjectURL(url);
         } finally {
-            // Restore selections and header state
+            // Restore selections, header state, and header height
             app.selectedSignals = savedSelection;
             app.selectedMeasureRows = savedMeasureSelection;
             app.hideHeader = savedHideHeader;
+            app.config.headerHeight = savedHeaderHeight;
             
             // Re-render to restore state
             app.render();
