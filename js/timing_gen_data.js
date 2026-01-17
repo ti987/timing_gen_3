@@ -110,6 +110,7 @@ class TimingGenData {
                     app.textData.clear();
                     app.counterData.clear();
                     app.measureCounter = 0;
+                    app.measureTextCounter = 0;
                     app.textCounter = 0;
                     app.counterCounter = 0;
                     
@@ -135,6 +136,16 @@ class TimingGenData {
                             const measureNum = parseInt(row.name.replace('M', ''));
                             if (!isNaN(measureNum) && measureNum >= app.measureCounter) {
                                 app.measureCounter = measureNum + 1;
+                            }
+                            // Update measure text counter based on text field
+                            if (row.data.text) {
+                                const match = row.data.text.match(/^t(\d+)$/);
+                                if (match) {
+                                    const textNum = parseInt(match[1]);
+                                    if (textNum >= app.measureTextCounter) {
+                                        app.measureTextCounter = textNum;
+                                    }
+                                }
                             }
                         } else if (row.type === 'text' && row.data) {
                             // Store text data in Map with default properties

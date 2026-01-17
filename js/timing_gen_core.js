@@ -57,6 +57,7 @@ class TimingGenApp {
         
         // Counter for auto-generating unique measure names
         this.measureCounter = 0;
+        this.measureTextCounter = 0; // Counter for measure text (t1, t2, t3...)
         this.textCounter = 0;
         this.counterCounter = 0;
         
@@ -2937,9 +2938,9 @@ class TimingGenApp {
         const measureRowIndex = this.currentMeasure.measureRow;
         
         // Auto-generate measure text (t1, t2, t3, ...)
-        // Count existing measures to determine next number
-        const existingMeasures = this.getMeasures().length;
-        this.currentMeasure.text = `t${existingMeasures + 1}`;
+        // Use dedicated counter to avoid duplicates when measures are deleted
+        this.measureTextCounter++;
+        this.currentMeasure.text = `t${this.measureTextCounter}`;
         
         // Store measure in Map
         this.measuresData.set(this.currentMeasure.name, this.currentMeasure);
@@ -3180,8 +3181,9 @@ class TimingGenApp {
         this.textData.clear();
         this.counterData.clear();
         
-        // Reset counters
-        this.measureCounter = 0;
+        // Reset counters (keep measureCounter for unique internal names)
+        // Only reset display counters
+        this.measureTextCounter = 0;
         this.textCounter = 0;
         this.counterCounter = 0;
         
@@ -3195,6 +3197,12 @@ class TimingGenApp {
     
     deleteTextRow() {
         if (this.currentEditingText) {
+            // Confirm deletion
+            if (!confirm('Delete this text row?')) {
+                this.hideAllMenus();
+                return;
+            }
+            
             // Find row index
             const rowIndex = this.rows.findIndex(row => row.type === 'text' && row.name === this.currentEditingText);
             if (rowIndex >= 0) {
@@ -3212,6 +3220,12 @@ class TimingGenApp {
     
     deleteMeasureRow() {
         if (this.currentEditingMeasureRow !== null) {
+            // Confirm deletion
+            if (!confirm('Delete this measure?')) {
+                this.hideAllMenus();
+                return;
+            }
+            
             const row = this.rows[this.currentEditingMeasureRow];
             if (row && row.type === 'measure') {
                 // Remove from measures data
