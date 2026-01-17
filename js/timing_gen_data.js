@@ -142,7 +142,7 @@ class TimingGenData {
                                 const match = row.data.text.match(/^t(\d+)$/);
                                 if (match) {
                                     const textNum = parseInt(match[1]);
-                                    if (textNum >= app.measureTextCounter) {
+                                    if (textNum > app.measureTextCounter) {
                                         app.measureTextCounter = textNum;
                                     }
                                 }
