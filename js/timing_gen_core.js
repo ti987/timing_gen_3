@@ -863,6 +863,43 @@ class TimingGenApp {
             return;
         }
         
+        // Check if clicking on a measure element (Paper.js tool handlers prevent item handlers from firing)
+        const hitResult = paper.project.hitTest(event.point, {
+            segments: true,
+            stroke: true,
+            fill: true,
+            tolerance: 5
+        });
+        
+        if (hitResult && hitResult.item) {
+            // Check if we hit a measure element by walking up the parent chain
+            let item = hitResult.item;
+            while (item) {
+                if (item.data && item.data.type === 'measure') {
+                    // Found a measure group - handle measure element clicks
+                    const measureIndex = item.data.measureIndex;
+                    const hitItem = hitResult.item;
+                    
+                    if (hitItem.data && hitItem.data.type === 'text') {
+                        // Start dragging text
+                        this.startDragMeasureText(measureIndex, event);
+                        return;
+                    } else if (hitItem.data && hitItem.data.type === 'vbar') {
+                        // Re-choose measure point
+                        this.startRechooseMeasurePoint(measureIndex, hitItem.data.pointIndex);
+                        return;
+                    } else if (hitItem.data && hitItem.data.type === 'arrow') {
+                        // Start moving measure to another row
+                        this.startMovingMeasureRow(measureIndex, event);
+                        return;
+                    }
+                    // If we hit the measure but not a specific interactive element, don't block other handlers
+                    break;
+                }
+                item = item.parent;
+            }
+        }
+        
         const xPos = event.point.x;
         const yPos = event.point.y;
         const nativeEvent = event.event;
@@ -1165,6 +1202,41 @@ class TimingGenApp {
                 this.currentEditingText = row.name;
                 TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
                 return;
+            } else if (row.type === 'measure') {
+                // Right-click on measure row - check what element was clicked
+                // Use Paper.js hitTest to determine if clicking on measure text or other parts
+                const point = new paper.Point(xPos, yPos);
+                const hitResult = paper.project.hitTest(point, {
+                    segments: true,
+                    stroke: true,
+                    fill: true,
+                    tolerance: 5
+                });
+                
+                if (hitResult && hitResult.item) {
+                    const hitItem = hitResult.item;
+                    // Walk up to find measure group
+                    let measureGroup = hitItem;
+                    while (measureGroup && !(measureGroup.data && measureGroup.data.type === 'measure')) {
+                        measureGroup = measureGroup.parent;
+                    }
+                    
+                    if (measureGroup && measureGroup.data) {
+                        const measureIndex = measureGroup.data.measureIndex;
+                        this.currentEditingMeasure = measureIndex;
+                        
+                        // Check if clicking on text specifically
+                        if (hitItem.data && hitItem.data.type === 'text') {
+                            this.isMeasureTextContext = true;
+                            TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
+                        } else {
+                            // General measure context menu
+                            this.isMeasureTextContext = false;
+                            this.showMeasureContextMenu(ev, measureIndex);
+                        }
+                        return;
+                    }
+                }
             } else if (row.type === 'signal') {
                 const signalIndex = this.getSignalIndexAtY(yPos);
                 
