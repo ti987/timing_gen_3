@@ -67,6 +67,7 @@ class TimingGenApp {
         this.currentEditingCycle = null;
         this.currentEditingText = null; // Current text row being edited
         this.currentEditingCounter = null; // Current counter row being edited {name, cycle}
+        this.currentEditingMeasureRow = null; // Current measure row being edited (row index)
         this.textDragState = null; // For tracking text dragging {textName, startX}
         
         // Measure mode state
@@ -118,6 +119,7 @@ class TimingGenApp {
     
     setupEventListeners() {
         // Menu buttons
+        document.getElementById('new-btn').addEventListener('click', () => this.handleNewDocument());
         document.getElementById('add-signal-btn').addEventListener('click', () => TimingGenUI.showAddSignalDialog(this));
         document.getElementById('global-option-btn').addEventListener('click', () => TimingGenUI.showGlobalOptionDialog(this));
         document.getElementById('save-btn').addEventListener('click', () => TimingGenData.saveToJSON(this));
@@ -215,6 +217,14 @@ class TimingGenApp {
         document.getElementById('font-text-menu').addEventListener('click', () => this.showFontDialog());
         document.getElementById('color-text-menu').addEventListener('click', () => this.showColorDialog());
         document.getElementById('cancel-text-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Text row name context menu
+        document.getElementById('delete-text-row-menu').addEventListener('click', () => this.deleteTextRow());
+        document.getElementById('cancel-text-row-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Measure row name context menu
+        document.getElementById('delete-measure-row-menu').addEventListener('click', () => this.deleteMeasureRow());
+        document.getElementById('cancel-measure-row-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Add signal dialog
         document.getElementById('dialog-ok-btn').addEventListener('click', () => this.addSignal());
@@ -419,6 +429,8 @@ class TimingGenApp {
         document.getElementById('cycle-context-menu').style.display = 'none';
         document.getElementById('measure-context-menu').style.display = 'none';
         document.getElementById('text-context-menu').style.display = 'none';
+        document.getElementById('text-row-name-context-menu').style.display = 'none';
+        document.getElementById('measure-row-name-context-menu').style.display = 'none';
         
         // Reset measure text context flag
         this.isMeasureTextContext = false;
@@ -1129,6 +1141,14 @@ class TimingGenApp {
                         this.currentEditingSignal = signalIndex;
                         TimingGenUI.showContextMenu('signal-context-menu', ev.clientX, ev.clientY);
                     }
+                } else if (row.type === 'text') {
+                    // Right-click on text row name column - show delete/cancel menu
+                    this.currentEditingText = row.name;
+                    TimingGenUI.showContextMenu('text-row-name-context-menu', ev.clientX, ev.clientY);
+                } else if (row.type === 'measure') {
+                    // Right-click on measure row name column - show delete/cancel menu
+                    this.currentEditingMeasureRow = row.index;
+                    TimingGenUI.showContextMenu('measure-row-name-context-menu', ev.clientX, ev.clientY);
                 }
             }
             return;
@@ -2913,10 +2933,18 @@ class TimingGenApp {
     }
     
     finalizeMeasureWithBlankRow() {
-        // After selecting row, show text dialog to enter measure text
+        // After selecting row, auto-assign text as t1, t2, t3, etc.
         const measureRowIndex = this.currentMeasure.measureRow;
         
-        // Insert new measure row immediately
+        // Auto-generate measure text (t1, t2, t3, ...)
+        // Count existing measures to determine next number
+        const existingMeasures = this.getMeasures().length;
+        this.currentMeasure.text = `t${existingMeasures + 1}`;
+        
+        // Store measure in Map
+        this.measuresData.set(this.currentMeasure.name, this.currentMeasure);
+        
+        // Insert new measure row
         this.rows.splice(measureRowIndex, 0, {
             type: 'measure',
             name: this.currentMeasure.name
@@ -2934,16 +2962,18 @@ class TimingGenApp {
             this.tempMeasureGraphics = null;
         }
         
-        // Render the measure row
-        this.render();
-        
-        // Show text dialog to enter measure label
+        // Clean up measure mode state
         this.hideInstruction();
-        document.getElementById('measure-text-input').value = '';
-        document.getElementById('measure-text-dialog').style.display = 'block';
-        setTimeout(() => {
-            document.getElementById('measure-text-input').focus();
-        }, 0);
+        this.measureMode = false;
+        this.measureState = null;
+        this.currentMeasure = null;
+        this.canvas.style.cursor = 'default';
+        
+        // Restore original onMouseMove
+        this.tool.onMouseMove = this.originalOnMouseMove;
+        
+        // Render the measure
+        this.render();
     }
     
     finalizeMeasure() {
@@ -3130,6 +3160,70 @@ class TimingGenApp {
         
         // Set up click handler for selecting new row
         this.isMovingMeasureRow = true;
+    }
+    
+    handleNewDocument() {
+        // Check if there's any data
+        const hasData = this.rows.length > 0;
+        
+        if (hasData) {
+            // Ask user if they want to save
+            if (confirm('Do you want to save the current diagram before creating a new one?')) {
+                TimingGenData.saveToJSON(this);
+            }
+        }
+        
+        // Clear all data
+        this.rows = [];
+        this.signalsData.clear();
+        this.measuresData.clear();
+        this.textData.clear();
+        this.counterData.clear();
+        
+        // Reset counters
+        this.measureCounter = 0;
+        this.textCounter = 0;
+        this.counterCounter = 0;
+        
+        // Reset selections
+        this.selectedSignals.clear();
+        this.selectedMeasureRows.clear();
+        
+        // Render empty canvas
+        this.render();
+    }
+    
+    deleteTextRow() {
+        if (this.currentEditingText) {
+            // Find row index
+            const rowIndex = this.rows.findIndex(row => row.type === 'text' && row.name === this.currentEditingText);
+            if (rowIndex >= 0) {
+                // Remove from rows array
+                this.rows.splice(rowIndex, 1);
+                // Remove from text data
+                this.textData.delete(this.currentEditingText);
+                
+                this.currentEditingText = null;
+                this.hideAllMenus();
+                this.render();
+            }
+        }
+    }
+    
+    deleteMeasureRow() {
+        if (this.currentEditingMeasureRow !== null) {
+            const row = this.rows[this.currentEditingMeasureRow];
+            if (row && row.type === 'measure') {
+                // Remove from measures data
+                this.measuresData.delete(row.name);
+                // Remove from rows array
+                this.rows.splice(this.currentEditingMeasureRow, 1);
+                
+                this.currentEditingMeasureRow = null;
+                this.hideAllMenus();
+                this.render();
+            }
+        }
     }
     
     

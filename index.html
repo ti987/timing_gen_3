@@ -14,6 +14,7 @@
     <div id="app">
         <!-- Top Menu Bar -->
         <div id="menu-bar">
+            <button id="new-btn" class="menu-btn">New</button>
             <button id="add-signal-btn" class="menu-btn">Add Signal</button>
             <div class="menu-dropdown">
                 <button id="add-menu-btn" class="menu-btn">Add widget</button>
@@ -406,6 +407,18 @@
         <div class="menu-item" id="font-text-menu">Font</div>
         <div class="menu-item" id="color-text-menu">Color</div>
         <div class="menu-item" id="cancel-text-menu">Cancel</div>
+    </div>
+
+    <!-- Context Menu for Text Row Name Column -->
+    <div id="text-row-name-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="delete-text-row-menu">Delete</div>
+        <div class="menu-item" id="cancel-text-row-menu">Cancel</div>
+    </div>
+
+    <!-- Context Menu for Measure Row Name Column -->
+    <div id="measure-row-name-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="delete-measure-row-menu">Delete</div>
+        <div class="menu-item" id="cancel-measure-row-menu">Cancel</div>
     </div>
 
     <!-- Load JavaScript modules in correct order -->
