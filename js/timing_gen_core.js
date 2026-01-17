@@ -591,7 +591,7 @@ class TimingGenApp {
         // Add to data store
         this.textData.set(name, textData);
         
-        // Add to rows array at the top
+        // Add to rows array at the top (row 0) for better visibility
         this.rows.unshift({
             type: 'text',
             name: name
@@ -626,7 +626,7 @@ class TimingGenApp {
         // Add to data store
         this.counterData.set(name, counterData);
         
-        // Add to rows array at the top
+        // Add to rows array at the top (row 0) for better visibility
         this.rows.unshift({
             type: 'counter',
             name: name
@@ -896,9 +896,9 @@ class TimingGenApp {
                 }
                 this.startDragMeasureRow(row.index, event);
             } else if (row && (row.type === 'text' || row.type === 'counter')) {
-                // Handle text/counter row selection - make them selectable for moving
+                // Handle text/counter row selection - reuse measure selection logic
+                // Text and counter rows use selectedMeasureRows for dragging (non-signal widgets)
                 if (!this.selectedMeasureRows.has(row.index)) {
-                    // Treat text/counter rows like measures for drag purposes
                     this.selectedSignals.clear();
                     this.selectedMeasureRows.clear();
                     this.selectedMeasureRows.add(row.index);
