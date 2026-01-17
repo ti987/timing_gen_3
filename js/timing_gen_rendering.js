@@ -1036,7 +1036,11 @@ class TimingGenRendering {
                 // Not numeric - just repeat the value
                 for (let cycle = startCycle; cycle < endCycle && cycle < totalCycles; cycle++) {
                     if (cycle >= 0) {
-                        labels[cycle] = startValue;
+                        if (startValue === "-") {
+                            labels[cycle] = "";
+                        } else {
+                            labels[cycle] = startValue;
+                        }
                     }
                 }
             }
