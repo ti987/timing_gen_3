@@ -2941,7 +2941,9 @@ class TimingGenApp {
         this.hideInstruction();
         document.getElementById('measure-text-input').value = '';
         document.getElementById('measure-text-dialog').style.display = 'block';
-        document.getElementById('measure-text-input').focus();
+        setTimeout(() => {
+            document.getElementById('measure-text-input').focus();
+        }, 0);
     }
     
     finalizeMeasure() {
@@ -3056,13 +3058,13 @@ class TimingGenApp {
         this.isDraggingMeasureText = true;
         this.currentEditingMeasure = measureIndex;
         this.dragStartX = startX;
-        this.originalTextX = measure.textX || null;
+        this.originalTextX = measure.textX ?? null;
         
         const mouseMoveHandler = (e) => {
             if (!this.isDraggingMeasureText) return;
             
             const deltaX = e.point.x - this.dragStartX;
-            measure.textX = (this.originalTextX || 0) + deltaX;
+            measure.textX = (this.originalTextX ?? 0) + deltaX;
             this.render();
         };
         

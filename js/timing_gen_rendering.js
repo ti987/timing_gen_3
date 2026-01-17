@@ -848,7 +848,7 @@ class TimingGenRendering {
         
         // Calculate text position
         let textX;
-        if (measure.textX !== null && measure.textX !== undefined) {
+        if (measure.textX != null) {
             // Use stored text position
             textX = measure.textX;
         } else if (isInward) {
@@ -879,7 +879,7 @@ class TimingGenRendering {
             measureGroup.addChild(arrow2);
         } else {
             // Outward pointing arrows - split line with text in middle
-            if (measure.text && textWidth > 0) {
+            if (measure.text) {
                 // Left arrow segment
                 const leftLine = new paper.Path.Line({
                     from: [minX, arrowY],
