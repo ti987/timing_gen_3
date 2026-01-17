@@ -2565,6 +2565,10 @@ class TimingGenApp {
             );
             this.tempMeasureGraphics.push(...arrows);
             
+            // Calculate row index from placement Y for row indicator
+            const relativeY = placementY - this.config.headerHeight;
+            const rowIndex = Math.round(relativeY / this.config.rowHeight);
+            
             // Draw dashed row indicator
             this.drawRowIndicator(rowIndex);
         }
