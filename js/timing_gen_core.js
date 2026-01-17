@@ -1,5 +1,5 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Version 3.3.0
+// Version 3.3.1
 // Main JavaScript Application using Paper.js
 //
 // Key Features:
@@ -66,6 +66,7 @@ class TimingGenApp {
         this.currentEditingSignal = null;
         this.currentEditingCycle = null;
         this.currentEditingText = null; // Current text row being edited
+        this.currentEditingCounter = null; // Current counter row being edited {name, cycle}
         this.textDragState = null; // For tracking text dragging {textName, startX}
         
         // Measure mode state
@@ -193,6 +194,10 @@ class TimingGenApp {
         // Counter row dialog
         document.getElementById('counter-dialog-ok-btn').addEventListener('click', () => this.addCounterRow());
         document.getElementById('counter-dialog-cancel-btn').addEventListener('click', () => this.hideAddCounterDialog());
+        
+        // Edit counter dialog
+        document.getElementById('edit-counter-ok-btn').addEventListener('click', () => this.updateCounterValue());
+        document.getElementById('edit-counter-cancel-btn').addEventListener('click', () => this.hideEditCounterDialog());
         
         // Measure context menu
         document.getElementById('delete-measure-menu').addEventListener('click', () => this.deleteMeasure());
@@ -522,6 +527,51 @@ class TimingGenApp {
         document.getElementById('add-counter-dialog').style.display = 'none';
     }
     
+    showEditCounterDialog(counterName, cycle) {
+        this.currentEditingCounter = { name: counterName, cycle: cycle };
+        document.getElementById('edit-counter-value-input').value = '';
+        document.getElementById('edit-counter-dialog').style.display = 'flex';
+    }
+    
+    hideEditCounterDialog() {
+        document.getElementById('edit-counter-dialog').style.display = 'none';
+        this.currentEditingCounter = null;
+    }
+    
+    updateCounterValue() {
+        if (this.currentEditingCounter) {
+            const counterData = this.counterData.get(this.currentEditingCounter.name);
+            if (counterData) {
+                const newValue = document.getElementById('edit-counter-value-input').value.trim();
+                const cycle = this.currentEditingCounter.cycle;
+                
+                if (newValue === '') {
+                    // Empty value means go back to default counting
+                    // Remove any existing value at this cycle and let it auto-increment
+                    counterData.values = counterData.values.filter(v => v.cycle !== cycle);
+                    
+                    // If there are no more values, add a default starting point
+                    if (counterData.values.length === 0) {
+                        counterData.values.push({ cycle: 0, value: '1' });
+                    }
+                } else {
+                    // Add or update value at this cycle
+                    const existingIndex = counterData.values.findIndex(v => v.cycle === cycle);
+                    if (existingIndex >= 0) {
+                        counterData.values[existingIndex].value = newValue;
+                    } else {
+                        counterData.values.push({ cycle: cycle, value: newValue });
+                        // Sort by cycle
+                        counterData.values.sort((a, b) => a.cycle - b.cycle);
+                    }
+                }
+                
+                this.hideEditCounterDialog();
+                this.render();
+            }
+        }
+    }
+    
     addTextRow() {
         const text = document.getElementById('text-row-input').value;
         
@@ -541,8 +591,8 @@ class TimingGenApp {
         // Add to data store
         this.textData.set(name, textData);
         
-        // Add to rows array at the bottom
-        this.rows.push({
+        // Add to rows array at the top
+        this.rows.unshift({
             type: 'text',
             name: name
         });
@@ -576,8 +626,8 @@ class TimingGenApp {
         // Add to data store
         this.counterData.set(name, counterData);
         
-        // Add to rows array at the bottom
-        this.rows.push({
+        // Add to rows array at the top
+        this.rows.unshift({
             type: 'counter',
             name: name
         });
@@ -801,7 +851,7 @@ class TimingGenApp {
             }
         }
         
-        // Check if click is in signal name area
+        // Check if click is in name area
         if (xPos < this.config.nameColumnWidth) {
             // Try to get row at this Y position
             const row = this.getRowAtY(yPos);
@@ -845,6 +895,16 @@ class TimingGenApp {
                     this.render();
                 }
                 this.startDragMeasureRow(row.index, event);
+            } else if (row && (row.type === 'text' || row.type === 'counter')) {
+                // Handle text/counter row selection - make them selectable for moving
+                if (!this.selectedMeasureRows.has(row.index)) {
+                    // Treat text/counter rows like measures for drag purposes
+                    this.selectedSignals.clear();
+                    this.selectedMeasureRows.clear();
+                    this.selectedMeasureRows.add(row.index);
+                    this.render();
+                }
+                this.startDragMeasureRow(row.index, event);
             }
             return;
         }
@@ -852,17 +912,25 @@ class TimingGenApp {
         // Check if click is in waveform area
         // First check for text rows to enable dragging
         if (xPos >= this.config.nameColumnWidth) {
-            const textRow = this.getRowAtY(yPos);
-            if (textRow && textRow.type === 'text') {
+            const clickedRow = this.getRowAtY(yPos);
+            
+            if (clickedRow && clickedRow.type === 'text') {
                 // Start text drag mode
-                const textData = this.textData.get(textRow.name);
+                const textData = this.textData.get(clickedRow.name);
                 if (textData && textData.text) {
                     this.textDragState = {
-                        textName: textRow.name,
+                        textName: clickedRow.name,
                         startX: xPos,
                         originalOffset: textData.xOffset || 10
                     };
                     this.canvas.style.cursor = 'move';
+                    return;
+                }
+            } else if (clickedRow && clickedRow.type === 'counter') {
+                // Left-click on counter to edit value at this cycle
+                const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
+                if (cycle >= 0 && cycle < this.config.cycles) {
+                    this.showEditCounterDialog(clickedRow.name, cycle);
                     return;
                 }
             }

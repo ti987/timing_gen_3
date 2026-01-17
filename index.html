@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<!-- Version 3.3.0 -->
+<!-- Version 3.3.1 -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -284,7 +284,7 @@
             <h3>About Timing Gen 3</h3>
             <p><strong>Timing Gen 3</strong></p>
             <p>Interactive Digital Logic Waveform Editor</p>
-            <p>Version: <strong>3.3.0</strong></p>
+            <p>Version: <strong>3.3.1</strong></p>
             <br>
             <button id="about-ok-btn" class="dialog-btn">OK</button>
         </div>
@@ -336,6 +336,18 @@
         </div>
     </div>
 
+    <!-- Edit Counter Value Dialog -->
+    <div id="edit-counter-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Edit Counter Value</h3>
+            <label>New Start Value (from this cycle):</label>
+            <input type="text" id="edit-counter-value-input" placeholder="Enter value or leave empty for default">
+            <br><br>
+            <button id="edit-counter-ok-btn" class="dialog-btn">OK</button>
+            <button id="edit-counter-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
     <!-- Edit Text Row Dialog -->
     <div id="edit-text-dialog" class="dialog" style="display: none;">
         <div class="dialog-content">
@@ -375,7 +387,7 @@
         <div class="dialog-content">
             <h3>Text Color</h3>
             <label>Color:</label>
-            <input type="color" id="text-color-input" value="#000000">
+            <input type="color" id="text-color-input" value="#000000" style="width: 200px; height: 40px;">
             <br><br>
             <button id="color-ok-btn" class="dialog-btn">OK</button>
             <button id="color-cancel-btn" class="dialog-btn">Cancel</button>
