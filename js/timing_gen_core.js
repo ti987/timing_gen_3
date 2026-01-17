@@ -1,5 +1,5 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Version 3.2.1
+// Version 3.3.1
 // Main JavaScript Application using Paper.js
 //
 // Key Features:
@@ -43,22 +43,31 @@ class TimingGenApp {
             backgroundColor: '#ffffff'
         };
         
-        // Data model v3.2.0 - Simplified single source of truth
-        // rows: defines order only - Array of {type: 'signal'|'measure', name: string}
+        // Data model v3.3.0 - Extended with text and counter widgets
+        // rows: defines order only - Array of {type: 'signal'|'measure'|'text'|'counter', name: string}
         // signalsData: Map<name, signalObject> - actual signal data
         // measuresData: Map<name, measureObject> - actual measure data
+        // textData: Map<name, textObject> - actual text data
+        // counterData: Map<name, counterObject> - actual counter data
         this.rows = [];
         this.signalsData = new Map();  // Key: signal name, Value: signal object
         this.measuresData = new Map(); // Key: measure name (auto-generated), Value: measure object
+        this.textData = new Map();     // Key: text name (auto-generated), Value: text object
+        this.counterData = new Map();  // Key: counter name (auto-generated), Value: counter object
         
         // Counter for auto-generating unique measure names
         this.measureCounter = 0;
+        this.textCounter = 0;
+        this.counterCounter = 0;
         
         // Row manager for unified row system
         this.rowManager = new RowManager(this);
         
         this.currentEditingSignal = null;
         this.currentEditingCycle = null;
+        this.currentEditingText = null; // Current text row being edited
+        this.currentEditingCounter = null; // Current counter row being edited {name, cycle}
+        this.textDragState = null; // For tracking text dragging {textName, startX}
         
         // Measure mode state
         this.measureMode = false;
@@ -122,6 +131,14 @@ class TimingGenApp {
             document.getElementById('add-submenu').style.display = 'none';
             this.startMeasureMode();
         });
+        document.getElementById('add-text-menu').addEventListener('click', () => {
+            document.getElementById('add-submenu').style.display = 'none';
+            this.showAddTextDialog();
+        });
+        document.getElementById('add-counter-menu').addEventListener('click', () => {
+            document.getElementById('add-submenu').style.display = 'none';
+            this.showAddCounterDialog();
+        });
         
         // Help menu and submenu
         document.getElementById('help-menu-btn').addEventListener('click', (e) => {
@@ -158,9 +175,39 @@ class TimingGenApp {
         document.getElementById('measure-text-ok-btn').addEventListener('click', () => this.finalizeMeasure());
         document.getElementById('measure-text-cancel-btn').addEventListener('click', () => this.cancelMeasure());
         
+        // Text row dialog
+        document.getElementById('text-dialog-ok-btn').addEventListener('click', () => this.addTextRow());
+        document.getElementById('text-dialog-cancel-btn').addEventListener('click', () => this.hideAddTextDialog());
+        
+        // Edit text dialog
+        document.getElementById('edit-text-ok-btn').addEventListener('click', () => this.updateTextRow());
+        document.getElementById('edit-text-cancel-btn').addEventListener('click', () => this.hideEditTextDialog());
+        
+        // Font dialog
+        document.getElementById('font-ok-btn').addEventListener('click', () => this.updateTextFont());
+        document.getElementById('font-cancel-btn').addEventListener('click', () => this.hideFontDialog());
+        
+        // Color dialog
+        document.getElementById('color-ok-btn').addEventListener('click', () => this.updateTextColor());
+        document.getElementById('color-cancel-btn').addEventListener('click', () => this.hideColorDialog());
+        
+        // Counter row dialog
+        document.getElementById('counter-dialog-ok-btn').addEventListener('click', () => this.addCounterRow());
+        document.getElementById('counter-dialog-cancel-btn').addEventListener('click', () => this.hideAddCounterDialog());
+        
+        // Edit counter dialog
+        document.getElementById('edit-counter-ok-btn').addEventListener('click', () => this.updateCounterValue());
+        document.getElementById('edit-counter-cancel-btn').addEventListener('click', () => this.hideEditCounterDialog());
+        
         // Measure context menu
         document.getElementById('delete-measure-menu').addEventListener('click', () => this.deleteMeasure());
         document.getElementById('cancel-measure-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Text context menu
+        document.getElementById('edit-text-menu').addEventListener('click', () => this.showEditTextDialog());
+        document.getElementById('font-text-menu').addEventListener('click', () => this.showFontDialog());
+        document.getElementById('color-text-menu').addEventListener('click', () => this.showColorDialog());
+        document.getElementById('cancel-text-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Add signal dialog
         document.getElementById('dialog-ok-btn').addEventListener('click', () => this.addSignal());
@@ -256,6 +303,8 @@ class TimingGenApp {
         // Canvas events using Paper.js tool
         this.tool = new paper.Tool();
         this.tool.onMouseDown = (event) => this.handleCanvasClick(event);
+        this.tool.onMouseDrag = (event) => this.handleCanvasMouseDrag(event);
+        this.tool.onMouseUp = (event) => this.handleCanvasMouseUp(event);
         
         // Context menu
         this.canvas.addEventListener('contextmenu', (ev) => this.handleCanvasRightClick(ev));
@@ -362,6 +411,7 @@ class TimingGenApp {
         document.getElementById('bus-cycle-context-menu').style.display = 'none';
         document.getElementById('cycle-context-menu').style.display = 'none';
         document.getElementById('measure-context-menu').style.display = 'none';
+        document.getElementById('text-context-menu').style.display = 'none';
     }
     
     showAboutDialog() {
@@ -370,6 +420,220 @@ class TimingGenApp {
     
     hideAboutDialog() {
         document.getElementById('about-dialog').style.display = 'none';
+    }
+    
+    showAddTextDialog() {
+        document.getElementById('text-row-input').value = '';
+        document.getElementById('add-text-dialog').style.display = 'flex';
+    }
+    
+    hideAddTextDialog() {
+        document.getElementById('add-text-dialog').style.display = 'none';
+    }
+    
+    showEditTextDialog() {
+        if (this.currentEditingText) {
+            const textData = this.textData.get(this.currentEditingText);
+            if (textData) {
+                document.getElementById('edit-text-input').value = textData.text || '';
+                document.getElementById('edit-text-dialog').style.display = 'flex';
+            }
+        }
+        this.hideAllMenus();
+    }
+    
+    hideEditTextDialog() {
+        document.getElementById('edit-text-dialog').style.display = 'none';
+    }
+    
+    showFontDialog() {
+        if (this.currentEditingText) {
+            const textData = this.textData.get(this.currentEditingText);
+            if (textData) {
+                document.getElementById('font-family-select').value = textData.fontFamily || 'Arial';
+                document.getElementById('font-size-input').value = textData.fontSize || 14;
+                document.getElementById('font-dialog').style.display = 'flex';
+            }
+        }
+        this.hideAllMenus();
+    }
+    
+    hideFontDialog() {
+        document.getElementById('font-dialog').style.display = 'none';
+    }
+    
+    showColorDialog() {
+        if (this.currentEditingText) {
+            const textData = this.textData.get(this.currentEditingText);
+            if (textData) {
+                document.getElementById('text-color-input').value = textData.color || '#000000';
+                document.getElementById('color-dialog').style.display = 'flex';
+            }
+        }
+        this.hideAllMenus();
+    }
+    
+    hideColorDialog() {
+        document.getElementById('color-dialog').style.display = 'none';
+    }
+    
+    updateTextRow() {
+        if (this.currentEditingText) {
+            const textData = this.textData.get(this.currentEditingText);
+            if (textData) {
+                textData.text = document.getElementById('edit-text-input').value;
+                this.hideEditTextDialog();
+                this.render();
+            }
+        }
+    }
+    
+    updateTextFont() {
+        if (this.currentEditingText) {
+            const textData = this.textData.get(this.currentEditingText);
+            if (textData) {
+                textData.fontFamily = document.getElementById('font-family-select').value;
+                const fontSize = parseInt(document.getElementById('font-size-input').value);
+                // Validate fontSize is a valid number within range
+                if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
+                    textData.fontSize = fontSize;
+                } else {
+                    textData.fontSize = 14; // Default fallback
+                }
+                this.hideFontDialog();
+                this.render();
+            }
+        }
+    }
+    
+    updateTextColor() {
+        if (this.currentEditingText) {
+            const textData = this.textData.get(this.currentEditingText);
+            if (textData) {
+                textData.color = document.getElementById('text-color-input').value;
+                this.hideColorDialog();
+                this.render();
+            }
+        }
+    }
+    
+    showAddCounterDialog() {
+        document.getElementById('counter-start-value-input').value = '1';
+        document.getElementById('counter-start-cycle-input').value = '0';
+        document.getElementById('add-counter-dialog').style.display = 'flex';
+    }
+    
+    hideAddCounterDialog() {
+        document.getElementById('add-counter-dialog').style.display = 'none';
+    }
+    
+    showEditCounterDialog(counterName, cycle) {
+        this.currentEditingCounter = { name: counterName, cycle: cycle };
+        document.getElementById('edit-counter-value-input').value = '';
+        document.getElementById('edit-counter-dialog').style.display = 'flex';
+    }
+    
+    hideEditCounterDialog() {
+        document.getElementById('edit-counter-dialog').style.display = 'none';
+        this.currentEditingCounter = null;
+    }
+    
+    updateCounterValue() {
+        if (this.currentEditingCounter) {
+            const counterData = this.counterData.get(this.currentEditingCounter.name);
+            if (counterData) {
+                const newValue = document.getElementById('edit-counter-value-input').value.trim();
+                const cycle = this.currentEditingCounter.cycle;
+                
+                if (newValue === '') {
+                    // Empty value means go back to default counting
+                    // Remove any existing value at this cycle and let it auto-increment
+                    counterData.values = counterData.values.filter(v => v.cycle !== cycle);
+                    
+                    // If there are no more values, add a default starting point
+                    if (counterData.values.length === 0) {
+                        counterData.values.push({ cycle: 0, value: '1' });
+                    }
+                } else {
+                    // Add or update value at this cycle
+                    const existingIndex = counterData.values.findIndex(v => v.cycle === cycle);
+                    if (existingIndex >= 0) {
+                        counterData.values[existingIndex].value = newValue;
+                    } else {
+                        counterData.values.push({ cycle: cycle, value: newValue });
+                        // Sort by cycle
+                        counterData.values.sort((a, b) => a.cycle - b.cycle);
+                    }
+                }
+                
+                this.hideEditCounterDialog();
+                this.render();
+            }
+        }
+    }
+    
+    addTextRow() {
+        const text = document.getElementById('text-row-input').value;
+        
+        // Generate unique name
+        const name = `T${this.textCounter}`;
+        this.textCounter++;
+        
+        // Create text data object with default properties
+        const textData = {
+            text: text,
+            fontFamily: 'Arial',
+            fontSize: 14,
+            color: '#000000',
+            xOffset: 10  // Default x offset from left edge of waveform area
+        };
+        
+        // Add to data store
+        this.textData.set(name, textData);
+        
+        // Add to rows array at the top (row 0) for better visibility
+        this.rows.unshift({
+            type: 'text',
+            name: name
+        });
+        
+        this.hideAddTextDialog();
+        this.render();
+    }
+    
+    addCounterRow() {
+        const startValue = document.getElementById('counter-start-value-input').value.trim();
+        const startCycle = parseInt(document.getElementById('counter-start-cycle-input').value);
+        
+        if (startValue === '') {
+            alert('Please enter a start value');
+            return;
+        }
+        
+        // Generate unique name
+        const name = `C${this.counterCounter}`;
+        this.counterCounter++;
+        
+        // Create counter data object
+        // Format: [{cycle: N, value: "label"}]
+        const counterData = {
+            values: [{
+                cycle: startCycle,
+                value: startValue
+            }]
+        };
+        
+        // Add to data store
+        this.counterData.set(name, counterData);
+        
+        // Add to rows array at the top (row 0) for better visibility
+        this.rows.unshift({
+            type: 'counter',
+            name: name
+        });
+        
+        this.hideAddCounterDialog();
+        this.render();
     }
     
     addSignal() {
@@ -566,9 +830,20 @@ class TimingGenApp {
                 }
                 return;
             } else if (this.measureState === 'placing-row') {
-                // Third click: finalize row and create measure with blank row insertion
-                const rowIndex = this.getRowIndexAtY(yPos);
-                this.currentMeasure.measureRow = rowIndex;
+                // Third click: finalize row and create measure with proper placement
+                // Calculate placement Y and determine insertion index
+                const placementY = this.getMeasurePlacementY(yPos);
+                
+                // Calculate row index for insertion based on placement Y
+                // If placementY is at a row boundary, we need to determine which index to use
+                const relativeY = placementY - this.config.headerHeight;
+                let insertIndex = Math.round(relativeY / this.config.rowHeight);
+                
+                // Clamp to valid range
+                const totalRows = this.rowManager.getTotalRows();
+                insertIndex = Math.max(0, Math.min(insertIndex, totalRows));
+                
+                this.currentMeasure.measureRow = insertIndex;
                 
                 // Finalize measure with actual blank row insertion
                 this.finalizeMeasureWithBlankRow();
@@ -576,7 +851,7 @@ class TimingGenApp {
             }
         }
         
-        // Check if click is in signal name area
+        // Check if click is in name area
         if (xPos < this.config.nameColumnWidth) {
             // Try to get row at this Y position
             const row = this.getRowAtY(yPos);
@@ -620,11 +895,48 @@ class TimingGenApp {
                     this.render();
                 }
                 this.startDragMeasureRow(row.index, event);
+            } else if (row && (row.type === 'text' || row.type === 'counter')) {
+                // Handle text/counter row selection - reuse measure selection logic
+                // Text and counter rows use selectedMeasureRows for dragging (non-signal widgets)
+                if (!this.selectedMeasureRows.has(row.index)) {
+                    this.selectedSignals.clear();
+                    this.selectedMeasureRows.clear();
+                    this.selectedMeasureRows.add(row.index);
+                    this.render();
+                }
+                this.startDragMeasureRow(row.index, event);
             }
             return;
         }
         
-        // Check if click is in waveform area - clear selection if clicking waveform
+        // Check if click is in waveform area
+        // First check for text rows to enable dragging
+        if (xPos >= this.config.nameColumnWidth) {
+            const clickedRow = this.getRowAtY(yPos);
+            
+            if (clickedRow && clickedRow.type === 'text') {
+                // Start text drag mode
+                const textData = this.textData.get(clickedRow.name);
+                if (textData && textData.text) {
+                    this.textDragState = {
+                        textName: clickedRow.name,
+                        startX: xPos,
+                        originalOffset: textData.xOffset || 10
+                    };
+                    this.canvas.style.cursor = 'move';
+                    return;
+                }
+            } else if (clickedRow && clickedRow.type === 'counter') {
+                // Left-click on counter to edit value at this cycle
+                const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
+                if (cycle >= 0 && cycle < this.config.cycles) {
+                    this.showEditCounterDialog(clickedRow.name, cycle);
+                    return;
+                }
+            }
+        }
+        
+        // Check signal interaction - clear selection if clicking waveform
         const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
         const signalIndex = this.getSignalIndexAtY(yPos);
         
@@ -659,31 +971,79 @@ class TimingGenApp {
         
         // Check if right-click is in signal name area
         if (xPos < this.config.nameColumnWidth) {
-            const signalIndex = this.getSignalIndexAtY(yPos);
-            if (signalIndex !== -1) {
-                this.currentEditingSignal = signalIndex;
-                TimingGenUI.showContextMenu('signal-context-menu', ev.clientX, ev.clientY);
+            const row = this.getRowAtY(yPos);
+            if (row) {
+                if (row.type === 'signal') {
+                    const signalIndex = this.getSignalIndexAtY(yPos);
+                    if (signalIndex !== -1) {
+                        this.currentEditingSignal = signalIndex;
+                        TimingGenUI.showContextMenu('signal-context-menu', ev.clientX, ev.clientY);
+                    }
+                }
             }
             return;
         }
         
         // Check if right-click is in waveform area
         const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
-        const signalIndex = this.getSignalIndexAtY(yPos);
+        const row = this.getRowAtY(yPos);
         
-        if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
-            const signal = this.getSignalByIndex(signalIndex);
-            
-            // Show appropriate cycle context menu based on signal type
-            if (signal.type === 'bit') {
-                this.currentEditingSignal = signalIndex;
-                this.currentEditingCycle = cycle;
-                TimingGenUI.showBitCycleContextMenu(this, ev.clientX, ev.clientY);
-            } else if (signal.type === 'bus') {
-                this.currentEditingSignal = signalIndex;
-                this.currentEditingCycle = cycle;
-                TimingGenUI.showBusCycleContextMenu(this, ev.clientX, ev.clientY);
+        if (row) {
+            if (row.type === 'text') {
+                // Right-click on text row - show text context menu
+                this.currentEditingText = row.name;
+                TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
+                return;
+            } else if (row.type === 'signal') {
+                const signalIndex = this.getSignalIndexAtY(yPos);
+                
+                if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
+                    const signal = this.getSignalByIndex(signalIndex);
+                    
+                    // Show appropriate cycle context menu based on signal type
+                    if (signal.type === 'bit') {
+                        this.currentEditingSignal = signalIndex;
+                        this.currentEditingCycle = cycle;
+                        TimingGenUI.showBitCycleContextMenu(this, ev.clientX, ev.clientY);
+                    } else if (signal.type === 'bus') {
+                        this.currentEditingSignal = signalIndex;
+                        this.currentEditingCycle = cycle;
+                        TimingGenUI.showBusCycleContextMenu(this, ev.clientX, ev.clientY);
+                    }
+                }
             }
+        }
+    }
+    
+    handleCanvasMouseDrag(event) {
+        // Handle text dragging
+        if (this.textDragState) {
+            const xPos = event.point.x;
+            const textData = this.textData.get(this.textDragState.textName);
+            if (textData) {
+                // Calculate new offset based on drag distance
+                const deltaX = xPos - this.textDragState.startX;
+                textData.xOffset = Math.max(0, this.textDragState.originalOffset + deltaX);
+                
+                // Throttle rendering using requestAnimationFrame
+                if (!this.textDragState.renderScheduled) {
+                    this.textDragState.renderScheduled = true;
+                    requestAnimationFrame(() => {
+                        this.render();
+                        if (this.textDragState) {
+                            this.textDragState.renderScheduled = false;
+                        }
+                    });
+                }
+            }
+        }
+    }
+    
+    handleCanvasMouseUp(event) {
+        // End text dragging
+        if (this.textDragState) {
+            this.textDragState = null;
+            this.canvas.style.cursor = 'default';
         }
     }
     
@@ -2015,14 +2375,18 @@ class TimingGenApp {
             this.tempMeasureGraphics.push(line2);
             
             // Determine row from mouse position and draw arrow at that position
-            const rowIndex = this.getRowIndexAtY(yPos);
-            const arrowY = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
+            // For measure placement, we want to snap to row boundaries:
+            // - Above top row
+            // - Below bottom row
+            // - Between rows
+            // - Middle of measure rows (if there are multiple measures)
+            const placementY = this.getMeasurePlacementY(yPos);
             
-            // Draw the double-headed arrow at the current mouse row
+            // Draw the double-headed arrow at the placement position
             const arrows = this.drawMeasureArrows(
                 coords.x1,
                 coords.x2,
-                arrowY
+                placementY
             );
             this.tempMeasureGraphics.push(...arrows);
             
@@ -2117,6 +2481,50 @@ class TimingGenApp {
         const relativeY = yPos - this.config.headerHeight;
         const rowIndex = Math.floor(relativeY / this.config.rowHeight);
         return rowIndex;
+    }
+    
+    getMeasurePlacementY(yPos) {
+        // Calculates Y position for measure placement based on mouse position
+        // Snaps to:
+        // - Above top row (y = headerHeight)
+        // - Below bottom row
+        // - Between adjacent rows (at row boundaries)
+        // - Middle of measure rows (if clicking within a measure row area)
+        
+        const totalRows = this.rowManager.getTotalRows();
+        
+        if (yPos < this.config.headerHeight) {
+            // Above header - place above top row
+            return this.config.headerHeight;
+        }
+        
+        const relativeY = yPos - this.config.headerHeight;
+        const rowIndex = Math.floor(relativeY / this.config.rowHeight);
+        
+        if (rowIndex >= totalRows) {
+            // Below all rows - place below bottom row
+            return this.config.headerHeight + totalRows * this.config.rowHeight;
+        }
+        
+        // Check if mouse is in a measure row
+        const row = this.rows[rowIndex];
+        if (row && row.type === 'measure') {
+            // In a measure row - place in the middle
+            return this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
+        }
+        
+        // In a signal, text, or counter row
+        // Determine if closer to top or bottom of the row
+        const rowStartY = this.config.headerHeight + rowIndex * this.config.rowHeight;
+        const posInRow = yPos - rowStartY;
+        
+        if (posInRow < this.config.rowHeight / 2) {
+            // Closer to top - snap to top boundary (above current row)
+            return rowStartY;
+        } else {
+            // Closer to bottom - snap to bottom boundary (below current row)
+            return rowStartY + this.config.rowHeight;
+        }
     }
     
     // New drawing helper methods for measure feature

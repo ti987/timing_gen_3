@@ -223,6 +223,7 @@ body {
     padding: 10px 15px;
     cursor: pointer;
     border-bottom: 1px solid #ecf0f1;
+    color: #2c3e50;
 }
 
 .menu-item:last-child {

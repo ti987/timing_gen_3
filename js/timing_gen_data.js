@@ -1,10 +1,10 @@
 // Timing Gen 3 - Data Management Module
-// Version 3.2.1
+// Version 3.3.1
 // Handles save/load functionality and data import/export
 
 class TimingGenData {
     static saveToJSON(app) {
-        // Save in unified row-based format (v3.2.0)
+        // Save in unified row-based format (v3.3.0)
         // Embed actual data from Maps into rows for serialization
         const rowsWithData = app.rows.map(row => {
             if (row.type === 'signal') {
@@ -21,12 +21,26 @@ class TimingGenData {
                     name: row.name,
                     data: measureData
                 };
+            } else if (row.type === 'text') {
+                const textData = app.textData.get(row.name);
+                return {
+                    type: 'text',
+                    name: row.name,
+                    data: textData
+                };
+            } else if (row.type === 'counter') {
+                const counterData = app.counterData.get(row.name);
+                return {
+                    type: 'counter',
+                    name: row.name,
+                    data: counterData
+                };
             }
             return row;
         });
         
         const data = {
-            version: '3.2.1',
+            version: '3.3.0',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,
@@ -93,7 +107,11 @@ class TimingGenData {
                     app.rows = [];
                     app.signalsData.clear();
                     app.measuresData.clear();
+                    app.textData.clear();
+                    app.counterData.clear();
                     app.measureCounter = 0;
+                    app.textCounter = 0;
+                    app.counterCounter = 0;
                     
                     // Populate Maps and rows array from saved data
                     data.rows.forEach(row => {
@@ -118,6 +136,39 @@ class TimingGenData {
                             if (!isNaN(measureNum) && measureNum >= app.measureCounter) {
                                 app.measureCounter = measureNum + 1;
                             }
+                        } else if (row.type === 'text' && row.data) {
+                            // Store text data in Map with default properties
+                            const textData = {
+                                text: row.data.text || '',
+                                fontFamily: row.data.fontFamily || 'Arial',
+                                fontSize: row.data.fontSize || 14,
+                                color: row.data.color || '#000000',
+                                xOffset: row.data.xOffset !== undefined ? row.data.xOffset : 10
+                            };
+                            app.textData.set(row.name, textData);
+                            // Add to rows array (ordering only)
+                            app.rows.push({
+                                type: 'text',
+                                name: row.name
+                            });
+                            // Update text counter for future text rows
+                            const textNum = parseInt(row.name.replace('T', ''));
+                            if (!isNaN(textNum) && textNum >= app.textCounter) {
+                                app.textCounter = textNum + 1;
+                            }
+                        } else if (row.type === 'counter' && row.data) {
+                            // Store counter data in Map
+                            app.counterData.set(row.name, row.data);
+                            // Add to rows array (ordering only)
+                            app.rows.push({
+                                type: 'counter',
+                                name: row.name
+                            });
+                            // Update counter counter for future counter rows
+                            const counterNum = parseInt(row.name.replace('C', ''));
+                            if (!isNaN(counterNum) && counterNum >= app.counterCounter) {
+                                app.counterCounter = counterNum + 1;
+                            }
                         }
                     });
                 } else {
@@ -138,18 +189,48 @@ class TimingGenData {
     }
     
     static exportToSVG(app) {
-        // Export using Paper.js
-        const svg = paper.project.exportSVG({ asString: true });
+        // Store current selection state and header height
+        const savedSelection = new Set(app.selectedSignals);
+        const savedMeasureSelection = new Set(app.selectedMeasureRows);
+        const savedHideHeader = app.hideHeader;
+        const savedHeaderHeight = app.config.headerHeight;
         
-        const blob = new Blob([svg], { type: 'image/svg+xml' });
-        const url = URL.createObjectURL(blob);
-        
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = 'timing_diagram.svg';
-        anchor.click();
-        
-        URL.revokeObjectURL(url);
+        try {
+            // Clear selections to turn off signal highlight
+            app.selectedSignals.clear();
+            app.selectedMeasureRows.clear();
+            
+            // Set flag to hide header (cycle reference counter)
+            app.hideHeader = true;
+            
+            // Remove header space by setting headerHeight to 0 for SVG export
+            app.config.headerHeight = 0;
+            
+            // Re-render with hidden header, no highlights, and no header space
+            app.render();
+            
+            // Export using Paper.js
+            const svg = paper.project.exportSVG({ asString: true });
+            
+            const blob = new Blob([svg], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = 'timing_diagram.svg';
+            anchor.click();
+            
+            URL.revokeObjectURL(url);
+        } finally {
+            // Restore selections, header state, and header height
+            app.selectedSignals = savedSelection;
+            app.selectedMeasureRows = savedMeasureSelection;
+            app.hideHeader = savedHideHeader;
+            app.config.headerHeight = savedHeaderHeight;
+            
+            // Re-render to restore state
+            app.render();
+        }
     }
 }
 
