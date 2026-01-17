@@ -488,7 +488,13 @@ class TimingGenApp {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 textData.fontFamily = document.getElementById('font-family-select').value;
-                textData.fontSize = parseInt(document.getElementById('font-size-input').value);
+                const fontSize = parseInt(document.getElementById('font-size-input').value);
+                // Validate fontSize is a valid number within range
+                if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
+                    textData.fontSize = fontSize;
+                } else {
+                    textData.fontSize = 14; // Default fallback
+                }
                 this.hideFontDialog();
                 this.render();
             }
@@ -950,7 +956,17 @@ class TimingGenApp {
                 // Calculate new offset based on drag distance
                 const deltaX = xPos - this.textDragState.startX;
                 textData.xOffset = Math.max(0, this.textDragState.originalOffset + deltaX);
-                this.render();
+                
+                // Throttle rendering using requestAnimationFrame
+                if (!this.textDragState.renderScheduled) {
+                    this.textDragState.renderScheduled = true;
+                    requestAnimationFrame(() => {
+                        this.render();
+                        if (this.textDragState) {
+                            this.textDragState.renderScheduled = false;
+                        }
+                    });
+                }
             }
         }
     }
