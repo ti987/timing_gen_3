@@ -1000,14 +1000,6 @@ class TimingGenApp {
             }
             return;
         }
-                
-                this.currentMeasure.measureRow = insertIndex;
-                
-                // Finalize measure with actual blank row insertion
-                this.finalizeMeasureWithBlankRow();
-                return;
-            }
-        }
         
         // Check if click is in name area
         if (xPos < this.config.nameColumnWidth) {
