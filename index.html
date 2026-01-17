@@ -336,10 +336,64 @@
         </div>
     </div>
 
+    <!-- Edit Text Row Dialog -->
+    <div id="edit-text-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Edit Text</h3>
+            <label>Text:</label>
+            <input type="text" id="edit-text-input" placeholder="Enter text">
+            <br><br>
+            <button id="edit-text-ok-btn" class="dialog-btn">OK</button>
+            <button id="edit-text-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Font Selection Dialog -->
+    <div id="font-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Font Settings</h3>
+            <label>Font Family:</label>
+            <select id="font-family-select">
+                <option value="Arial">Arial</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Courier New">Courier New</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Verdana">Verdana</option>
+                <option value="monospace">Monospace</option>
+            </select>
+            <br><br>
+            <label>Font Size:</label>
+            <input type="number" id="font-size-input" value="14" min="8" max="72">
+            <br><br>
+            <button id="font-ok-btn" class="dialog-btn">OK</button>
+            <button id="font-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Color Selection Dialog -->
+    <div id="color-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Text Color</h3>
+            <label>Color:</label>
+            <input type="color" id="text-color-input" value="#000000">
+            <br><br>
+            <button id="color-ok-btn" class="dialog-btn">OK</button>
+            <button id="color-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
     <!-- Context Menu for Measure -->
     <div id="measure-context-menu" class="context-menu" style="display: none;">
         <div class="menu-item" id="delete-measure-menu">Delete</div>
         <div class="menu-item" id="cancel-measure-menu">Cancel</div>
+    </div>
+
+    <!-- Context Menu for Text Row -->
+    <div id="text-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="edit-text-menu">Edit</div>
+        <div class="menu-item" id="font-text-menu">Font</div>
+        <div class="menu-item" id="color-text-menu">Color</div>
+        <div class="menu-item" id="cancel-text-menu">Cancel</div>
     </div>
 
     <!-- Load JavaScript modules in correct order -->

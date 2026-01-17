@@ -65,6 +65,8 @@ class TimingGenApp {
         
         this.currentEditingSignal = null;
         this.currentEditingCycle = null;
+        this.currentEditingText = null; // Current text row being edited
+        this.textDragState = null; // For tracking text dragging {textName, startX}
         
         // Measure mode state
         this.measureMode = false;
@@ -176,6 +178,18 @@ class TimingGenApp {
         document.getElementById('text-dialog-ok-btn').addEventListener('click', () => this.addTextRow());
         document.getElementById('text-dialog-cancel-btn').addEventListener('click', () => this.hideAddTextDialog());
         
+        // Edit text dialog
+        document.getElementById('edit-text-ok-btn').addEventListener('click', () => this.updateTextRow());
+        document.getElementById('edit-text-cancel-btn').addEventListener('click', () => this.hideEditTextDialog());
+        
+        // Font dialog
+        document.getElementById('font-ok-btn').addEventListener('click', () => this.updateTextFont());
+        document.getElementById('font-cancel-btn').addEventListener('click', () => this.hideFontDialog());
+        
+        // Color dialog
+        document.getElementById('color-ok-btn').addEventListener('click', () => this.updateTextColor());
+        document.getElementById('color-cancel-btn').addEventListener('click', () => this.hideColorDialog());
+        
         // Counter row dialog
         document.getElementById('counter-dialog-ok-btn').addEventListener('click', () => this.addCounterRow());
         document.getElementById('counter-dialog-cancel-btn').addEventListener('click', () => this.hideAddCounterDialog());
@@ -183,6 +197,12 @@ class TimingGenApp {
         // Measure context menu
         document.getElementById('delete-measure-menu').addEventListener('click', () => this.deleteMeasure());
         document.getElementById('cancel-measure-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Text context menu
+        document.getElementById('edit-text-menu').addEventListener('click', () => this.showEditTextDialog());
+        document.getElementById('font-text-menu').addEventListener('click', () => this.showFontDialog());
+        document.getElementById('color-text-menu').addEventListener('click', () => this.showColorDialog());
+        document.getElementById('cancel-text-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Add signal dialog
         document.getElementById('dialog-ok-btn').addEventListener('click', () => this.addSignal());
@@ -278,6 +298,8 @@ class TimingGenApp {
         // Canvas events using Paper.js tool
         this.tool = new paper.Tool();
         this.tool.onMouseDown = (event) => this.handleCanvasClick(event);
+        this.tool.onMouseDrag = (event) => this.handleCanvasMouseDrag(event);
+        this.tool.onMouseUp = (event) => this.handleCanvasMouseUp(event);
         
         // Context menu
         this.canvas.addEventListener('contextmenu', (ev) => this.handleCanvasRightClick(ev));
@@ -384,6 +406,7 @@ class TimingGenApp {
         document.getElementById('bus-cycle-context-menu').style.display = 'none';
         document.getElementById('cycle-context-menu').style.display = 'none';
         document.getElementById('measure-context-menu').style.display = 'none';
+        document.getElementById('text-context-menu').style.display = 'none';
     }
     
     showAboutDialog() {
@@ -403,6 +426,86 @@ class TimingGenApp {
         document.getElementById('add-text-dialog').style.display = 'none';
     }
     
+    showEditTextDialog() {
+        if (this.currentEditingText) {
+            const textData = this.textData.get(this.currentEditingText);
+            if (textData) {
+                document.getElementById('edit-text-input').value = textData.text || '';
+                document.getElementById('edit-text-dialog').style.display = 'flex';
+            }
+        }
+        this.hideAllMenus();
+    }
+    
+    hideEditTextDialog() {
+        document.getElementById('edit-text-dialog').style.display = 'none';
+    }
+    
+    showFontDialog() {
+        if (this.currentEditingText) {
+            const textData = this.textData.get(this.currentEditingText);
+            if (textData) {
+                document.getElementById('font-family-select').value = textData.fontFamily || 'Arial';
+                document.getElementById('font-size-input').value = textData.fontSize || 14;
+                document.getElementById('font-dialog').style.display = 'flex';
+            }
+        }
+        this.hideAllMenus();
+    }
+    
+    hideFontDialog() {
+        document.getElementById('font-dialog').style.display = 'none';
+    }
+    
+    showColorDialog() {
+        if (this.currentEditingText) {
+            const textData = this.textData.get(this.currentEditingText);
+            if (textData) {
+                document.getElementById('text-color-input').value = textData.color || '#000000';
+                document.getElementById('color-dialog').style.display = 'flex';
+            }
+        }
+        this.hideAllMenus();
+    }
+    
+    hideColorDialog() {
+        document.getElementById('color-dialog').style.display = 'none';
+    }
+    
+    updateTextRow() {
+        if (this.currentEditingText) {
+            const textData = this.textData.get(this.currentEditingText);
+            if (textData) {
+                textData.text = document.getElementById('edit-text-input').value;
+                this.hideEditTextDialog();
+                this.render();
+            }
+        }
+    }
+    
+    updateTextFont() {
+        if (this.currentEditingText) {
+            const textData = this.textData.get(this.currentEditingText);
+            if (textData) {
+                textData.fontFamily = document.getElementById('font-family-select').value;
+                textData.fontSize = parseInt(document.getElementById('font-size-input').value);
+                this.hideFontDialog();
+                this.render();
+            }
+        }
+    }
+    
+    updateTextColor() {
+        if (this.currentEditingText) {
+            const textData = this.textData.get(this.currentEditingText);
+            if (textData) {
+                textData.color = document.getElementById('text-color-input').value;
+                this.hideColorDialog();
+                this.render();
+            }
+        }
+    }
+    
     showAddCounterDialog() {
         document.getElementById('counter-start-value-input').value = '1';
         document.getElementById('counter-start-cycle-input').value = '0';
@@ -420,9 +523,13 @@ class TimingGenApp {
         const name = `T${this.textCounter}`;
         this.textCounter++;
         
-        // Create text data object
+        // Create text data object with default properties
         const textData = {
-            text: text
+            text: text,
+            fontFamily: 'Arial',
+            fontSize: 14,
+            color: '#000000',
+            xOffset: 10  // Default x offset from left edge of waveform area
         };
         
         // Add to data store
@@ -736,7 +843,26 @@ class TimingGenApp {
             return;
         }
         
-        // Check if click is in waveform area - clear selection if clicking waveform
+        // Check if click is in waveform area
+        // First check for text rows to enable dragging
+        if (xPos >= this.config.nameColumnWidth) {
+            const textRow = this.getRowAtY(yPos);
+            if (textRow && textRow.type === 'text') {
+                // Start text drag mode
+                const textData = this.textData.get(textRow.name);
+                if (textData && textData.text) {
+                    this.textDragState = {
+                        textName: textRow.name,
+                        startX: xPos,
+                        originalOffset: textData.xOffset || 10
+                    };
+                    this.canvas.style.cursor = 'move';
+                    return;
+                }
+            }
+        }
+        
+        // Check signal interaction - clear selection if clicking waveform
         const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
         const signalIndex = this.getSignalIndexAtY(yPos);
         
@@ -771,31 +897,69 @@ class TimingGenApp {
         
         // Check if right-click is in signal name area
         if (xPos < this.config.nameColumnWidth) {
-            const signalIndex = this.getSignalIndexAtY(yPos);
-            if (signalIndex !== -1) {
-                this.currentEditingSignal = signalIndex;
-                TimingGenUI.showContextMenu('signal-context-menu', ev.clientX, ev.clientY);
+            const row = this.getRowAtY(yPos);
+            if (row) {
+                if (row.type === 'signal') {
+                    const signalIndex = this.getSignalIndexAtY(yPos);
+                    if (signalIndex !== -1) {
+                        this.currentEditingSignal = signalIndex;
+                        TimingGenUI.showContextMenu('signal-context-menu', ev.clientX, ev.clientY);
+                    }
+                }
             }
             return;
         }
         
         // Check if right-click is in waveform area
         const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
-        const signalIndex = this.getSignalIndexAtY(yPos);
+        const row = this.getRowAtY(yPos);
         
-        if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
-            const signal = this.getSignalByIndex(signalIndex);
-            
-            // Show appropriate cycle context menu based on signal type
-            if (signal.type === 'bit') {
-                this.currentEditingSignal = signalIndex;
-                this.currentEditingCycle = cycle;
-                TimingGenUI.showBitCycleContextMenu(this, ev.clientX, ev.clientY);
-            } else if (signal.type === 'bus') {
-                this.currentEditingSignal = signalIndex;
-                this.currentEditingCycle = cycle;
-                TimingGenUI.showBusCycleContextMenu(this, ev.clientX, ev.clientY);
+        if (row) {
+            if (row.type === 'text') {
+                // Right-click on text row - show text context menu
+                this.currentEditingText = row.name;
+                TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
+                return;
+            } else if (row.type === 'signal') {
+                const signalIndex = this.getSignalIndexAtY(yPos);
+                
+                if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
+                    const signal = this.getSignalByIndex(signalIndex);
+                    
+                    // Show appropriate cycle context menu based on signal type
+                    if (signal.type === 'bit') {
+                        this.currentEditingSignal = signalIndex;
+                        this.currentEditingCycle = cycle;
+                        TimingGenUI.showBitCycleContextMenu(this, ev.clientX, ev.clientY);
+                    } else if (signal.type === 'bus') {
+                        this.currentEditingSignal = signalIndex;
+                        this.currentEditingCycle = cycle;
+                        TimingGenUI.showBusCycleContextMenu(this, ev.clientX, ev.clientY);
+                    }
+                }
             }
+        }
+    }
+    
+    handleCanvasMouseDrag(event) {
+        // Handle text dragging
+        if (this.textDragState) {
+            const xPos = event.point.x;
+            const textData = this.textData.get(this.textDragState.textName);
+            if (textData) {
+                // Calculate new offset based on drag distance
+                const deltaX = xPos - this.textDragState.startX;
+                textData.xOffset = Math.max(0, this.textDragState.originalOffset + deltaX);
+                this.render();
+            }
+        }
+    }
+    
+    handleCanvasMouseUp(event) {
+        // End text dragging
+        if (this.textDragState) {
+            this.textDragState = null;
+            this.canvas.style.cursor = 'default';
         }
     }
     

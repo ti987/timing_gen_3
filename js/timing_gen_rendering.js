@@ -942,14 +942,18 @@ class TimingGenRendering {
         
         // Draw text in the waveform area (centered vertically in the row)
         if (textData.text) {
+            const xPos = app.config.nameColumnWidth + (textData.xOffset || 10);
             const textObj = new paper.PointText({
-                point: [app.config.nameColumnWidth + 10, yPos + app.config.rowHeight / 2 + 5],
+                point: [xPos, yPos + app.config.rowHeight / 2 + 5],
                 content: textData.text,
-                fillColor: 'black',
-                fontFamily: 'Arial',
-                fontSize: 14,
+                fillColor: textData.color || 'black',
+                fontFamily: textData.fontFamily || 'Arial',
+                fontSize: textData.fontSize || 14,
                 justification: 'left'
             });
+            
+            // Add metadata for click detection
+            textObj.data = { type: 'text', rowIndex: rowIndex };
         }
         // If text is empty, row remains blank
     }

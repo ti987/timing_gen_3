@@ -137,8 +137,15 @@ class TimingGenData {
                                 app.measureCounter = measureNum + 1;
                             }
                         } else if (row.type === 'text' && row.data) {
-                            // Store text data in Map
-                            app.textData.set(row.name, row.data);
+                            // Store text data in Map with default properties
+                            const textData = {
+                                text: row.data.text || '',
+                                fontFamily: row.data.fontFamily || 'Arial',
+                                fontSize: row.data.fontSize || 14,
+                                color: row.data.color || '#000000',
+                                xOffset: row.data.xOffset !== undefined ? row.data.xOffset : 10
+                            };
+                            app.textData.set(row.name, textData);
                             // Add to rows array (ordering only)
                             app.rows.push({
                                 type: 'text',
