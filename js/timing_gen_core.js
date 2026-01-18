@@ -874,34 +874,54 @@ class TimingGenApp {
         }
         
         // Check if clicking on a measure element (Paper.js tool handlers prevent item handlers from firing)
-        const hitResult = paper.project.hitTest(event.point, this.getHitTestOptions());
+        // Use hitTestAll to get all items at the point, not just the topmost group
+        const hitResults = paper.project.hitTestAll(event.point, this.getHitTestOptions());
         
-        if (hitResult && hitResult.item) {
-            // Check if we hit a measure element by walking up the parent chain
-            let item = hitResult.item;
-            while (item) {
-                if (item.data && item.data.type === 'measure') {
-                    // Found a measure group - handle measure element clicks
-                    const measureIndex = item.data.measureIndex;
-                    const hitItem = hitResult.item;
-                    
-                    if (hitItem.data && hitItem.data.type === 'text') {
-                        // Start dragging text
-                        this.startDragMeasureText(measureIndex, event);
-                        return;
-                    } else if (hitItem.data && hitItem.data.type === 'vbar') {
-                        // Re-choose measure point
-                        this.startRechooseMeasurePoint(measureIndex, hitItem.data.pointIndex);
-                        return;
-                    } else if (hitItem.data && hitItem.data.type === 'arrow') {
-                        // Start moving measure to another row
-                        this.startMovingMeasureRow(measureIndex, event);
-                        return;
+        if (hitResults && hitResults.length > 0) {
+            // Look for the first hit that is a measure child element (text, vbar, arrow)
+            // or find a measure group
+            let measureGroup = null;
+            let hitItem = null;
+            
+            for (const result of hitResults) {
+                const item = result.item;
+                
+                // Check if this is a measure child element
+                if (item.data && (item.data.type === 'text' || item.data.type === 'vbar' || item.data.type === 'arrow')) {
+                    hitItem = item;
+                    // Find the measure group parent
+                    let parent = item.parent;
+                    while (parent) {
+                        if (parent.data && parent.data.type === 'measure') {
+                            measureGroup = parent;
+                            break;
+                        }
+                        parent = parent.parent;
                     }
-                    // If we hit the measure but not a specific interactive element, don't block other handlers
-                    break;
+                    if (measureGroup) break;
+                } else if (item.data && item.data.type === 'measure') {
+                    // Found the group itself
+                    measureGroup = item;
                 }
-                item = item.parent;
+            }
+            
+            if (measureGroup && hitItem) {
+                // Handle based on the specific child element that was clicked
+                const measureIndex = measureGroup.data.measureIndex;
+                
+                if (hitItem.data.type === 'text') {
+                    // Start dragging text
+                    this.startDragMeasureText(measureIndex, event);
+                    return;
+                } else if (hitItem.data.type === 'vbar') {
+                    // Re-choose measure point
+                    this.startRechooseMeasurePoint(measureIndex, hitItem.data.pointIndex);
+                    return;
+                } else if (hitItem.data.type === 'arrow') {
+                    // Start moving measure to another row
+                    this.startMovingMeasureRow(measureIndex, event);
+                    return;
+                }
             }
         }
         
@@ -1209,16 +1229,35 @@ class TimingGenApp {
                 return;
             } else if (row.type === 'measure') {
                 // Right-click on measure row - check what element was clicked
-                // Use Paper.js hitTest to determine if clicking on measure text or other parts
+                // Use Paper.js hitTestAll to get all items, not just the topmost group
                 const point = new paper.Point(xPos, yPos);
-                const hitResult = paper.project.hitTest(point, this.getHitTestOptions());
+                const hitResults = paper.project.hitTestAll(point, this.getHitTestOptions());
                 
-                if (hitResult && hitResult.item) {
-                    const hitItem = hitResult.item;
-                    // Walk up to find measure group
-                    let measureGroup = hitItem;
-                    while (measureGroup && !(measureGroup.data && measureGroup.data.type === 'measure')) {
-                        measureGroup = measureGroup.parent;
+                if (hitResults && hitResults.length > 0) {
+                    // Look for the first hit that is a measure child element or group
+                    let measureGroup = null;
+                    let hitItem = null;
+                    
+                    for (const result of hitResults) {
+                        const item = result.item;
+                        
+                        // Check if this is a measure child element
+                        if (item.data && (item.data.type === 'text' || item.data.type === 'vbar' || item.data.type === 'arrow')) {
+                            hitItem = item;
+                            // Find the measure group parent
+                            let parent = item.parent;
+                            while (parent) {
+                                if (parent.data && parent.data.type === 'measure') {
+                                    measureGroup = parent;
+                                    break;
+                                }
+                                parent = parent.parent;
+                            }
+                            if (measureGroup) break;
+                        } else if (item.data && item.data.type === 'measure') {
+                            // Found the group itself
+                            measureGroup = item;
+                        }
                     }
                     
                     if (measureGroup && measureGroup.data) {
@@ -1226,7 +1265,7 @@ class TimingGenApp {
                         this.currentEditingMeasure = measureIndex;
                         
                         // Check if clicking on text specifically
-                        if (hitItem.data && hitItem.data.type === 'text') {
+                        if (hitItem && hitItem.data && hitItem.data.type === 'text') {
                             this.isMeasureTextContext = true;
                             TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
                         } else {
