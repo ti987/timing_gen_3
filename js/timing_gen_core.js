@@ -1081,6 +1081,8 @@ class TimingGenApp {
                     this.isMovingMeasureRow = false;
                     this.movingMeasureRowIndex = null;
                     this.currentEditingMeasureName = null;
+                    this.measureMode = false;
+                    this.measureState = null;
                     this.canvas.style.cursor = 'default';
                     this.hideInstruction();
                     this.render();
@@ -1332,12 +1334,30 @@ class TimingGenApp {
                 }
             }
         }
+        
+        // Handle measure text dragging
+        if (this.isDraggingMeasureText && this.draggingMeasure) {
+            const xPos = event.point.x;
+            const deltaX = xPos - this.dragStartX;
+            const newTextX = (this.originalTextX ?? 0) + deltaX;
+            console.log('[Drag Move] deltaX:', deltaX, 'newTextX:', newTextX);
+            this.draggingMeasure.textX = newTextX;
+            this.render();
+        }
     }
     
     handleCanvasMouseUp(event) {
         // End text dragging
         if (this.textDragState) {
             this.textDragState = null;
+            this.canvas.style.cursor = 'default';
+        }
+        
+        // End measure text dragging
+        if (this.isDraggingMeasureText) {
+            console.log('[Drag End] Mouse up detected');
+            this.isDraggingMeasureText = false;
+            this.draggingMeasure = null;
             this.canvas.style.cursor = 'default';
         }
     }
@@ -2619,6 +2639,26 @@ class TimingGenApp {
             }
         }
         
+        // Show snap-to indicator during rechoose point modes
+        if (this.measureState === 'rechoose-point-1' || this.measureState === 'rechoose-point-2') {
+            // Find snap-to point
+            const snapPoint = this.findNearestTransition(xPos, yPos);
+            if (snapPoint) {
+                const snapX = this.getTransitionMidpointX(snapPoint.signalIndex, snapPoint.cycle);
+                const snapY = this.rowManager.getRowYPosition(this.rowManager.signalIndexToRowIndex(snapPoint.signalIndex)) + this.config.rowHeight / 2;
+                
+                // Draw snap-to indicator with different color (orange)
+                const snapIndicator = new paper.Path.Circle({
+                    center: [snapX, snapY],
+                    radius: 8,
+                    strokeColor: '#FFA500',
+                    strokeWidth: 2,
+                    fillColor: new paper.Color(1, 0.65, 0, 0.2) // Semi-transparent orange
+                });
+                this.tempMeasureGraphics.push(snapIndicator);
+            }
+        }
+        
         if (this.measureState === 'second-point' && this.currentMeasure.signal1Name) {
             // After first click: show first line + cross, and dynamic line to mouse
             const coords = this.getMeasureCoordinates({
@@ -2694,6 +2734,23 @@ class TimingGenApp {
             
             // Draw dashed row indicator
             this.drawRowIndicator(rowIndex);
+        }
+        
+        // Show row indicator when moving measure to another row
+        if (this.isMovingMeasureRow) {
+            const rowIndex = this.rowManager.getRowIndexAtY(yPos);
+            if (rowIndex >= 0 && rowIndex < this.rows.length) {
+                // Draw dashed row indicator in blue
+                const yPos = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
+                const indicator = new paper.Path.Line({
+                    from: [0, yPos],
+                    to: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, yPos],
+                    strokeColor: '#0000FF', // Blue color for row move
+                    strokeWidth: 2,
+                    dashArray: [10, 5]
+                });
+                this.tempMeasureGraphics.push(indicator);
+            }
         }
         
         
@@ -3236,30 +3293,9 @@ class TimingGenApp {
         this.currentEditingMeasureRow = measureRowIndex;
         this.dragStartX = startX;
         this.originalTextX = measure.textX ?? null;
+        this.draggingMeasure = measure; // Store reference to the measure being dragged
         
-        // Save the current onMouseMove handler to restore later
-        const savedOnMouseMove = this.tool.onMouseMove;
-        
-        const mouseMoveHandler = (e) => {
-            if (!this.isDraggingMeasureText) return;
-            
-            const deltaX = e.point.x - this.dragStartX;
-            const newTextX = (this.originalTextX ?? 0) + deltaX;
-            console.log('[Drag Move] deltaX:', deltaX, 'newTextX:', newTextX);
-            measure.textX = newTextX;
-            this.render();
-        };
-        
-        const mouseUpHandler = () => {
-            console.log('[Drag End] Mouse up detected');
-            this.isDraggingMeasureText = false;
-            this.tool.onMouseMove = savedOnMouseMove;
-            this.tool.onMouseUp = null;
-        };
-        
-        console.log('[startDragMeasureText] Setting up mouse handlers');
-        this.tool.onMouseMove = mouseMoveHandler;
-        this.tool.onMouseUp = mouseUpHandler;
+        this.canvas.style.cursor = 'ew-resize'; // Show horizontal resize cursor
     }
     
     showMeasureTextContextMenu(event, measureIndex) {
@@ -3344,6 +3380,10 @@ class TimingGenApp {
         
         // Set up click handler for selecting new row
         this.isMovingMeasureRow = true;
+        
+        // Enable measure mode so handleMeasureMouseMove is called for visual feedback
+        this.measureMode = true;
+        this.measureState = null; // No specific measure state, just moving
     }
     
     handleNewDocument() {
