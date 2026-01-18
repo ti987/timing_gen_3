@@ -909,16 +909,22 @@ class TimingGenApp {
                 // Handle based on the specific child element that was clicked
                 const measureIndex = measureGroup.data.measureIndex;
                 
+                // Debug logging to help diagnose click issues
+                console.log('[Measure Click] Detected:', hitItem.data.type, 'at measureIndex:', measureIndex);
+                
                 if (hitItem.data.type === 'text') {
                     // Start dragging text
+                    console.log('[Measure Click] Starting text drag');
                     this.startDragMeasureText(measureIndex, event);
                     return;
                 } else if (hitItem.data.type === 'vbar') {
                     // Re-choose measure point
+                    console.log('[Measure Click] Starting point rechoose, pointIndex:', hitItem.data.pointIndex);
                     this.startRechooseMeasurePoint(measureIndex, hitItem.data.pointIndex);
                     return;
                 } else if (hitItem.data.type === 'arrow') {
                     // Start moving measure to another row
+                    console.log('[Measure Click] Starting measure row move');
                     this.startMovingMeasureRow(measureIndex, event);
                     return;
                 }
