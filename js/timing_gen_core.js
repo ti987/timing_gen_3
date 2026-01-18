@@ -57,6 +57,7 @@ class TimingGenApp {
         
         // Counter for auto-generating unique measure names
         this.measureCounter = 0;
+        this.measureTextCounter = 0; // Counter for measure text (t1, t2, t3...)
         this.textCounter = 0;
         this.counterCounter = 0;
         
@@ -67,14 +68,22 @@ class TimingGenApp {
         this.currentEditingCycle = null;
         this.currentEditingText = null; // Current text row being edited
         this.currentEditingCounter = null; // Current counter row being edited {name, cycle}
+        this.currentEditingMeasureRow = null; // Current measure row being edited (row index)
         this.textDragState = null; // For tracking text dragging {textName, startX}
         
         // Measure mode state
         this.measureMode = false;
-        this.measureState = null; // null, 'first-point', 'second-point', 'placing-text'
+        this.measureState = null; // null, 'first-point', 'second-point', 'placing-text', 'rechoose-point-1', 'rechoose-point-2'
         this.currentMeasure = null; // Current measure being created
         this.currentEditingMeasure = null; // Index of measure being edited
         this.tempMeasureGraphics = null; // Temporary graphics for measure creation
+        this.isDraggingMeasureText = false; // For dragging measure text
+        this.dragStartX = null; // Starting X position for text drag
+        this.originalTextX = null; // Original text X position
+        this.rechoosingPointIndex = null; // Which point is being rechosen (1 or 2)
+        this.isMovingMeasureRow = false; // Flag for moving measure to another row
+        this.movingMeasureRowIndex = null; // Row index of measure being moved
+        this.isMeasureTextContext = false; // Flag for measure text context menu
         
         // Insert/Delete cycle mode tracking
         this.insertCycleMode = null; // 'global' or 'signal'
@@ -111,6 +120,7 @@ class TimingGenApp {
     
     setupEventListeners() {
         // Menu buttons
+        document.getElementById('new-btn').addEventListener('click', () => this.handleNewDocument());
         document.getElementById('add-signal-btn').addEventListener('click', () => TimingGenUI.showAddSignalDialog(this));
         document.getElementById('global-option-btn').addEventListener('click', () => TimingGenUI.showGlobalOptionDialog(this));
         document.getElementById('save-btn').addEventListener('click', () => TimingGenData.saveToJSON(this));
@@ -208,6 +218,14 @@ class TimingGenApp {
         document.getElementById('font-text-menu').addEventListener('click', () => this.showFontDialog());
         document.getElementById('color-text-menu').addEventListener('click', () => this.showColorDialog());
         document.getElementById('cancel-text-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Text row name context menu
+        document.getElementById('delete-text-row-menu').addEventListener('click', () => this.deleteTextRow());
+        document.getElementById('cancel-text-row-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Measure row name context menu
+        document.getElementById('delete-measure-row-menu').addEventListener('click', () => this.deleteMeasureRow());
+        document.getElementById('cancel-measure-row-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Add signal dialog
         document.getElementById('dialog-ok-btn').addEventListener('click', () => this.addSignal());
@@ -412,6 +430,11 @@ class TimingGenApp {
         document.getElementById('cycle-context-menu').style.display = 'none';
         document.getElementById('measure-context-menu').style.display = 'none';
         document.getElementById('text-context-menu').style.display = 'none';
+        document.getElementById('text-row-name-context-menu').style.display = 'none';
+        document.getElementById('measure-row-name-context-menu').style.display = 'none';
+        
+        // Reset measure text context flag
+        this.isMeasureTextContext = false;
     }
     
     showAboutDialog() {
@@ -432,7 +455,15 @@ class TimingGenApp {
     }
     
     showEditTextDialog() {
-        if (this.currentEditingText) {
+        if (this.isMeasureTextContext) {
+            // Handle measure text editing
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                const measure = measures[this.currentEditingMeasure];
+                document.getElementById('edit-text-input').value = measure.text || '';
+                document.getElementById('edit-text-dialog').style.display = 'flex';
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 document.getElementById('edit-text-input').value = textData.text || '';
@@ -447,7 +478,16 @@ class TimingGenApp {
     }
     
     showFontDialog() {
-        if (this.currentEditingText) {
+        if (this.isMeasureTextContext) {
+            // Handle measure text font
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                const measure = measures[this.currentEditingMeasure];
+                document.getElementById('font-family-select').value = measure.textFont || 'Arial';
+                document.getElementById('font-size-input').value = measure.textSize || 12;
+                document.getElementById('font-dialog').style.display = 'flex';
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 document.getElementById('font-family-select').value = textData.fontFamily || 'Arial';
@@ -463,7 +503,15 @@ class TimingGenApp {
     }
     
     showColorDialog() {
-        if (this.currentEditingText) {
+        if (this.isMeasureTextContext) {
+            // Handle measure text color
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                const measure = measures[this.currentEditingMeasure];
+                document.getElementById('text-color-input').value = measure.textColor || '#FF0000';
+                document.getElementById('color-dialog').style.display = 'flex';
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 document.getElementById('text-color-input').value = textData.color || '#000000';
@@ -478,7 +526,17 @@ class TimingGenApp {
     }
     
     updateTextRow() {
-        if (this.currentEditingText) {
+        if (this.isMeasureTextContext) {
+            // Update measure text
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                const measure = measures[this.currentEditingMeasure];
+                measure.text = document.getElementById('edit-text-input').value;
+                this.hideEditTextDialog();
+                this.isMeasureTextContext = false;
+                this.render();
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 textData.text = document.getElementById('edit-text-input').value;
@@ -489,7 +547,23 @@ class TimingGenApp {
     }
     
     updateTextFont() {
-        if (this.currentEditingText) {
+        if (this.isMeasureTextContext) {
+            // Update measure text font
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                const measure = measures[this.currentEditingMeasure];
+                measure.textFont = document.getElementById('font-family-select').value;
+                const fontSize = parseInt(document.getElementById('font-size-input').value);
+                if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
+                    measure.textSize = fontSize;
+                } else {
+                    measure.textSize = 12; // Default fallback
+                }
+                this.hideFontDialog();
+                this.isMeasureTextContext = false;
+                this.render();
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 textData.fontFamily = document.getElementById('font-family-select').value;
@@ -507,7 +581,17 @@ class TimingGenApp {
     }
     
     updateTextColor() {
-        if (this.currentEditingText) {
+        if (this.isMeasureTextContext) {
+            // Update measure text color
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                const measure = measures[this.currentEditingMeasure];
+                measure.textColor = document.getElementById('text-color-input').value;
+                this.hideColorDialog();
+                this.isMeasureTextContext = false;
+                this.render();
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 textData.color = document.getElementById('text-color-input').value;
@@ -772,11 +856,79 @@ class TimingGenApp {
         this.render();
     }
     
+    // Helper method for hit testing (used by both click and right-click handlers)
+    getHitTestOptions() {
+        return {
+            segments: true,
+            stroke: true,
+            fill: true,
+            tolerance: 5
+        };
+    }
+    
     handleCanvasClick(event) {
         // Only handle left mouse button clicks (button 0)
         // Right clicks are handled by handleCanvasRightClick
         if (event.event && event.event.button !== 0) {
             return;
+        }
+        
+        // Check if clicking on a measure element (Paper.js tool handlers prevent item handlers from firing)
+        // Use hitTestAll to get all items at the point, not just the topmost group
+        const hitResults = paper.project.hitTestAll(event.point, this.getHitTestOptions());
+        
+        if (hitResults && hitResults.length > 0) {
+            // Look for the first hit that is a measure child element (text, vbar, arrow)
+            // or find a measure group
+            let measureGroup = null;
+            let hitItem = null;
+            
+            for (const result of hitResults) {
+                const item = result.item;
+                
+                // Check if this is a measure child element
+                if (item.data && (item.data.type === 'text' || item.data.type === 'vbar' || item.data.type === 'arrow')) {
+                    hitItem = item;
+                    // Find the measure group parent
+                    let parent = item.parent;
+                    while (parent) {
+                        if (parent.data && parent.data.type === 'measure') {
+                            measureGroup = parent;
+                            break;
+                        }
+                        parent = parent.parent;
+                    }
+                    if (measureGroup) break;
+                } else if (item.data && item.data.type === 'measure') {
+                    // Found the group itself
+                    measureGroup = item;
+                }
+            }
+            
+            if (measureGroup && hitItem) {
+                // Handle based on the specific child element that was clicked
+                const measureIndex = measureGroup.data.measureIndex;
+                
+                // Debug logging to help diagnose click issues
+                console.log('[Measure Click] Detected:', hitItem.data.type, 'at measureIndex:', measureIndex);
+                
+                if (hitItem.data.type === 'text') {
+                    // Start dragging text
+                    console.log('[Measure Click] Starting text drag');
+                    this.startDragMeasureText(measureIndex, event);
+                    return;
+                } else if (hitItem.data.type === 'vbar') {
+                    // Re-choose measure point
+                    console.log('[Measure Click] Starting point rechoose, pointIndex:', hitItem.data.pointIndex);
+                    this.startRechooseMeasurePoint(measureIndex, hitItem.data.pointIndex);
+                    return;
+                } else if (hitItem.data.type === 'arrow') {
+                    // Start moving measure to another row
+                    console.log('[Measure Click] Starting measure row move');
+                    this.startMovingMeasureRow(measureIndex, event);
+                    return;
+                }
+            }
         }
         
         const xPos = event.point.x;
@@ -848,7 +1000,86 @@ class TimingGenApp {
                 // Finalize measure with actual blank row insertion
                 this.finalizeMeasureWithBlankRow();
                 return;
+            } else if (this.measureState === 'rechoose-point-1') {
+                // Re-choosing first point
+                const transition = this.findNearestTransition(xPos, yPos);
+                
+                if (transition) {
+                    const measures = this.getMeasures();
+                    const measure = measures[this.currentEditingMeasure];
+                    const signal = this.getSignalByIndex(transition.signalIndex);
+                    measure.signal1Name = signal.name;
+                    measure.cycle1 = transition.cycle;
+                    
+                    // Exit re-choose mode
+                    this.measureMode = false;
+                    this.measureState = null;
+                    this.rechoosingPointIndex = null;
+                    this.canvas.style.cursor = 'default';
+                    this.hideInstruction();
+                    this.render();
+                }
+                return;
+            } else if (this.measureState === 'rechoose-point-2') {
+                // Re-choosing second point
+                const transition = this.findNearestTransition(xPos, yPos);
+                
+                if (transition) {
+                    const measures = this.getMeasures();
+                    const measure = measures[this.currentEditingMeasure];
+                    const signal = this.getSignalByIndex(transition.signalIndex);
+                    measure.signal2Name = signal.name;
+                    measure.cycle2 = transition.cycle;
+                    
+                    // Exit re-choose mode
+                    this.measureMode = false;
+                    this.measureState = null;
+                    this.rechoosingPointIndex = null;
+                    this.canvas.style.cursor = 'default';
+                    this.hideInstruction();
+                    this.render();
+                }
+                return;
             }
+        }
+        
+        // Handle moving measure to another row
+        if (this.isMovingMeasureRow) {
+            const row = this.getRowAtY(yPos);
+            if (row) {
+                const measures = this.getMeasures();
+                const measure = measures[this.currentEditingMeasure];
+                const measureName = measure.name;
+                
+                // Remove from old position
+                const oldRowIndex = this.rows.findIndex(r => r.type === 'measure' && r.name === measureName);
+                if (oldRowIndex >= 0) {
+                    this.rows.splice(oldRowIndex, 1);
+                }
+                
+                // Calculate new insertion index
+                let newRowIndex = row.index;
+                if (oldRowIndex < newRowIndex) {
+                    newRowIndex--; // Adjust for removal
+                }
+                
+                // Insert at new position
+                this.rows.splice(newRowIndex, 0, {
+                    type: 'measure',
+                    name: measureName
+                });
+                
+                // Update measure row reference
+                measure.measureRow = newRowIndex;
+                
+                // Exit moving mode
+                this.isMovingMeasureRow = false;
+                this.movingMeasureRowIndex = null;
+                this.canvas.style.cursor = 'default';
+                this.hideInstruction();
+                this.render();
+            }
+            return;
         }
         
         // Check if click is in name area
@@ -979,6 +1210,14 @@ class TimingGenApp {
                         this.currentEditingSignal = signalIndex;
                         TimingGenUI.showContextMenu('signal-context-menu', ev.clientX, ev.clientY);
                     }
+                } else if (row.type === 'text') {
+                    // Right-click on text row name column - show delete/cancel menu
+                    this.currentEditingText = row.name;
+                    TimingGenUI.showContextMenu('text-row-name-context-menu', ev.clientX, ev.clientY);
+                } else if (row.type === 'measure') {
+                    // Right-click on measure row name column - show delete/cancel menu
+                    this.currentEditingMeasureRow = row.index;
+                    TimingGenUI.showContextMenu('measure-row-name-context-menu', ev.clientX, ev.clientY);
                 }
             }
             return;
@@ -994,6 +1233,55 @@ class TimingGenApp {
                 this.currentEditingText = row.name;
                 TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
                 return;
+            } else if (row.type === 'measure') {
+                // Right-click on measure row - check what element was clicked
+                // Use Paper.js hitTestAll to get all items, not just the topmost group
+                const point = new paper.Point(xPos, yPos);
+                const hitResults = paper.project.hitTestAll(point, this.getHitTestOptions());
+                
+                if (hitResults && hitResults.length > 0) {
+                    // Look for the first hit that is a measure child element or group
+                    let measureGroup = null;
+                    let hitItem = null;
+                    
+                    for (const result of hitResults) {
+                        const item = result.item;
+                        
+                        // Check if this is a measure child element
+                        if (item.data && (item.data.type === 'text' || item.data.type === 'vbar' || item.data.type === 'arrow')) {
+                            hitItem = item;
+                            // Find the measure group parent
+                            let parent = item.parent;
+                            while (parent) {
+                                if (parent.data && parent.data.type === 'measure') {
+                                    measureGroup = parent;
+                                    break;
+                                }
+                                parent = parent.parent;
+                            }
+                            if (measureGroup) break;
+                        } else if (item.data && item.data.type === 'measure') {
+                            // Found the group itself
+                            measureGroup = item;
+                        }
+                    }
+                    
+                    if (measureGroup && measureGroup.data) {
+                        const measureIndex = measureGroup.data.measureIndex;
+                        this.currentEditingMeasure = measureIndex;
+                        
+                        // Check if clicking on text specifically
+                        if (hitItem && hitItem.data && hitItem.data.type === 'text') {
+                            this.isMeasureTextContext = true;
+                            TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
+                        } else {
+                            // General measure context menu
+                            this.isMeasureTextContext = false;
+                            this.showMeasureContextMenu(ev, measureIndex);
+                        }
+                        return;
+                    }
+                }
             } else if (row.type === 'signal') {
                 const signalIndex = this.getSignalIndexAtY(yPos);
                 
@@ -2001,7 +2289,11 @@ class TimingGenApp {
             signal2Row: null,  // Changed from signal2Index to signal2Row
             cycle2: null,
             measureRow: null,  // Row index where measure will be placed
-            text: ''
+            text: '',
+            textX: null,       // X position of text (relative to arrow)
+            textFont: 'Arial', // Font family for text
+            textSize: 12,      // Font size for text
+            textColor: '#FF0000' // Text color
         };
         this.canvas.style.cursor = 'crosshair';
         
@@ -2390,6 +2682,9 @@ class TimingGenApp {
             );
             this.tempMeasureGraphics.push(...arrows);
             
+            // Calculate row index from placement Y for row indicator
+            const rowIndex = this.rowManager.getRowIndexAtY(placementY);
+            
             // Draw dashed row indicator
             this.drawRowIndicator(rowIndex);
         }
@@ -2759,38 +3054,24 @@ class TimingGenApp {
     }
     
     finalizeMeasureWithBlankRow() {
-        // Finalize measure with actual blank row insertion
-        this.currentMeasure.text = ''; // No text for now
-        
-        const measureName = this.currentMeasure.name;
+        // After selecting row, auto-assign text as t1, t2, t3, etc.
         const measureRowIndex = this.currentMeasure.measureRow;
         
+        // Auto-generate measure text (t1, t2, t3, ...)
+        // Use dedicated counter to avoid duplicates when measures are deleted
+        this.measureTextCounter++;
+        this.currentMeasure.text = `t${this.measureTextCounter}`;
+        
         // Store measure in Map
-        this.measuresData.set(measureName, this.currentMeasure);
+        this.measuresData.set(this.currentMeasure.name, this.currentMeasure);
         
-        // Check if a measure row already exists at this position
-        const existingRowIndex = this.rows.findIndex((row, idx) => 
-            idx === measureRowIndex && row.type === 'measure'
-        );
+        // Insert new measure row
+        this.rows.splice(measureRowIndex, 0, {
+            type: 'measure',
+            name: this.currentMeasure.name
+        });
         
-        if (existingRowIndex >= 0) {
-            // Measure row already exists at this position - should not happen in current implementation
-            // but keep for safety
-        } else {
-            // Insert new measure row
-            this.rows.splice(measureRowIndex, 0, {
-                type: 'measure',
-                name: measureName
-            });
-        }
-        
-        // Clean up
-        this.hideInstruction();
-        this.measureMode = false;
-        this.measureState = null;
-        this.currentMeasure = null;
-        this.canvas.style.cursor = 'crosshair';
-        
+        // Clean up temporary graphics
         if (this.tempMeasureGraphics) {
             if (Array.isArray(this.tempMeasureGraphics)) {
                 this.tempMeasureGraphics.forEach(item => {
@@ -2802,9 +3083,17 @@ class TimingGenApp {
             this.tempMeasureGraphics = null;
         }
         
+        // Clean up measure mode state
+        this.hideInstruction();
+        this.measureMode = false;
+        this.measureState = null;
+        this.currentMeasure = null;
+        this.canvas.style.cursor = 'default';
+        
         // Restore original onMouseMove
         this.tool.onMouseMove = this.originalOnMouseMove;
         
+        // Render the measure
         this.render();
     }
     
@@ -2822,26 +3111,13 @@ class TimingGenApp {
         // Store measure in Map
         this.measuresData.set(measureName, this.currentMeasure);
         
-        // Add measure row to rows array if not already added
-        // (This might be from an alternative path)
-        
         document.getElementById('measure-text-dialog').style.display = 'none';
-        this.hideInstruction();
+        
+        // Clean up measure mode state
         this.measureMode = false;
         this.measureState = null;
         this.currentMeasure = null;
-        this.canvas.style.cursor = 'crosshair';
-        
-        if (this.tempMeasureGraphics) {
-            if (Array.isArray(this.tempMeasureGraphics)) {
-                this.tempMeasureGraphics.forEach(item => {
-                    if (item && item.remove) item.remove();
-                });
-            } else if (this.tempMeasureGraphics.remove) {
-                this.tempMeasureGraphics.remove();
-            }
-            this.tempMeasureGraphics = null;
-        }
+        this.canvas.style.cursor = 'default';
         
         // Restore original onMouseMove
         this.tool.onMouseMove = this.originalOnMouseMove;
@@ -2852,10 +3128,20 @@ class TimingGenApp {
     cancelMeasure() {
         document.getElementById('measure-text-dialog').style.display = 'none';
         this.hideInstruction();
+        
+        // If currentMeasure exists and was added to rows, remove it
+        if (this.currentMeasure) {
+            const measureName = this.currentMeasure.name;
+            const rowIndex = this.rows.findIndex(row => row.type === 'measure' && row.name === measureName);
+            if (rowIndex >= 0) {
+                this.rows.splice(rowIndex, 1);
+            }
+        }
+        
         this.measureMode = false;
         this.measureState = null;
         this.currentMeasure = null;
-        this.canvas.style.cursor = 'crosshair';
+        this.canvas.style.cursor = 'default';
         
         if (this.tempMeasureGraphics) {
             if (Array.isArray(this.tempMeasureGraphics)) {
@@ -2911,6 +3197,169 @@ class TimingGenApp {
             this.render();
         }
     }
+    
+    startDragMeasureText(measureIndex, event) {
+        // Start dragging measure text in X direction
+        const measures = this.getMeasures();
+        if (measureIndex < 0 || measureIndex >= measures.length) return;
+        
+        const measure = measures[measureIndex];
+        const startX = event.point.x;
+        
+        this.isDraggingMeasureText = true;
+        this.currentEditingMeasure = measureIndex;
+        this.dragStartX = startX;
+        this.originalTextX = measure.textX ?? null;
+        
+        const mouseMoveHandler = (e) => {
+            if (!this.isDraggingMeasureText) return;
+            
+            const deltaX = e.point.x - this.dragStartX;
+            measure.textX = (this.originalTextX ?? 0) + deltaX;
+            this.render();
+        };
+        
+        const mouseUpHandler = () => {
+            this.isDraggingMeasureText = false;
+            this.tool.onMouseMove = this.originalOnMouseMove;
+            this.tool.onMouseUp = null;
+        };
+        
+        this.tool.onMouseMove = mouseMoveHandler;
+        this.tool.onMouseUp = mouseUpHandler;
+    }
+    
+    showMeasureTextContextMenu(event, measureIndex) {
+        // Show context menu for measure text
+        this.currentEditingMeasure = measureIndex;
+        
+        const menu = document.getElementById('text-context-menu');
+        menu.style.left = event.clientX + 'px';
+        menu.style.top = event.clientY + 'px';
+        menu.style.display = 'block';
+        
+        event.preventDefault();
+        
+        // Update menu handlers to work with measure text
+        this.isMeasureTextContext = true;
+    }
+    
+    startRechooseMeasurePoint(measureIndex, pointIndex) {
+        // Allow user to re-choose a measure point
+        const measures = this.getMeasures();
+        if (measureIndex < 0 || measureIndex >= measures.length) return;
+        
+        const measure = measures[measureIndex];
+        this.currentEditingMeasure = measureIndex;
+        this.rechoosingPointIndex = pointIndex;
+        
+        // Enter re-choose mode
+        this.measureMode = true;
+        this.measureState = pointIndex === 1 ? 'rechoose-point-1' : 'rechoose-point-2';
+        this.canvas.style.cursor = 'crosshair';
+        
+        this.showInstruction(`Click to re-choose point ${pointIndex}`);
+    }
+    
+    startMovingMeasureRow(measureIndex, event) {
+        // Start moving measure to another row
+        const measures = this.getMeasures();
+        if (measureIndex < 0 || measureIndex >= measures.length) return;
+        
+        const measure = measures[measureIndex];
+        const measureName = measure.name;
+        
+        // Find the row index for this measure
+        const rowIndex = this.rows.findIndex(row => row.type === 'measure' && row.name === measureName);
+        if (rowIndex < 0) return;
+        
+        this.currentEditingMeasure = measureIndex;
+        this.movingMeasureRowIndex = rowIndex;
+        this.canvas.style.cursor = 'move';
+        
+        this.showInstruction('Click on a row to move the measure there');
+        
+        // Set up click handler for selecting new row
+        this.isMovingMeasureRow = true;
+    }
+    
+    handleNewDocument() {
+        // Check if there's any data
+        const hasData = this.rows.length > 0;
+        
+        if (hasData) {
+            // Ask user if they want to save
+            if (confirm('Do you want to save the current diagram before creating a new one?')) {
+                TimingGenData.saveToJSON(this);
+            }
+        }
+        
+        // Clear all data
+        this.rows = [];
+        this.signalsData.clear();
+        this.measuresData.clear();
+        this.textData.clear();
+        this.counterData.clear();
+        
+        // Reset counters (keep measureCounter for unique internal names)
+        // Only reset display counters
+        this.measureTextCounter = 0;
+        this.textCounter = 0;
+        this.counterCounter = 0;
+        
+        // Reset selections
+        this.selectedSignals.clear();
+        this.selectedMeasureRows.clear();
+        
+        // Render empty canvas
+        this.render();
+    }
+    
+    deleteTextRow() {
+        if (this.currentEditingText) {
+            // Confirm deletion
+            if (!confirm('Delete this text row?')) {
+                this.hideAllMenus();
+                return;
+            }
+            
+            // Find row index
+            const rowIndex = this.rows.findIndex(row => row.type === 'text' && row.name === this.currentEditingText);
+            if (rowIndex >= 0) {
+                // Remove from rows array
+                this.rows.splice(rowIndex, 1);
+                // Remove from text data
+                this.textData.delete(this.currentEditingText);
+                
+                this.currentEditingText = null;
+                this.hideAllMenus();
+                this.render();
+            }
+        }
+    }
+    
+    deleteMeasureRow() {
+        if (this.currentEditingMeasureRow !== null) {
+            // Confirm deletion
+            if (!confirm('Delete this measure?')) {
+                this.hideAllMenus();
+                return;
+            }
+            
+            const row = this.rows[this.currentEditingMeasureRow];
+            if (row && row.type === 'measure') {
+                // Remove from measures data
+                this.measuresData.delete(row.name);
+                // Remove from rows array
+                this.rows.splice(this.currentEditingMeasureRow, 1);
+                
+                this.currentEditingMeasureRow = null;
+                this.hideAllMenus();
+                this.render();
+            }
+        }
+    }
+    
     
     render() {
         TimingGenRendering.render(this);
