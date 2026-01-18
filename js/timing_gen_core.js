@@ -75,7 +75,8 @@ class TimingGenApp {
         this.measureMode = false;
         this.measureState = null; // null, 'first-point', 'second-point', 'placing-text', 'rechoose-point-1', 'rechoose-point-2'
         this.currentMeasure = null; // Current measure being created
-        this.currentEditingMeasure = null; // Index of measure being edited
+        this.currentEditingMeasure = null; // Index of measure being edited (DEPRECATED - use currentEditingMeasureName)
+        this.currentEditingMeasureName = null; // Name of measure being edited
         this.tempMeasureGraphics = null; // Temporary graphics for measure creation
         this.isDraggingMeasureText = false; // For dragging measure text
         this.dragStartX = null; // Starting X position for text drag
@@ -1005,19 +1006,21 @@ class TimingGenApp {
                 const transition = this.findNearestTransition(xPos, yPos);
                 
                 if (transition) {
-                    const measures = this.getMeasures();
-                    const measure = measures[this.currentEditingMeasure];
-                    const signal = this.getSignalByIndex(transition.signalIndex);
-                    measure.signal1Name = signal.name;
-                    measure.cycle1 = transition.cycle;
-                    
-                    // Exit re-choose mode
-                    this.measureMode = false;
-                    this.measureState = null;
-                    this.rechoosingPointIndex = null;
-                    this.canvas.style.cursor = 'default';
-                    this.hideInstruction();
-                    this.render();
+                    const measure = this.measuresData.get(this.currentEditingMeasureName);
+                    if (measure) {
+                        const signal = this.getSignalByIndex(transition.signalIndex);
+                        measure.signal1Name = signal.name;
+                        measure.cycle1 = transition.cycle;
+                        
+                        // Exit re-choose mode
+                        this.measureMode = false;
+                        this.measureState = null;
+                        this.rechoosingPointIndex = null;
+                        this.currentEditingMeasureName = null;
+                        this.canvas.style.cursor = 'default';
+                        this.hideInstruction();
+                        this.render();
+                    }
                 }
                 return;
             } else if (this.measureState === 'rechoose-point-2') {
@@ -1025,19 +1028,21 @@ class TimingGenApp {
                 const transition = this.findNearestTransition(xPos, yPos);
                 
                 if (transition) {
-                    const measures = this.getMeasures();
-                    const measure = measures[this.currentEditingMeasure];
-                    const signal = this.getSignalByIndex(transition.signalIndex);
-                    measure.signal2Name = signal.name;
-                    measure.cycle2 = transition.cycle;
-                    
-                    // Exit re-choose mode
-                    this.measureMode = false;
-                    this.measureState = null;
-                    this.rechoosingPointIndex = null;
-                    this.canvas.style.cursor = 'default';
-                    this.hideInstruction();
-                    this.render();
+                    const measure = this.measuresData.get(this.currentEditingMeasureName);
+                    if (measure) {
+                        const signal = this.getSignalByIndex(transition.signalIndex);
+                        measure.signal2Name = signal.name;
+                        measure.cycle2 = transition.cycle;
+                        
+                        // Exit re-choose mode
+                        this.measureMode = false;
+                        this.measureState = null;
+                        this.rechoosingPointIndex = null;
+                        this.currentEditingMeasureName = null;
+                        this.canvas.style.cursor = 'default';
+                        this.hideInstruction();
+                        this.render();
+                    }
                 }
                 return;
             }
@@ -1047,37 +1052,39 @@ class TimingGenApp {
         if (this.isMovingMeasureRow) {
             const row = this.getRowAtY(yPos);
             if (row) {
-                const measures = this.getMeasures();
-                const measure = measures[this.currentEditingMeasure];
-                const measureName = measure.name;
-                
-                // Remove from old position
-                const oldRowIndex = this.rows.findIndex(r => r.type === 'measure' && r.name === measureName);
-                if (oldRowIndex >= 0) {
-                    this.rows.splice(oldRowIndex, 1);
+                const measure = this.measuresData.get(this.currentEditingMeasureName);
+                if (measure) {
+                    const measureName = measure.name;
+                    
+                    // Remove from old position
+                    const oldRowIndex = this.rows.findIndex(r => r.type === 'measure' && r.name === measureName);
+                    if (oldRowIndex >= 0) {
+                        this.rows.splice(oldRowIndex, 1);
+                    }
+                    
+                    // Calculate new insertion index
+                    let newRowIndex = row.index;
+                    if (oldRowIndex < newRowIndex) {
+                        newRowIndex--; // Adjust for removal
+                    }
+                    
+                    // Insert at new position
+                    this.rows.splice(newRowIndex, 0, {
+                        type: 'measure',
+                        name: measureName
+                    });
+                    
+                    // Update measure row reference
+                    measure.measureRow = newRowIndex;
+                    
+                    // Exit moving mode
+                    this.isMovingMeasureRow = false;
+                    this.movingMeasureRowIndex = null;
+                    this.currentEditingMeasureName = null;
+                    this.canvas.style.cursor = 'default';
+                    this.hideInstruction();
+                    this.render();
                 }
-                
-                // Calculate new insertion index
-                let newRowIndex = row.index;
-                if (oldRowIndex < newRowIndex) {
-                    newRowIndex--; // Adjust for removal
-                }
-                
-                // Insert at new position
-                this.rows.splice(newRowIndex, 0, {
-                    type: 'measure',
-                    name: measureName
-                });
-                
-                // Update measure row reference
-                measure.measureRow = newRowIndex;
-                
-                // Exit moving mode
-                this.isMovingMeasureRow = false;
-                this.movingMeasureRowIndex = null;
-                this.canvas.style.cursor = 'default';
-                this.hideInstruction();
-                this.render();
             }
             return;
         }
@@ -3198,33 +3205,59 @@ class TimingGenApp {
         }
     }
     
-    startDragMeasureText(measureIndex, event) {
+    startDragMeasureText(measureRowIndex, event) {
         // Start dragging measure text in X direction
-        const measures = this.getMeasures();
-        if (measureIndex < 0 || measureIndex >= measures.length) return;
+        // measureRowIndex is the row index, not the measure array index
+        console.log('[startDragMeasureText] Called with measureRowIndex:', measureRowIndex);
         
-        const measure = measures[measureIndex];
+        // Find the measure by row index
+        if (measureRowIndex < 0 || measureRowIndex >= this.rows.length) {
+            console.log('[startDragMeasureText] Invalid measureRowIndex, aborting');
+            return;
+        }
+        
+        const row = this.rows[measureRowIndex];
+        if (row.type !== 'measure') {
+            console.log('[startDragMeasureText] Row is not a measure, aborting');
+            return;
+        }
+        
+        const measure = this.measuresData.get(row.name);
+        if (!measure) {
+            console.log('[startDragMeasureText] Measure not found, aborting');
+            return;
+        }
+        
         const startX = event.point.x;
         
+        console.log('[startDragMeasureText] Starting drag at X:', startX, 'originalTextX:', measure.textX);
+        
         this.isDraggingMeasureText = true;
-        this.currentEditingMeasure = measureIndex;
+        this.currentEditingMeasureRow = measureRowIndex;
         this.dragStartX = startX;
         this.originalTextX = measure.textX ?? null;
+        
+        // Save the current onMouseMove handler to restore later
+        const savedOnMouseMove = this.tool.onMouseMove;
         
         const mouseMoveHandler = (e) => {
             if (!this.isDraggingMeasureText) return;
             
             const deltaX = e.point.x - this.dragStartX;
-            measure.textX = (this.originalTextX ?? 0) + deltaX;
+            const newTextX = (this.originalTextX ?? 0) + deltaX;
+            console.log('[Drag Move] deltaX:', deltaX, 'newTextX:', newTextX);
+            measure.textX = newTextX;
             this.render();
         };
         
         const mouseUpHandler = () => {
+            console.log('[Drag End] Mouse up detected');
             this.isDraggingMeasureText = false;
-            this.tool.onMouseMove = this.originalOnMouseMove;
+            this.tool.onMouseMove = savedOnMouseMove;
             this.tool.onMouseUp = null;
         };
         
+        console.log('[startDragMeasureText] Setting up mouse handlers');
         this.tool.onMouseMove = mouseMoveHandler;
         this.tool.onMouseUp = mouseUpHandler;
     }
@@ -3244,13 +3277,30 @@ class TimingGenApp {
         this.isMeasureTextContext = true;
     }
     
-    startRechooseMeasurePoint(measureIndex, pointIndex) {
+    startRechooseMeasurePoint(measureRowIndex, pointIndex) {
         // Allow user to re-choose a measure point
-        const measures = this.getMeasures();
-        if (measureIndex < 0 || measureIndex >= measures.length) return;
+        // measureRowIndex is the row index, not the measure array index
+        console.log('[startRechooseMeasurePoint] Called with measureRowIndex:', measureRowIndex, 'pointIndex:', pointIndex);
         
-        const measure = measures[measureIndex];
-        this.currentEditingMeasure = measureIndex;
+        if (measureRowIndex < 0 || measureRowIndex >= this.rows.length) {
+            console.log('[startRechooseMeasurePoint] Invalid measureRowIndex, aborting');
+            return;
+        }
+        
+        const row = this.rows[measureRowIndex];
+        if (row.type !== 'measure') {
+            console.log('[startRechooseMeasurePoint] Row is not a measure, aborting');
+            return;
+        }
+        
+        const measure = this.measuresData.get(row.name);
+        if (!measure) {
+            console.log('[startRechooseMeasurePoint] Measure not found, aborting');
+            return;
+        }
+        
+        // Store measure name for later use
+        this.currentEditingMeasureName = measure.name;
         this.rechoosingPointIndex = pointIndex;
         
         // Enter re-choose mode
@@ -3258,25 +3308,38 @@ class TimingGenApp {
         this.measureState = pointIndex === 1 ? 'rechoose-point-1' : 'rechoose-point-2';
         this.canvas.style.cursor = 'crosshair';
         
+        console.log('[startRechooseMeasurePoint] Entering rechoose mode for point', pointIndex);
         this.showInstruction(`Click to re-choose point ${pointIndex}`);
     }
     
-    startMovingMeasureRow(measureIndex, event) {
+    startMovingMeasureRow(measureRowIndex, event) {
         // Start moving measure to another row
-        const measures = this.getMeasures();
-        if (measureIndex < 0 || measureIndex >= measures.length) return;
+        // measureRowIndex is the row index, not the measure array index
+        console.log('[startMovingMeasureRow] Called with measureRowIndex:', measureRowIndex);
         
-        const measure = measures[measureIndex];
-        const measureName = measure.name;
+        if (measureRowIndex < 0 || measureRowIndex >= this.rows.length) {
+            console.log('[startMovingMeasureRow] Invalid measureRowIndex, aborting');
+            return;
+        }
         
-        // Find the row index for this measure
-        const rowIndex = this.rows.findIndex(row => row.type === 'measure' && row.name === measureName);
-        if (rowIndex < 0) return;
+        const row = this.rows[measureRowIndex];
+        if (row.type !== 'measure') {
+            console.log('[startMovingMeasureRow] Row is not a measure, aborting');
+            return;
+        }
         
-        this.currentEditingMeasure = measureIndex;
-        this.movingMeasureRowIndex = rowIndex;
+        const measure = this.measuresData.get(row.name);
+        if (!measure) {
+            console.log('[startMovingMeasureRow] Measure not found, aborting');
+            return;
+        }
+        
+        // Store measure name for later use
+        this.currentEditingMeasureName = measure.name;
+        this.movingMeasureRowIndex = measureRowIndex;
         this.canvas.style.cursor = 'move';
         
+        console.log('[startMovingMeasureRow] Entering move mode for row', measureRowIndex);
         this.showInstruction('Click on a row to move the measure there');
         
         // Set up click handler for selecting new row
