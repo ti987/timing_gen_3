@@ -1003,7 +1003,7 @@ class TimingGenRendering {
             new paper.Point(arrow.ctrl2X - arrow.endX, arrow.ctrl2Y - arrow.endY),
             null
         ));
-        hitArea.strokeColor = 'transparent';
+        hitArea.strokeColor = new paper.Color(0, 0, 0, 0.01);  // Almost transparent but still registers hits
         hitArea.strokeWidth = 12;  // Wider for easier clicking
         hitArea.data = { type: 'arrow-curve', arrowName: arrowName };
         arrowGroup.addChild(hitArea);
@@ -1090,8 +1090,7 @@ class TimingGenRendering {
                 const hitArea = new paper.Path.Rectangle({
                     center: [point.x, point.y],
                     size: [16, 16],  // Larger hit area
-                    fillColor: 'transparent',
-                    strokeColor: 'transparent'
+                    fillColor: new paper.Color(0, 0, 0, 0.01)  // Almost transparent but still registers hits
                 });
                 hitArea.data = { type: 'arrow-control-point', arrowName: arrowName, pointIndex: point.index };
                 arrowGroup.addChild(hitArea);

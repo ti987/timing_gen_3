@@ -920,6 +920,31 @@ class TimingGenApp {
         const hitResults = paper.project.hitTestAll(event.point, this.getHitTestOptions());
         
         if (hitResults && hitResults.length > 0) {
+            // Look for arrow elements first
+            for (const result of hitResults) {
+                const item = result.item;
+                
+                // Check if this is an arrow element
+                if (item.data && item.data.arrowName) {
+                    const arrowName = item.data.arrowName;
+                    
+                    if (item.data.type === 'arrow-control-point') {
+                        // Start dragging control point
+                        this.startDraggingArrowPoint(arrowName, item.data.pointIndex, event);
+                        return;
+                    } else if (item.data.type === 'arrow-curve' || item.data.type === 'arrow-curve-visual' || 
+                               item.data.type === 'arrow-start' || item.data.type === 'arrow-head') {
+                        // Toggle edit mode for the arrow
+                        if (this.arrowEditMode && this.currentEditingArrowName === arrowName) {
+                            this.stopEditingArrow();
+                        } else {
+                            this.startEditingArrow(arrowName);
+                        }
+                        return;
+                    }
+                }
+            }
+            
             // Look for the first hit that is a measure child element (text, vbar, arrow)
             // or find a measure group
             let measureGroup = null;
@@ -1332,6 +1357,34 @@ class TimingGenApp {
         const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
         const row = this.getRowAtY(yPos);
         
+        // First check for arrow elements (they overlay signals)
+        const point = new paper.Point(xPos, yPos);
+        const hitResults = paper.project.hitTestAll(point, this.getHitTestOptions());
+        
+        if (hitResults && hitResults.length > 0) {
+            // Look for arrow elements first
+            for (const result of hitResults) {
+                const item = result.item;
+                
+                if (item.data && item.data.arrowName) {
+                    const arrowName = item.data.arrowName;
+                    
+                    if (item.data.type === 'arrow-text') {
+                        // Right-click on arrow text
+                        this.currentEditingArrowName = arrowName;
+                        this.showArrowTextContextMenu(ev, arrowName);
+                        return;
+                    } else if (item.data.type === 'arrow-curve' || item.data.type === 'arrow-curve-visual' ||
+                               item.data.type === 'arrow-start' || item.data.type === 'arrow-head' ||
+                               item.data.type === 'arrow-control-point') {
+                        // Right-click on arrow
+                        this.showArrowContextMenu(ev, arrowName);
+                        return;
+                    }
+                }
+            }
+        }
+        
         if (row) {
             if (row.type === 'text') {
                 // Right-click on text row - show text context menu
@@ -1341,8 +1394,6 @@ class TimingGenApp {
             } else if (row.type === 'measure') {
                 // Right-click on measure row - check what element was clicked
                 // Use Paper.js hitTestAll to get all items, not just the topmost group
-                const point = new paper.Point(xPos, yPos);
-                const hitResults = paper.project.hitTestAll(point, this.getHitTestOptions());
                 
                 if (hitResults && hitResults.length > 0) {
                     // Look for the first hit that is a measure child element or group
