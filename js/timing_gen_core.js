@@ -385,6 +385,14 @@ class TimingGenApp {
                 if (this.measureMode) {
                     this.cancelMeasure();
                 }
+                // Cancel arrow mode if active
+                if (this.arrowMode) {
+                    this.cancelArrow();
+                }
+                // Exit arrow edit mode if active
+                if (this.arrowEditMode) {
+                    this.stopEditingArrow();
+                }
             }
         });
     }
@@ -1126,38 +1134,72 @@ class TimingGenApp {
         if (this.arrowMode) {
             if (this.arrowState === 'first-point') {
                 // First click: select start point at nearest POI (cycle boundary)
-                const poi = this.findNearestPOI(event.point.x, event.point.y);
+                const mouseX = event.point.x;
+                const mouseY = event.point.y;
+                const poi = this.findNearestPOI(mouseX, mouseY);
                 if (poi) {
                     const signal = this.getSignalByIndex(poi.signalIndex);
                     if (signal) {
-                        const point = this.getPointOfInterest(signal.name, poi.cycle);
-                        if (point) {
-                            this.currentArrow.startX = point.x;
-                            this.currentArrow.startY = point.y;
-                            this.currentArrow.signal1Name = signal.name;
-                            this.currentArrow.cycle1 = poi.cycle;
+                        // Get all POI options and find the closest one
+                        const allPOIs = this.getAllPOIsForSignalCycle(signal.name, poi.cycle);
+                        if (allPOIs && allPOIs.length > 0) {
+                            let closestPOI = allPOIs[0];
+                            let minDist = Math.sqrt(Math.pow(mouseX - allPOIs[0].x, 2) + Math.pow(mouseY - allPOIs[0].y, 2));
                             
-                            this.arrowState = 'second-point';
-                            this.showInstruction("Click at the end point (result)");
+                            for (let i = 1; i < allPOIs.length; i++) {
+                                const dist = Math.sqrt(Math.pow(mouseX - allPOIs[i].x, 2) + Math.pow(mouseY - allPOIs[i].y, 2));
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    closestPOI = allPOIs[i];
+                                }
+                            }
+                            
+                            if (closestPOI) {
+                                this.currentArrow.startX = closestPOI.x;
+                                this.currentArrow.startY = closestPOI.y;
+                                this.currentArrow.signal1Name = signal.name;
+                                this.currentArrow.cycle1 = poi.cycle;
+                                this.currentArrow.poi1Type = closestPOI.poiType;
+                                
+                                this.arrowState = 'second-point';
+                                this.showInstruction("Click at the end point (result)");
+                            }
                         }
                     }
                 }
                 return;
             } else if (this.arrowState === 'second-point') {
                 // Second click: select end point at nearest POI (cycle boundary)
-                const poi = this.findNearestPOI(event.point.x, event.point.y);
+                const mouseX = event.point.x;
+                const mouseY = event.point.y;
+                const poi = this.findNearestPOI(mouseX, mouseY);
                 if (poi) {
                     const signal = this.getSignalByIndex(poi.signalIndex);
                     if (signal) {
-                        const point = this.getPointOfInterest(signal.name, poi.cycle);
-                        if (point) {
-                            this.currentArrow.endX = point.x;
-                            this.currentArrow.endY = point.y;
-                            this.currentArrow.signal2Name = signal.name;
-                            this.currentArrow.cycle2 = poi.cycle;
+                        // Get all POI options and find the closest one
+                        const allPOIs = this.getAllPOIsForSignalCycle(signal.name, poi.cycle);
+                        if (allPOIs && allPOIs.length > 0) {
+                            let closestPOI = allPOIs[0];
+                            let minDist = Math.sqrt(Math.pow(mouseX - allPOIs[0].x, 2) + Math.pow(mouseY - allPOIs[0].y, 2));
                             
-                            // Finalize the arrow
-                            this.finalizeArrow();
+                            for (let i = 1; i < allPOIs.length; i++) {
+                                const dist = Math.sqrt(Math.pow(mouseX - allPOIs[i].x, 2) + Math.pow(mouseY - allPOIs[i].y, 2));
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    closestPOI = allPOIs[i];
+                                }
+                            }
+                            
+                            if (closestPOI) {
+                                this.currentArrow.endX = closestPOI.x;
+                                this.currentArrow.endY = closestPOI.y;
+                                this.currentArrow.signal2Name = signal.name;
+                                this.currentArrow.cycle2 = poi.cycle;
+                                this.currentArrow.poi2Type = closestPOI.poiType;
+                                
+                                // Finalize the arrow
+                                this.finalizeArrow();
+                            }
                         }
                     }
                 }
@@ -3771,7 +3813,10 @@ class TimingGenApp {
             this.tempArrowGraphics = null;
         }
         
-        const poi = this.findNearestPOI(event.point.x, event.point.y);
+        const mouseX = event.point.x;
+        const mouseY = event.point.y;
+        
+        const poi = this.findNearestPOI(mouseX, mouseY);
         if (poi) {
             const signal = this.getSignalByIndex(poi.signalIndex);
             if (signal) {
@@ -3779,23 +3824,29 @@ class TimingGenApp {
                 const allPOIs = this.getAllPOIsForSignalCycle(signal.name, poi.cycle);
                 
                 if (allPOIs.length > 0) {
-                    // Draw all available POI options as small circles
-                    this.tempArrowGraphics = new paper.Group();
+                    // Find the closest POI to the mouse position
+                    let closestPOI = allPOIs[0];
+                    let minDist = Math.sqrt(Math.pow(mouseX - allPOIs[0].x, 2) + Math.pow(mouseY - allPOIs[0].y, 2));
                     
-                    allPOIs.forEach((point, index) => {
-                        if (point) {
-                            // Draw a small circle at each POI option
-                            const circle = new paper.Path.Circle({
-                                center: [point.x, point.y],
-                                radius: 4,
-                                fillColor: '#0000FF',
-                                strokeColor: '#FFFFFF',
-                                strokeWidth: 1,
-                                opacity: 0.6
-                            });
-                            this.tempArrowGraphics.addChild(circle);
+                    for (let i = 1; i < allPOIs.length; i++) {
+                        const dist = Math.sqrt(Math.pow(mouseX - allPOIs[i].x, 2) + Math.pow(mouseY - allPOIs[i].y, 2));
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestPOI = allPOIs[i];
                         }
+                    }
+                    
+                    // Draw only the closest POI as a highlight circle
+                    this.tempArrowGraphics = new paper.Group();
+                    const circle = new paper.Path.Circle({
+                        center: [closestPOI.x, closestPOI.y],
+                        radius: 5,
+                        fillColor: '#0000FF',
+                        strokeColor: '#FFFFFF',
+                        strokeWidth: 2,
+                        opacity: 0.7
                     });
+                    this.tempArrowGraphics.addChild(circle);
                     
                     paper.view.draw();
                 }
