@@ -2604,6 +2604,8 @@ class TimingGenApp {
         const xPos = event.point.x;
         const yPos = event.point.y;
         
+        console.log('[handleMeasureMouseMove] Called - measureState:', this.measureState, 'isMovingMeasureRow:', this.isMovingMeasureRow);
+        
         // Clear temporary graphics
         if (this.tempMeasureGraphics) {
             if (Array.isArray(this.tempMeasureGraphics)) {
@@ -2641,11 +2643,14 @@ class TimingGenApp {
         
         // Show snap-to indicator during rechoose point modes
         if (this.measureState === 'rechoose-point-1' || this.measureState === 'rechoose-point-2') {
+            console.log('[handleMeasureMouseMove] Drawing orange snap indicator for rechoose mode');
             // Find snap-to point
             const snapPoint = this.findNearestTransition(xPos, yPos);
             if (snapPoint) {
                 const snapX = this.getTransitionMidpointX(snapPoint.signalIndex, snapPoint.cycle);
                 const snapY = this.rowManager.getRowYPosition(this.rowManager.signalIndexToRowIndex(snapPoint.signalIndex)) + this.config.rowHeight / 2;
+                
+                console.log('[handleMeasureMouseMove] Snap point found at:', snapX, snapY);
                 
                 // Draw snap-to indicator with different color (orange)
                 const snapIndicator = new paper.Path.Circle({
@@ -2738,13 +2743,15 @@ class TimingGenApp {
         
         // Show row indicator when moving measure to another row
         if (this.isMovingMeasureRow) {
+            console.log('[handleMeasureMouseMove] Drawing blue row indicator for row move mode');
             const rowIndex = this.rowManager.getRowIndexAtY(yPos);
             if (rowIndex >= 0 && rowIndex < this.rows.length) {
                 // Draw dashed row indicator in blue
-                const yPos = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
+                const rowYPos = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
+                console.log('[handleMeasureMouseMove] Row indicator at Y:', rowYPos);
                 const indicator = new paper.Path.Line({
-                    from: [0, yPos],
-                    to: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, yPos],
+                    from: [0, rowYPos],
+                    to: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, rowYPos],
                     strokeColor: '#0000FF', // Blue color for row move
                     strokeWidth: 2,
                     dashArray: [10, 5]
@@ -3287,12 +3294,48 @@ class TimingGenApp {
         
         const startX = event.point.x;
         
-        console.log('[startDragMeasureText] Starting drag at X:', startX, 'originalTextX:', measure.textX);
+        // If textX is not set, we need to calculate the default rendered position
+        // to use as the starting point for dragging
+        let currentTextX = measure.textX;
+        if (currentTextX == null) {
+            // Calculate the default text position based on the measure coordinates
+            const coords = this.getMeasureCoordinates(measure);
+            const spacing = Math.abs(coords.x2 - coords.x1);
+            const isInward = spacing < 30;
+            const minX = Math.min(coords.x1, coords.x2);
+            const maxX = Math.max(coords.x1, coords.x2);
+            
+            if (measure.text) {
+                // Create temporary text to measure dimensions
+                const tempText = new paper.PointText({
+                    content: measure.text,
+                    fontFamily: measure.textFont || 'Arial',
+                    fontSize: measure.textSize || 12,
+                    fontWeight: 'bold'
+                });
+                const textWidth = tempText.bounds.width;
+                tempText.remove();
+                
+                const textGap = 10;
+                if (isInward) {
+                    // Inward arrows: text to the right
+                    currentTextX = maxX + textGap;
+                } else {
+                    // Outward arrows: text in the middle
+                    currentTextX = (minX + maxX) / 2 - textWidth / 2;
+                }
+            } else {
+                // No text, use middle point
+                currentTextX = (minX + maxX) / 2;
+            }
+        }
+        
+        console.log('[startDragMeasureText] Starting drag at X:', startX, 'currentTextX:', currentTextX);
         
         this.isDraggingMeasureText = true;
         this.currentEditingMeasureRow = measureRowIndex;
         this.dragStartX = startX;
-        this.originalTextX = measure.textX ?? null;
+        this.originalTextX = currentTextX;
         this.draggingMeasure = measure; // Store reference to the measure being dragged
         
         this.canvas.style.cursor = 'ew-resize'; // Show horizontal resize cursor
