@@ -240,6 +240,19 @@ class TimingGenApp {
         document.getElementById('arrow-options-ok-btn').addEventListener('click', () => this.applyArrowOptions());
         document.getElementById('arrow-options-cancel-btn').addEventListener('click', () => this.hideArrowOptionsDialog());
         
+        // Arrow text context menu
+        document.getElementById('edit-arrow-text-menu').addEventListener('click', () => this.showEditArrowTextDialog());
+        document.getElementById('arrow-text-options-menu').addEventListener('click', () => this.showArrowTextOptionsDialog());
+        document.getElementById('cancel-arrow-text-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Edit arrow text dialog
+        document.getElementById('edit-arrow-text-ok-btn').addEventListener('click', () => this.applyEditArrowText());
+        document.getElementById('edit-arrow-text-cancel-btn').addEventListener('click', () => this.hideEditArrowTextDialog());
+        
+        // Arrow text options dialog
+        document.getElementById('arrow-text-options-ok-btn').addEventListener('click', () => this.applyArrowTextOptions());
+        document.getElementById('arrow-text-options-cancel-btn').addEventListener('click', () => this.hideArrowTextOptionsDialog());
+        
         // Text context menu
         document.getElementById('edit-text-menu').addEventListener('click', () => this.showEditTextDialog());
         document.getElementById('font-text-menu').addEventListener('click', () => this.showFontDialog());
@@ -457,6 +470,7 @@ class TimingGenApp {
         document.getElementById('cycle-context-menu').style.display = 'none';
         document.getElementById('measure-context-menu').style.display = 'none';
         document.getElementById('arrow-context-menu').style.display = 'none';
+        document.getElementById('arrow-text-context-menu').style.display = 'none';
         document.getElementById('text-context-menu').style.display = 'none';
         document.getElementById('text-row-name-context-menu').style.display = 'none';
         document.getElementById('measure-row-name-context-menu').style.display = 'none';
@@ -1086,17 +1100,17 @@ class TimingGenApp {
         // Handle arrow mode clicks
         if (this.arrowMode) {
             if (this.arrowState === 'first-point') {
-                // First click: select start point at nearest transition
-                const transition = this.findNearestTransition(event.point.x, event.point.y);
-                if (transition) {
-                    const signal = this.getSignalByIndex(transition.signalIndex);
+                // First click: select start point at nearest POI (cycle boundary)
+                const poi = this.findNearestPOI(event.point.x, event.point.y);
+                if (poi) {
+                    const signal = this.getSignalByIndex(poi.signalIndex);
                     if (signal) {
-                        const point = this.getTransitionPoint(signal.name, transition.cycle);
+                        const point = this.getPointOfInterest(signal.name, poi.cycle);
                         if (point) {
                             this.currentArrow.startX = point.x;
                             this.currentArrow.startY = point.y;
                             this.currentArrow.signal1Name = signal.name;
-                            this.currentArrow.cycle1 = transition.cycle;
+                            this.currentArrow.cycle1 = poi.cycle;
                             
                             this.arrowState = 'second-point';
                             this.showInstruction("Click at the end point (result)");
@@ -1105,17 +1119,17 @@ class TimingGenApp {
                 }
                 return;
             } else if (this.arrowState === 'second-point') {
-                // Second click: select end point at nearest transition
-                const transition = this.findNearestTransition(event.point.x, event.point.y);
-                if (transition) {
-                    const signal = this.getSignalByIndex(transition.signalIndex);
+                // Second click: select end point at nearest POI (cycle boundary)
+                const poi = this.findNearestPOI(event.point.x, event.point.y);
+                if (poi) {
+                    const signal = this.getSignalByIndex(poi.signalIndex);
                     if (signal) {
-                        const point = this.getTransitionPoint(signal.name, transition.cycle);
+                        const point = this.getPointOfInterest(signal.name, poi.cycle);
                         if (point) {
                             this.currentArrow.endX = point.x;
                             this.currentArrow.endY = point.y;
                             this.currentArrow.signal2Name = signal.name;
-                            this.currentArrow.cycle2 = transition.cycle;
+                            this.currentArrow.cycle2 = poi.cycle;
                             
                             // Finalize the arrow
                             this.finalizeArrow();
@@ -2696,6 +2710,39 @@ class TimingGenApp {
         return { signalIndex, cycle: clickedCycle };
     }
     
+    findNearestPOI(xPos, yPos) {
+        // Find the nearest point of interest (POI) to the click position
+        // POIs are at cycle boundaries (vertical grid lines) representing the state at cycle beginning
+        // Returns { signalIndex, cycle }
+        const signals = this.getSignals();
+        
+        if (!signals || signals.length === 0) {
+            console.warn('Cannot find POI: no signals loaded');
+            return null;
+        }
+        
+        const signalIndex = this.getSignalIndexAtY(yPos);
+        if (signalIndex === -1 || signalIndex >= signals.length) {
+            const cycle = this.getCycleAtX(xPos);
+            return { signalIndex: 0, cycle: cycle !== null ? cycle : 0 };
+        }
+        
+        const signal = this.getSignalByIndex(signalIndex);
+        if (!signal) {
+            const cycle = this.getCycleAtX(xPos);
+            return { signalIndex: 0, cycle: cycle !== null ? cycle : 0 };
+        }
+        
+        // Find the nearest cycle boundary (vertical grid line)
+        const relativeX = xPos - this.config.nameColumnWidth;
+        const nearestCycle = Math.round(relativeX / this.config.cycleWidth);
+        
+        // Clamp to valid range
+        const cycle = Math.max(0, Math.min(this.config.cycles, nearestCycle));
+        
+        return { signalIndex, cycle };
+    }
+    
     showInstruction(text) {
         const instructionBox = document.getElementById('instruction-box');
         const instructionText = document.getElementById('instruction-text');
@@ -3578,7 +3625,11 @@ class TimingGenApp {
             ctrl2X: null,
             ctrl2Y: null,
             width: 2,  // Default arrow width
-            color: '#0000FF'  // Default blue color
+            color: '#0000FF',  // Default blue color
+            text: 'result',  // Default text label
+            textFont: 'Arial',
+            textSize: 12,
+            textColor: '#0000FF'
         };
         this.canvas.style.cursor = 'crosshair';
         
@@ -3600,11 +3651,11 @@ class TimingGenApp {
             this.tempArrowGraphics = null;
         }
         
-        const transition = this.findNearestTransition(event.point.x, event.point.y);
-        if (transition) {
-            const signal = this.getSignalByIndex(transition.signalIndex);
+        const poi = this.findNearestPOI(event.point.x, event.point.y);
+        if (poi) {
+            const signal = this.getSignalByIndex(poi.signalIndex);
             if (signal) {
-                const point = this.getTransitionPoint(signal.name, transition.cycle);
+                const point = this.getPointOfInterest(signal.name, poi.cycle);
                 if (point) {
                     // Draw a small highlight circle at the snap point
                     this.tempArrowGraphics = new paper.Group();
@@ -3746,6 +3797,84 @@ class TimingGenApp {
         menu.style.top = `${event.pageY}px`;
     }
     
+    showArrowTextContextMenu(event, arrowName) {
+        this.currentEditingArrowName = arrowName;
+        this.hideAllMenus();
+        
+        const menu = document.getElementById('arrow-text-context-menu');
+        menu.style.display = 'block';
+        menu.style.left = `${event.pageX}px`;
+        menu.style.top = `${event.pageY}px`;
+    }
+    
+    showEditArrowTextDialog() {
+        if (!this.currentEditingArrowName) return;
+        
+        const arrow = this.arrowsData.get(this.currentEditingArrowName);
+        if (!arrow) return;
+        
+        document.getElementById('edit-arrow-text-input').value = arrow.text || '';
+        document.getElementById('edit-arrow-text-dialog').style.display = 'flex';
+        this.hideAllMenus();
+    }
+    
+    hideEditArrowTextDialog() {
+        document.getElementById('edit-arrow-text-dialog').style.display = 'none';
+    }
+    
+    applyEditArrowText() {
+        if (!this.currentEditingArrowName) {
+            this.hideEditArrowTextDialog();
+            return;
+        }
+        
+        const arrow = this.arrowsData.get(this.currentEditingArrowName);
+        if (!arrow) {
+            this.hideEditArrowTextDialog();
+            return;
+        }
+        
+        arrow.text = document.getElementById('edit-arrow-text-input').value;
+        this.hideEditArrowTextDialog();
+        this.render();
+    }
+    
+    showArrowTextOptionsDialog() {
+        if (!this.currentEditingArrowName) return;
+        
+        const arrow = this.arrowsData.get(this.currentEditingArrowName);
+        if (!arrow) return;
+        
+        document.getElementById('arrow-text-font-select').value = arrow.textFont || 'Arial';
+        document.getElementById('arrow-text-size-input').value = arrow.textSize || 12;
+        document.getElementById('arrow-text-color-input').value = arrow.textColor || arrow.color || '#0000FF';
+        document.getElementById('arrow-text-options-dialog').style.display = 'flex';
+        this.hideAllMenus();
+    }
+    
+    hideArrowTextOptionsDialog() {
+        document.getElementById('arrow-text-options-dialog').style.display = 'none';
+    }
+    
+    applyArrowTextOptions() {
+        if (!this.currentEditingArrowName) {
+            this.hideArrowTextOptionsDialog();
+            return;
+        }
+        
+        const arrow = this.arrowsData.get(this.currentEditingArrowName);
+        if (!arrow) {
+            this.hideArrowTextOptionsDialog();
+            return;
+        }
+        
+        arrow.textFont = document.getElementById('arrow-text-font-select').value;
+        arrow.textSize = parseInt(document.getElementById('arrow-text-size-input').value) || 12;
+        arrow.textColor = document.getElementById('arrow-text-color-input').value;
+        this.hideArrowTextOptionsDialog();
+        this.render();
+    }
+    
     startEditingArrow(arrowName) {
         this.arrowEditMode = true;
         this.currentEditingArrowName = arrowName;
@@ -3773,17 +3902,17 @@ class TimingGenApp {
         
         // Update the appropriate point
         if (pointIndex === 0) {
-            // Start point - snap to transition
-            const transition = this.findNearestTransition(x, y);
-            if (transition) {
-                const signal = this.getSignalByIndex(transition.signalIndex);
+            // Start point - snap to POI (cycle boundary)
+            const poi = this.findNearestPOI(x, y);
+            if (poi) {
+                const signal = this.getSignalByIndex(poi.signalIndex);
                 if (signal) {
-                    const point = this.getTransitionPoint(signal.name, transition.cycle);
+                    const point = this.getPointOfInterest(signal.name, poi.cycle);
                     if (point) {
                         arrow.startX = point.x;
                         arrow.startY = point.y;
                         arrow.signal1Name = signal.name;
-                        arrow.cycle1 = transition.cycle;
+                        arrow.cycle1 = poi.cycle;
                     }
                 }
             }
@@ -3796,17 +3925,17 @@ class TimingGenApp {
             arrow.ctrl2X = x;
             arrow.ctrl2Y = y;
         } else if (pointIndex === 3) {
-            // End point - snap to transition
-            const transition = this.findNearestTransition(x, y);
-            if (transition) {
-                const signal = this.getSignalByIndex(transition.signalIndex);
+            // End point - snap to POI (cycle boundary)
+            const poi = this.findNearestPOI(x, y);
+            if (poi) {
+                const signal = this.getSignalByIndex(poi.signalIndex);
                 if (signal) {
-                    const point = this.getTransitionPoint(signal.name, transition.cycle);
+                    const point = this.getPointOfInterest(signal.name, poi.cycle);
                     if (point) {
                         arrow.endX = point.x;
                         arrow.endY = point.y;
                         arrow.signal2Name = signal.name;
-                        arrow.cycle2 = transition.cycle;
+                        arrow.cycle2 = poi.cycle;
                     }
                 }
             }
@@ -3818,18 +3947,18 @@ class TimingGenApp {
     recalculateArrowPositions() {
         // Recalculate arrow positions when signals move
         for (const [name, arrow] of this.arrowsData.entries()) {
-            // Recalculate start point
+            // Recalculate start point using POI
             if (arrow.signal1Name !== null && arrow.cycle1 !== null) {
-                const point = this.getTransitionPoint(arrow.signal1Name, arrow.cycle1);
+                const point = this.getPointOfInterest(arrow.signal1Name, arrow.cycle1);
                 if (point) {
                     arrow.startX = point.x;
                     arrow.startY = point.y;
                 }
             }
             
-            // Recalculate end point
+            // Recalculate end point using POI
             if (arrow.signal2Name !== null && arrow.cycle2 !== null) {
-                const point = this.getTransitionPoint(arrow.signal2Name, arrow.cycle2);
+                const point = this.getPointOfInterest(arrow.signal2Name, arrow.cycle2);
                 if (point) {
                     arrow.endX = point.x;
                     arrow.endY = point.y;
@@ -3850,8 +3979,48 @@ class TimingGenApp {
         }
     }
     
+    getPointOfInterest(signalName, cycle) {
+        // Get the screen coordinates for a point of interest on a signal at a cycle
+        // POI can be at the beginning of the cycle (state from previous cycle)
+        const signal = this.getSignalByName(signalName);
+        if (!signal) return null;
+        
+        const signals = this.getSignals();
+        const signalIndex = signals.findIndex(s => s.name === signalName);
+        if (signalIndex < 0) return null;
+        
+        const signalRow = this.rowManager.signalIndexToRowIndex(signalIndex);
+        const baseY = this.rowManager.getRowYPosition(signalRow);
+        const x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+        
+        let y;
+        
+        if (signal.type === 'bit') {
+            // For bit signals, place indicator based on state at cycle beginning (previous cycle's value)
+            const prevCycle = Math.max(0, cycle - 1);
+            const value = this.getBitValueAtCycle(signal, prevCycle);
+            
+            if (value === 0) {
+                // Low state - bottom of signal row
+                y = baseY + this.config.rowHeight * 0.8;
+            } else if (value === 1) {
+                // High state - top of signal row
+                y = baseY + this.config.rowHeight * 0.2;
+            } else {
+                // Z or X state - middle of signal row
+                y = baseY + this.config.rowHeight * 0.5;
+            }
+        } else {
+            // For bus and clock signals, place at middle
+            y = baseY + this.config.rowHeight * 0.5;
+        }
+        
+        return { x, y, signalName, cycle };
+    }
+    
     getTransitionPoint(signalName, cycle) {
         // Get the screen coordinates for a signal transition at a given cycle
+        // This is kept for backward compatibility but POI should be used for arrows
         const signal = this.getSignalByName(signalName);
         if (!signal) return null;
         

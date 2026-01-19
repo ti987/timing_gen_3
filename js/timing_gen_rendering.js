@@ -1017,15 +1017,37 @@ class TimingGenRendering {
         startCircle.data = { type: 'arrow-start', arrowName: arrowName };
         arrowGroup.addChild(startCircle);
         
-        // Draw arrow head at end point
-        const arrowHead = TimingGenRendering.drawBezierArrowHead(
+        // Calculate arrow head angle from curve tangent at end point
+        // Get the tangent at the end of the curve
+        const tangent = curve.getTangentAt(curve.length);
+        const angle = tangent ? Math.atan2(tangent.y, tangent.x) : Math.atan2(arrow.endY - arrow.ctrl2Y, arrow.endX - arrow.ctrl2X);
+        
+        // Draw arrow head at end point with proper rotation
+        const arrowHead = TimingGenRendering.drawRotatedArrowHead(
             arrow.endX, arrow.endY,
-            arrow.ctrl2X, arrow.ctrl2Y,
+            angle,
             arrow.color || '#0000FF',
             8
         );
         arrowHead.data = { type: 'arrow-head', arrowName: arrowName };
         arrowGroup.addChild(arrowHead);
+        
+        // Draw text label near the middle of the arrow
+        if (arrow.text) {
+            const midX = (arrow.startX + arrow.endX) / 2;
+            const midY = (arrow.startY + arrow.endY) / 2;
+            
+            const text = new paper.PointText({
+                point: [midX, midY - 10],  // Offset above the arrow
+                content: arrow.text,
+                fillColor: arrow.textColor || arrow.color || '#0000FF',
+                fontFamily: arrow.textFont || 'Arial',
+                fontSize: arrow.textSize || 12,
+                justification: 'center'
+            });
+            text.data = { type: 'arrow-text', arrowName: arrowName };
+            arrowGroup.addChild(text);
+        }
         
         // If in edit mode for this arrow, show control points
         if (app.arrowEditMode && app.currentEditingArrowName === arrowName) {
@@ -1086,10 +1108,33 @@ class TimingGenRendering {
                     }
                 }
             } else if (event.event.button === 2) {
-                // Right click - show context menu
-                app.showArrowContextMenu(event.event, arrowName);
+                // Right click - check what was clicked
+                const clickedItem = event.target;
+                if (clickedItem.data && clickedItem.data.type === 'arrow-text') {
+                    // Show text context menu
+                    app.currentEditingArrowName = arrowName;
+                    app.showArrowTextContextMenu(event.event, arrowName);
+                } else {
+                    // Show arrow context menu
+                    app.showArrowContextMenu(event.event, arrowName);
+                }
             }
         };
+    }
+    
+    static drawRotatedArrowHead(endX, endY, angle, color, size) {
+        // Draw arrow head rotated to match the curve angle
+        const arrowHead = new paper.Path({
+            segments: [
+                [endX, endY],
+                [endX - size * Math.cos(angle - Math.PI / 6), endY - size * Math.sin(angle - Math.PI / 6)],
+                [endX - size * Math.cos(angle + Math.PI / 6), endY - size * Math.sin(angle + Math.PI / 6)]
+            ],
+            fillColor: color,
+            closed: true
+        });
+        
+        return arrowHead;
     }
     
     static drawBezierArrowHead(endX, endY, ctrlX, ctrlY, color, size) {

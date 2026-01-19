@@ -424,6 +424,50 @@
         </div>
     </div>
 
+    <!-- Context Menu for Arrow Text -->
+    <div id="arrow-text-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="edit-arrow-text-menu">Edit</div>
+        <div class="menu-item" id="arrow-text-options-menu">Options</div>
+        <div class="menu-item" id="cancel-arrow-text-menu">Cancel</div>
+    </div>
+
+    <!-- Edit Arrow Text Dialog -->
+    <div id="edit-arrow-text-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Edit Arrow Text</h3>
+            <label>Text:</label>
+            <input type="text" id="edit-arrow-text-input" placeholder="Enter text">
+            <br><br>
+            <button id="edit-arrow-text-ok-btn" class="dialog-btn">OK</button>
+            <button id="edit-arrow-text-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Arrow Text Options Dialog -->
+    <div id="arrow-text-options-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Arrow Text Options</h3>
+            <label>Font Family:</label>
+            <select id="arrow-text-font-select">
+                <option value="Arial">Arial</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Courier New">Courier New</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Verdana">Verdana</option>
+                <option value="monospace">Monospace</option>
+            </select>
+            <br><br>
+            <label>Font Size:</label>
+            <input type="number" id="arrow-text-size-input" value="12" min="8" max="72">
+            <br><br>
+            <label>Color:</label>
+            <input type="color" id="arrow-text-color-input" value="#0000FF" style="width: 200px; height: 40px;">
+            <br><br>
+            <button id="arrow-text-options-ok-btn" class="dialog-btn">OK</button>
+            <button id="arrow-text-options-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
     <!-- Context Menu for Text Row -->
     <div id="text-context-menu" class="context-menu" style="display: none;">
         <div class="menu-item" id="edit-text-menu">Edit</div>
