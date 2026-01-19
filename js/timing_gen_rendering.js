@@ -1004,7 +1004,7 @@ class TimingGenRendering {
             null
         ));
         hitArea.strokeColor = new paper.Color(0, 0, 0, 0.01);  // Almost transparent but still registers hits
-        hitArea.strokeWidth = 12;  // Wider for easier clicking
+        hitArea.strokeWidth = 20;  // Much wider for easier clicking (20px instead of 12px)
         hitArea.data = { type: 'arrow-curve', arrowName: arrowName };
         arrowGroup.addChild(hitArea);
         
@@ -1086,19 +1086,19 @@ class TimingGenRendering {
             ];
             
             controlPoints.forEach(point => {
-                // Draw transparent hit area first (larger)
+                // Draw transparent hit area first (much larger for easier clicking)
                 const hitArea = new paper.Path.Rectangle({
                     center: [point.x, point.y],
-                    size: [16, 16],  // Larger hit area
+                    size: [24, 24],  // Much larger hit area (24x24 instead of 16x16)
                     fillColor: new paper.Color(0, 0, 0, 0.01)  // Almost transparent but still registers hits
                 });
                 hitArea.data = { type: 'arrow-control-point', arrowName: arrowName, pointIndex: point.index };
                 arrowGroup.addChild(hitArea);
                 
-                // Draw visible square on top
+                // Draw visible square on top (also larger)
                 const square = new paper.Path.Rectangle({
                     center: [point.x, point.y],
-                    size: [8, 8],
+                    size: [12, 12],  // Larger visible square (12x12 instead of 8x8)
                     fillColor: '#FFD700',
                     strokeColor: '#000000',
                     strokeWidth: 1

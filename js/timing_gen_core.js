@@ -3775,17 +3775,28 @@ class TimingGenApp {
         if (poi) {
             const signal = this.getSignalByIndex(poi.signalIndex);
             if (signal) {
-                const point = this.getPointOfInterest(signal.name, poi.cycle);
-                if (point) {
-                    // Draw a small highlight circle at the snap point
+                // Get all available POIs for this signal and cycle
+                const allPOIs = this.getAllPOIsForSignalCycle(signal.name, poi.cycle);
+                
+                if (allPOIs.length > 0) {
+                    // Draw all available POI options as small circles
                     this.tempArrowGraphics = new paper.Group();
-                    const circle = new paper.Path.Circle({
-                        center: [point.x, point.y],
-                        radius: 5,
-                        fillColor: '#0000FF',
-                        opacity: 0.5
+                    
+                    allPOIs.forEach((point, index) => {
+                        if (point) {
+                            // Draw a small circle at each POI option
+                            const circle = new paper.Path.Circle({
+                                center: [point.x, point.y],
+                                radius: 4,
+                                fillColor: '#0000FF',
+                                strokeColor: '#FFFFFF',
+                                strokeWidth: 1,
+                                opacity: 0.6
+                            });
+                            this.tempArrowGraphics.addChild(circle);
+                        }
                     });
-                    this.tempArrowGraphics.addChild(circle);
+                    
                     paper.view.draw();
                 }
             }
@@ -4185,6 +4196,39 @@ class TimingGenApp {
         }
         
         return { x, y, signalName, cycle, poiType };
+    }
+    
+    getAllPOIsForSignalCycle(signalName, cycle) {
+        // Get all available POI options for a signal at a given cycle
+        const signal = this.getSignalByName(signalName);
+        if (!signal) return [];
+        
+        const pois = [];
+        
+        if (signal.type === 'clock') {
+            // Clock signals: rising and falling transitions
+            pois.push(this.getPointOfInterest(signalName, cycle, 'rising'));
+            pois.push(this.getPointOfInterest(signalName, cycle, 'falling'));
+        } else if (signal.type === 'bit' || signal.type === 'bus') {
+            // Bit/Bus signals: low, mid, high positions
+            pois.push(this.getPointOfInterest(signalName, cycle, 'low'));
+            pois.push(this.getPointOfInterest(signalName, cycle, 'mid'));
+            pois.push(this.getPointOfInterest(signalName, cycle, 'high'));
+            
+            // Add slew positions if there's a transition
+            const stateCycle = cycle === 0 ? 0 : cycle - 1;
+            const currentValue = this.getBitValueAtCycle(signal, cycle);
+            const prevValue = this.getBitValueAtCycle(signal, stateCycle);
+            const hasTransition = cycle > 0 && currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X';
+            
+            if (hasTransition) {
+                pois.push(this.getPointOfInterest(signalName, cycle, 'slew-start'));
+                pois.push(this.getPointOfInterest(signalName, cycle, 'slew-center'));
+                pois.push(this.getPointOfInterest(signalName, cycle, 'slew-end'));
+            }
+        }
+        
+        return pois.filter(poi => poi !== null);
     }
     
     getTransitionPoint(signalName, cycle) {
