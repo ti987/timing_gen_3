@@ -3681,8 +3681,10 @@ class TimingGenApp {
             name: arrowName,
             signal1Name: null,
             cycle1: null,
+            poi1Type: 'auto',  // POI type for start point
             signal2Name: null,
             cycle2: null,
+            poi2Type: 'auto',  // POI type for end point
             startX: null,
             startY: null,
             endX: null,
@@ -4014,18 +4016,20 @@ class TimingGenApp {
     recalculateArrowPositions() {
         // Recalculate arrow positions when signals move
         for (const [name, arrow] of this.arrowsData.entries()) {
-            // Recalculate start point using POI
+            // Recalculate start point using POI with stored type
             if (arrow.signal1Name !== null && arrow.cycle1 !== null) {
-                const point = this.getPointOfInterest(arrow.signal1Name, arrow.cycle1);
+                const poiType = arrow.poi1Type || 'auto';
+                const point = this.getPointOfInterest(arrow.signal1Name, arrow.cycle1, poiType);
                 if (point) {
                     arrow.startX = point.x;
                     arrow.startY = point.y;
                 }
             }
             
-            // Recalculate end point using POI
+            // Recalculate end point using POI with stored type
             if (arrow.signal2Name !== null && arrow.cycle2 !== null) {
-                const point = this.getPointOfInterest(arrow.signal2Name, arrow.cycle2);
+                const poiType = arrow.poi2Type || 'auto';
+                const point = this.getPointOfInterest(arrow.signal2Name, arrow.cycle2, poiType);
                 if (point) {
                     arrow.endX = point.x;
                     arrow.endY = point.y;
@@ -4046,9 +4050,19 @@ class TimingGenApp {
         }
     }
     
-    getPointOfInterest(signalName, cycle) {
+    getPointOfInterest(signalName, cycle, poiType = 'auto') {
         // Get the screen coordinates for a point of interest on a signal at a cycle
-        // POI can be at the beginning of the cycle (state from previous cycle)
+        // poiType options:
+        // - 'auto': Auto-detect based on signal state (default)
+        // - 'low': Low state at cycle beginning
+        // - 'mid': Middle state at cycle beginning
+        // - 'high': High state at cycle beginning
+        // - 'slew-start': Start of slew slope
+        // - 'slew-center': Center of slew slope
+        // - 'slew-end': End of slew slope
+        // - 'rising': Middle of rising transition (clock)
+        // - 'falling': Middle of falling transition (clock)
+        
         const signal = this.getSignalByName(signalName);
         if (!signal) return null;
         
@@ -4058,32 +4072,68 @@ class TimingGenApp {
         
         const signalRow = this.rowManager.signalIndexToRowIndex(signalIndex);
         const baseY = this.rowManager.getRowYPosition(signalRow);
-        const x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
         
-        let y;
+        let x, y;
         
-        if (signal.type === 'bit') {
-            // For bit signals, place indicator based on state at cycle beginning (previous cycle's value)
-            // For cycle 0, use the value at cycle 0 itself as there's no previous cycle
-            const stateCycle = cycle === 0 ? 0 : cycle - 1;
-            const value = this.getBitValueAtCycle(signal, stateCycle);
-            
-            if (value === 0) {
-                // Low state - bottom of signal row
-                y = baseY + this.config.rowHeight * 0.8;
-            } else if (value === 1) {
-                // High state - top of signal row
-                y = baseY + this.config.rowHeight * 0.2;
+        if (signal.type === 'clock') {
+            // Clock signal POIs
+            if (poiType === 'rising' || (poiType === 'auto' && cycle > 0)) {
+                // Middle of rising transition (at cycle boundary)
+                x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+                y = baseY + this.config.rowHeight * 0.5;
+            } else if (poiType === 'falling') {
+                // Middle of falling transition (at mid-cycle)
+                x = this.config.nameColumnWidth + cycle * this.config.cycleWidth + this.config.cycleWidth * 0.5;
+                y = baseY + this.config.rowHeight * 0.5;
             } else {
-                // Z or X state - middle of signal row
+                // Default: cycle boundary, middle
+                x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+                y = baseY + this.config.rowHeight * 0.5;
+            }
+        } else if (signal.type === 'bit' || signal.type === 'bus') {
+            // Bit/Bus signal POIs
+            const stateCycle = cycle === 0 ? 0 : cycle - 1;
+            const currentValue = this.getBitValueAtCycle(signal, cycle);
+            const prevValue = this.getBitValueAtCycle(signal, stateCycle);
+            const hasTransition = cycle > 0 && currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X';
+            
+            // Calculate slew positions
+            const delayInfo = this.getDelayInfo(signalIndex);
+            const slew = this.config.slew || 2;
+            const slewStartX = this.config.nameColumnWidth + cycle * this.config.cycleWidth + delayInfo.min;
+            const slewEndX = slewStartX + slew;
+            const slewCenterX = slewStartX + slew / 2;
+            
+            if (poiType === 'low' || (poiType === 'auto' && prevValue === 0)) {
+                x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+                y = baseY + this.config.rowHeight * 0.8;
+            } else if (poiType === 'high' || (poiType === 'auto' && prevValue === 1)) {
+                x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+                y = baseY + this.config.rowHeight * 0.2;
+            } else if (poiType === 'mid' || poiType === 'auto') {
+                x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+                y = baseY + this.config.rowHeight * 0.5;
+            } else if (poiType === 'slew-start' && hasTransition) {
+                x = slewStartX;
+                y = prevValue === 0 ? baseY + this.config.rowHeight * 0.8 : baseY + this.config.rowHeight * 0.2;
+            } else if (poiType === 'slew-center' && hasTransition) {
+                x = slewCenterX;
+                y = baseY + this.config.rowHeight * 0.5;
+            } else if (poiType === 'slew-end' && hasTransition) {
+                x = slewEndX;
+                y = currentValue === 0 ? baseY + this.config.rowHeight * 0.8 : baseY + this.config.rowHeight * 0.2;
+            } else {
+                // Fallback to cycle boundary, middle
+                x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
                 y = baseY + this.config.rowHeight * 0.5;
             }
         } else {
-            // For bus and clock signals, place at middle
+            // Unknown signal type, use middle
+            x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
             y = baseY + this.config.rowHeight * 0.5;
         }
         
-        return { x, y, signalName, cycle };
+        return { x, y, signalName, cycle, poiType };
     }
     
     getTransitionPoint(signalName, cycle) {

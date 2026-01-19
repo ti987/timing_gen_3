@@ -991,7 +991,24 @@ class TimingGenRendering {
         const arrowGroup = new paper.Group();
         arrowGroup.data = { type: 'arrow', arrowName: arrowName };
         
-        // Draw the bezier curve using proper cubic bezier with handles
+        // Draw transparent thicker hit area for easier clicking
+        const hitArea = new paper.Path();
+        hitArea.add(new paper.Segment(
+            new paper.Point(arrow.startX, arrow.startY),
+            null,
+            new paper.Point(arrow.ctrl1X - arrow.startX, arrow.ctrl1Y - arrow.startY)
+        ));
+        hitArea.add(new paper.Segment(
+            new paper.Point(arrow.endX, arrow.endY),
+            new paper.Point(arrow.ctrl2X - arrow.endX, arrow.ctrl2Y - arrow.endY),
+            null
+        ));
+        hitArea.strokeColor = 'transparent';
+        hitArea.strokeWidth = 12;  // Wider for easier clicking
+        hitArea.data = { type: 'arrow-curve', arrowName: arrowName };
+        arrowGroup.addChild(hitArea);
+        
+        // Draw the visible bezier curve
         const curve = new paper.Path();
         curve.add(new paper.Segment(
             new paper.Point(arrow.startX, arrow.startY),
@@ -1005,7 +1022,7 @@ class TimingGenRendering {
         ));
         curve.strokeColor = arrow.color || '#0000FF';
         curve.strokeWidth = arrow.width || 2;
-        curve.data = { type: 'arrow-curve', arrowName: arrowName };
+        curve.data = { type: 'arrow-curve-visual', arrowName: arrowName };
         arrowGroup.addChild(curve);
         
         // Draw small circle at start point (smaller than measure marker)
@@ -1069,6 +1086,17 @@ class TimingGenRendering {
             ];
             
             controlPoints.forEach(point => {
+                // Draw transparent hit area first (larger)
+                const hitArea = new paper.Path.Rectangle({
+                    center: [point.x, point.y],
+                    size: [16, 16],  // Larger hit area
+                    fillColor: 'transparent',
+                    strokeColor: 'transparent'
+                });
+                hitArea.data = { type: 'arrow-control-point', arrowName: arrowName, pointIndex: point.index };
+                arrowGroup.addChild(hitArea);
+                
+                // Draw visible square on top
                 const square = new paper.Path.Rectangle({
                     center: [point.x, point.y],
                     size: [8, 8],
@@ -1076,7 +1104,7 @@ class TimingGenRendering {
                     strokeColor: '#000000',
                     strokeWidth: 1
                 });
-                square.data = { type: 'arrow-control-point', arrowName: arrowName, pointIndex: point.index };
+                square.data = { type: 'arrow-control-point-visual', arrowName: arrowName, pointIndex: point.index };
                 arrowGroup.addChild(square);
             });
             
