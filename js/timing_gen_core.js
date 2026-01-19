@@ -2211,6 +2211,9 @@ class TimingGenApp {
         // Update measure cycle references
         this.updateMeasureCyclesAfterInsertion(startCycle, numCycles);
         
+        // Update arrow cycle references
+        this.updateArrowCyclesAfterInsertion(startCycle, numCycles);
+        
         // Update cycle count
         this.config.cycles += numCycles;
         document.getElementById('cycles-input').value = this.config.cycles;
@@ -2227,6 +2230,9 @@ class TimingGenApp {
         
         // Update measure cycle references
         this.updateMeasureCyclesAfterDeletion(startCycle, numCycles);
+        
+        // Update arrow cycle references
+        this.updateArrowCyclesAfterDeletion(startCycle, numCycles);
         
         // Keep cycle count unchanged - the deleted cycles are replaced with steady cycles at the end
         // (steady cycles extend the last state automatically without explicit values)
@@ -2374,6 +2380,67 @@ class TimingGenApp {
                 this.rows.splice(rowIndex, 1);
             }
         });
+    }
+    
+    updateArrowCyclesAfterInsertion(startCycle, numCycles) {
+        // Update cycle references in all arrows after cycles are inserted
+        for (const [name, arrow] of this.arrowsData.entries()) {
+            // Update cycle1 if it's after the insertion point
+            if (arrow.cycle1 !== undefined && arrow.cycle1 > startCycle) {
+                arrow.cycle1 += numCycles;
+            }
+            
+            // Update cycle2 if it's after the insertion point
+            if (arrow.cycle2 !== undefined && arrow.cycle2 > startCycle) {
+                arrow.cycle2 += numCycles;
+            }
+        }
+        
+        // Recalculate arrow positions after cycle shift
+        this.recalculateArrowPositions();
+    }
+    
+    updateArrowCyclesAfterDeletion(startCycle, numCycles) {
+        // Update cycle references in all arrows after cycles are deleted
+        const arrowsToDelete = [];
+        
+        for (const [name, arrow] of this.arrowsData.entries()) {
+            let shouldDelete = false;
+            
+            // Check if cycle1 is in the deleted range
+            if (arrow.cycle1 !== undefined) {
+                if (arrow.cycle1 >= startCycle && arrow.cycle1 < startCycle + numCycles) {
+                    // POI was deleted - mark arrow for deletion
+                    shouldDelete = true;
+                } else if (arrow.cycle1 >= startCycle + numCycles) {
+                    // Shift left by numCycles
+                    arrow.cycle1 -= numCycles;
+                }
+            }
+            
+            // Check if cycle2 is in the deleted range
+            if (arrow.cycle2 !== undefined) {
+                if (arrow.cycle2 >= startCycle && arrow.cycle2 < startCycle + numCycles) {
+                    // POI was deleted - mark arrow for deletion
+                    shouldDelete = true;
+                } else if (arrow.cycle2 >= startCycle + numCycles) {
+                    // Shift left by numCycles
+                    arrow.cycle2 -= numCycles;
+                }
+            }
+            
+            if (shouldDelete) {
+                arrowsToDelete.push(name);
+            }
+        }
+        
+        // Remove invalid arrows from Map
+        arrowsToDelete.forEach(arrowName => {
+            this.arrowsData.delete(arrowName);
+        });
+        
+        // Recalculate arrow positions after cycle shift
+        this.recalculateArrowPositions();
     }
     
     handleInsertCycles() {
