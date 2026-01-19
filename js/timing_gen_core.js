@@ -1087,28 +1087,40 @@ class TimingGenApp {
         if (this.arrowMode) {
             if (this.arrowState === 'first-point') {
                 // First click: select start point at nearest transition
-                const point = this.findNearestTransition(event.point);
-                if (point) {
-                    this.currentArrow.startX = point.x;
-                    this.currentArrow.startY = point.y;
-                    this.currentArrow.signal1Name = point.signalName;
-                    this.currentArrow.cycle1 = point.cycle;
-                    
-                    this.arrowState = 'second-point';
-                    this.showInstruction("Click at the end point (result)");
+                const transition = this.findNearestTransition(event.point.x, event.point.y);
+                if (transition) {
+                    const signal = this.getSignalByIndex(transition.signalIndex);
+                    if (signal) {
+                        const point = this.getTransitionPoint(signal.name, transition.cycle);
+                        if (point) {
+                            this.currentArrow.startX = point.x;
+                            this.currentArrow.startY = point.y;
+                            this.currentArrow.signal1Name = signal.name;
+                            this.currentArrow.cycle1 = transition.cycle;
+                            
+                            this.arrowState = 'second-point';
+                            this.showInstruction("Click at the end point (result)");
+                        }
+                    }
                 }
                 return;
             } else if (this.arrowState === 'second-point') {
                 // Second click: select end point at nearest transition
-                const point = this.findNearestTransition(event.point);
-                if (point) {
-                    this.currentArrow.endX = point.x;
-                    this.currentArrow.endY = point.y;
-                    this.currentArrow.signal2Name = point.signalName;
-                    this.currentArrow.cycle2 = point.cycle;
-                    
-                    // Finalize the arrow
-                    this.finalizeArrow();
+                const transition = this.findNearestTransition(event.point.x, event.point.y);
+                if (transition) {
+                    const signal = this.getSignalByIndex(transition.signalIndex);
+                    if (signal) {
+                        const point = this.getTransitionPoint(signal.name, transition.cycle);
+                        if (point) {
+                            this.currentArrow.endX = point.x;
+                            this.currentArrow.endY = point.y;
+                            this.currentArrow.signal2Name = signal.name;
+                            this.currentArrow.cycle2 = transition.cycle;
+                            
+                            // Finalize the arrow
+                            this.finalizeArrow();
+                        }
+                    }
                 }
                 return;
             }
@@ -3585,18 +3597,24 @@ class TimingGenApp {
             this.tempArrowGraphics = null;
         }
         
-        const point = this.findNearestTransition(event.point);
-        if (point) {
-            // Draw a small highlight circle at the snap point
-            this.tempArrowGraphics = new paper.Group();
-            const circle = new paper.Path.Circle({
-                center: [point.x, point.y],
-                radius: 5,
-                fillColor: '#0000FF',
-                opacity: 0.5
-            });
-            this.tempArrowGraphics.addChild(circle);
-            paper.view.draw();
+        const transition = this.findNearestTransition(event.point.x, event.point.y);
+        if (transition) {
+            const signal = this.getSignalByIndex(transition.signalIndex);
+            if (signal) {
+                const point = this.getTransitionPoint(signal.name, transition.cycle);
+                if (point) {
+                    // Draw a small highlight circle at the snap point
+                    this.tempArrowGraphics = new paper.Group();
+                    const circle = new paper.Path.Circle({
+                        center: [point.x, point.y],
+                        radius: 5,
+                        fillColor: '#0000FF',
+                        opacity: 0.5
+                    });
+                    this.tempArrowGraphics.addChild(circle);
+                    paper.view.draw();
+                }
+            }
         }
     }
     
@@ -3753,12 +3771,18 @@ class TimingGenApp {
         // Update the appropriate point
         if (pointIndex === 0) {
             // Start point - snap to transition
-            const point = this.findNearestTransition(new paper.Point(x, y));
-            if (point) {
-                arrow.startX = point.x;
-                arrow.startY = point.y;
-                arrow.signal1Name = point.signalName;
-                arrow.cycle1 = point.cycle;
+            const transition = this.findNearestTransition(x, y);
+            if (transition) {
+                const signal = this.getSignalByIndex(transition.signalIndex);
+                if (signal) {
+                    const point = this.getTransitionPoint(signal.name, transition.cycle);
+                    if (point) {
+                        arrow.startX = point.x;
+                        arrow.startY = point.y;
+                        arrow.signal1Name = signal.name;
+                        arrow.cycle1 = transition.cycle;
+                    }
+                }
             }
         } else if (pointIndex === 1) {
             // Control point 1 - free positioning
@@ -3770,12 +3794,18 @@ class TimingGenApp {
             arrow.ctrl2Y = y;
         } else if (pointIndex === 3) {
             // End point - snap to transition
-            const point = this.findNearestTransition(new paper.Point(x, y));
-            if (point) {
-                arrow.endX = point.x;
-                arrow.endY = point.y;
-                arrow.signal2Name = point.signalName;
-                arrow.cycle2 = point.cycle;
+            const transition = this.findNearestTransition(x, y);
+            if (transition) {
+                const signal = this.getSignalByIndex(transition.signalIndex);
+                if (signal) {
+                    const point = this.getTransitionPoint(signal.name, transition.cycle);
+                    if (point) {
+                        arrow.endX = point.x;
+                        arrow.endY = point.y;
+                        arrow.signal2Name = signal.name;
+                        arrow.cycle2 = transition.cycle;
+                    }
+                }
             }
         }
         
