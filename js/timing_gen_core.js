@@ -49,17 +49,20 @@ class TimingGenApp {
         // measuresData: Map<name, measureObject> - actual measure data
         // textData: Map<name, textObject> - actual text data
         // counterData: Map<name, counterObject> - actual counter data
+        // arrowsData: Map<name, arrowObject> - actual arrow data
         this.rows = [];
         this.signalsData = new Map();  // Key: signal name, Value: signal object
         this.measuresData = new Map(); // Key: measure name (auto-generated), Value: measure object
         this.textData = new Map();     // Key: text name (auto-generated), Value: text object
         this.counterData = new Map();  // Key: counter name (auto-generated), Value: counter object
+        this.arrowsData = new Map();   // Key: arrow name (auto-generated), Value: arrow object
         
         // Counter for auto-generating unique measure names
         this.measureCounter = 0;
         this.measureTextCounter = 0; // Counter for measure text (t1, t2, t3...)
         this.textCounter = 0;
         this.counterCounter = 0;
+        this.arrowCounter = 0;
         
         // Row manager for unified row system
         this.rowManager = new RowManager(this);
@@ -85,6 +88,16 @@ class TimingGenApp {
         this.isMovingMeasureRow = false; // Flag for moving measure to another row
         this.movingMeasureRowIndex = null; // Row index of measure being moved
         this.isMeasureTextContext = false; // Flag for measure text context menu
+        
+        // Arrow mode state
+        this.arrowMode = false;
+        this.arrowState = null; // null, 'first-point', 'second-point'
+        this.currentArrow = null; // Current arrow being created
+        this.currentEditingArrowName = null; // Name of arrow being edited
+        this.tempArrowGraphics = null; // Temporary graphics for arrow creation
+        this.isDraggingArrowPoint = false; // For dragging arrow control points
+        this.draggingArrowPointIndex = null; // Which point is being dragged (0=start, 1=ctrl1, 2=ctrl2, 3=end)
+        this.arrowEditMode = false; // Whether arrow is in edit mode (showing control points)
         
         // Insert/Delete cycle mode tracking
         this.insertCycleMode = null; // 'global' or 'signal'
@@ -141,6 +154,10 @@ class TimingGenApp {
         document.getElementById('add-measure-menu').addEventListener('click', () => {
             document.getElementById('add-submenu').style.display = 'none';
             this.startMeasureMode();
+        });
+        document.getElementById('add-arrow-menu').addEventListener('click', () => {
+            document.getElementById('add-submenu').style.display = 'none';
+            this.startArrowMode();
         });
         document.getElementById('add-text-menu').addEventListener('click', () => {
             document.getElementById('add-submenu').style.display = 'none';
@@ -213,6 +230,15 @@ class TimingGenApp {
         // Measure context menu
         document.getElementById('delete-measure-menu').addEventListener('click', () => this.deleteMeasure());
         document.getElementById('cancel-measure-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Arrow context menu
+        document.getElementById('delete-arrow-menu').addEventListener('click', () => this.deleteArrow());
+        document.getElementById('arrow-options-menu').addEventListener('click', () => this.showArrowOptionsDialog());
+        document.getElementById('cancel-arrow-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Arrow options dialog
+        document.getElementById('arrow-options-ok-btn').addEventListener('click', () => this.applyArrowOptions());
+        document.getElementById('arrow-options-cancel-btn').addEventListener('click', () => this.hideArrowOptionsDialog());
         
         // Text context menu
         document.getElementById('edit-text-menu').addEventListener('click', () => this.showEditTextDialog());
