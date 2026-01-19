@@ -1564,8 +1564,17 @@ class TimingGenApp {
         }
         
         const rowIndex = this.rowManager.getRowIndexAtY(yPos);
-        if (rowIndex < 0 || rowIndex >= this.rows.length) {
+        if (rowIndex < 0 || rowIndex > this.rows.length) {
             return null;
+        }
+        
+        // Allow rowIndex === this.rows.length for "insert at end" position
+        if (rowIndex === this.rows.length) {
+            return {
+                index: rowIndex,
+                type: 'end', // Special marker for end position
+                name: null
+            };
         }
         
         return {
@@ -2757,7 +2766,7 @@ class TimingGenApp {
         if (this.isMovingMeasureRow) {
             console.log('[handleMeasureMouseMove] Drawing blue row indicator for row move mode');
             const rowIndex = this.rowManager.getRowIndexAtY(yPos);
-            if (rowIndex >= 0 && rowIndex < this.rows.length) {
+            if (rowIndex >= 0 && rowIndex <= this.rows.length) {
                 // Draw dashed row indicator in blue
                 const rowYPos = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
                 console.log('[handleMeasureMouseMove] Row indicator at Y:', rowYPos);
