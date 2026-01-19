@@ -3400,7 +3400,10 @@ class TimingGenApp {
         this.canvas.style.cursor = 'crosshair';
         
         // Set up onMouseMove handler for visual feedback
-        this.originalOnMouseMove = this.tool.onMouseMove;
+        // Save current handler (could be undefined, which is fine)
+        if (!this.originalOnMouseMove) {
+            this.originalOnMouseMove = this.tool.onMouseMove || null;
+        }
         this.tool.onMouseMove = (event) => this.handleMeasureMouseMove(event);
         
         console.log('[startRechooseMeasurePoint] Entering rechoose mode for point', pointIndex);
@@ -3445,7 +3448,10 @@ class TimingGenApp {
         this.measureState = null; // No specific measure state, just moving
         
         // Set up onMouseMove handler for visual feedback
-        this.originalOnMouseMove = this.tool.onMouseMove;
+        // Save current handler (could be undefined, which is fine)
+        if (!this.originalOnMouseMove) {
+            this.originalOnMouseMove = this.tool.onMouseMove || null;
+        }
         this.tool.onMouseMove = (event) => this.handleMeasureMouseMove(event);
     }
     
