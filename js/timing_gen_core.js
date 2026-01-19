@@ -3936,7 +3936,7 @@ class TimingGenApp {
         }
         
         arrow.textFont = document.getElementById('arrow-text-font-select').value;
-        arrow.textSize = parseInt(document.getElementById('arrow-text-size-input').value) || 12;
+        arrow.textSize = parseInt(document.getElementById('arrow-text-size-input').value, 10) || 12;
         arrow.textColor = document.getElementById('arrow-text-color-input').value;
         this.hideArrowTextOptionsDialog();
         this.render();
@@ -4064,8 +4064,9 @@ class TimingGenApp {
         
         if (signal.type === 'bit') {
             // For bit signals, place indicator based on state at cycle beginning (previous cycle's value)
-            const prevCycle = Math.max(0, cycle - 1);
-            const value = this.getBitValueAtCycle(signal, prevCycle);
+            // For cycle 0, use the value at cycle 0 itself as there's no previous cycle
+            const stateCycle = cycle === 0 ? 0 : cycle - 1;
+            const value = this.getBitValueAtCycle(signal, stateCycle);
             
             if (value === 0) {
                 // Low state - bottom of signal row

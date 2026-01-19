@@ -1020,7 +1020,16 @@ class TimingGenRendering {
         // Calculate arrow head angle from curve tangent at end point
         // Get the tangent at the end of the curve
         const tangent = curve.getTangentAt(curve.length);
-        const angle = tangent ? Math.atan2(tangent.y, tangent.x) : Math.atan2(arrow.endY - arrow.ctrl2Y, arrow.endX - arrow.ctrl2X);
+        let angle;
+        if (tangent) {
+            angle = Math.atan2(tangent.y, tangent.x);
+        } else if (arrow.ctrl2X != null && arrow.ctrl2Y != null && arrow.endX != null && arrow.endY != null) {
+            // Fallback to control point direction if tangent unavailable
+            angle = Math.atan2(arrow.endY - arrow.ctrl2Y, arrow.endX - arrow.ctrl2X);
+        } else {
+            // Final fallback to horizontal right
+            angle = 0;
+        }
         
         // Draw arrow head at end point with proper rotation
         const arrowHead = TimingGenRendering.drawRotatedArrowHead(
