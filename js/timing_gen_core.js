@@ -2041,6 +2041,9 @@ class TimingGenApp {
                 }
             }
         });
+        
+        // Recalculate arrow positions when signals move
+        this.recalculateArrowPositions();
     }
     
     rebuildRowsAfterSignalMove(movedIndices, insertIndex) {

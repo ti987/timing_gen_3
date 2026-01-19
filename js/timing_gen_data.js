@@ -39,8 +39,14 @@ class TimingGenData {
             return row;
         });
         
+        // Convert arrows Map to array
+        const arrows = [];
+        for (const [name, arrow] of app.arrowsData.entries()) {
+            arrows.push(arrow);
+        }
+        
         const data = {
-            version: '3.3.0',
+            version: '3.3.3',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,
@@ -50,7 +56,8 @@ class TimingGenData {
                 delayMax: app.config.delayMax,
                 delayColor: app.config.delayColor
             },
-            rows: rowsWithData
+            rows: rowsWithData,
+            arrows: arrows
         };
         
         const jsonStr = JSON.stringify(data, null, 2);
@@ -182,6 +189,21 @@ class TimingGenData {
                             }
                         }
                     });
+                }
+                
+                // Load arrows (v3.3.3+)
+                if (data.arrows) {
+                    app.arrowsData.clear();
+                    data.arrows.forEach(arrow => {
+                        app.arrowsData.set(arrow.name, arrow);
+                        // Update arrow counter for future arrows
+                        const arrowNum = parseInt(arrow.name.replace('A', ''));
+                        if (!isNaN(arrowNum) && arrowNum >= app.arrowCounter) {
+                            app.arrowCounter = arrowNum + 1;
+                        }
+                    });
+                    // Recalculate arrow positions based on current signal positions
+                    app.recalculateArrowPositions();
                 } else {
                     alert('Old file format not supported. This version requires v3.2.x format.');
                     return;

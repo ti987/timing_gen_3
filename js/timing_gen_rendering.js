@@ -991,20 +991,20 @@ class TimingGenRendering {
         const arrowGroup = new paper.Group();
         arrowGroup.data = { type: 'arrow', arrowName: arrowName };
         
-        // Draw the bezier curve
-        const curve = new paper.Path({
-            segments: [
-                [arrow.startX, arrow.startY],
-                [arrow.ctrl1X, arrow.ctrl1Y],
-                [arrow.ctrl2X, arrow.ctrl2Y],
-                [arrow.endX, arrow.endY]
-            ],
-            strokeColor: arrow.color || '#0000FF',
-            strokeWidth: arrow.width || 2
-        });
-        
-        // Make it a bezier curve
-        curve.smooth({ type: 'catmull-rom', factor: 0.5 });
+        // Draw the bezier curve using proper cubic bezier with handles
+        const curve = new paper.Path();
+        curve.add(new paper.Segment(
+            new paper.Point(arrow.startX, arrow.startY),
+            null,  // handleIn
+            new paper.Point(arrow.ctrl1X - arrow.startX, arrow.ctrl1Y - arrow.startY)  // handleOut
+        ));
+        curve.add(new paper.Segment(
+            new paper.Point(arrow.endX, arrow.endY),
+            new paper.Point(arrow.ctrl2X - arrow.endX, arrow.ctrl2Y - arrow.endY),  // handleIn
+            null  // handleOut
+        ));
+        curve.strokeColor = arrow.color || '#0000FF';
+        curve.strokeWidth = arrow.width || 2;
         curve.data = { type: 'arrow-curve', arrowName: arrowName };
         arrowGroup.addChild(curve);
         
