@@ -3400,8 +3400,8 @@ class TimingGenApp {
         this.canvas.style.cursor = 'crosshair';
         
         // Set up onMouseMove handler for visual feedback
-        // Save current handler (could be undefined, which is fine)
-        if (!this.originalOnMouseMove) {
+        // Save current handler only if not already saved (prevents overwriting during nested calls)
+        if (this.originalOnMouseMove === undefined) {
             this.originalOnMouseMove = this.tool.onMouseMove || null;
         }
         this.tool.onMouseMove = (event) => this.handleMeasureMouseMove(event);
@@ -3448,8 +3448,8 @@ class TimingGenApp {
         this.measureState = null; // No specific measure state, just moving
         
         // Set up onMouseMove handler for visual feedback
-        // Save current handler (could be undefined, which is fine)
-        if (!this.originalOnMouseMove) {
+        // Save current handler only if not already saved (prevents overwriting during nested calls)
+        if (this.originalOnMouseMove === undefined) {
             this.originalOnMouseMove = this.tool.onMouseMove || null;
         }
         this.tool.onMouseMove = (event) => this.handleMeasureMouseMove(event);
