@@ -1,5 +1,5 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Version 3.3.1
+// Version 3.3.3
 // Main JavaScript Application using Paper.js
 //
 // Key Features:
@@ -3837,12 +3837,16 @@ class TimingGenApp {
             }
             
             // Recalculate control points based on new positions
-            const dx = arrow.endX - arrow.startX;
-            const horizontalBias = Math.min(Math.abs(dx) * 0.5, 100);
-            arrow.ctrl1X = arrow.startX + horizontalBias;
-            arrow.ctrl1Y = arrow.startY;
-            arrow.ctrl2X = arrow.endX - horizontalBias;
-            arrow.ctrl2Y = arrow.endY;
+            // Only if both start and end points exist
+            if (arrow.startX != null && arrow.endX != null && 
+                arrow.startY != null && arrow.endY != null) {
+                const dx = arrow.endX - arrow.startX;
+                const horizontalBias = Math.min(Math.abs(dx) * 0.5, 100);
+                arrow.ctrl1X = arrow.startX + horizontalBias;
+                arrow.ctrl1Y = arrow.startY;
+                arrow.ctrl2X = arrow.endX - horizontalBias;
+                arrow.ctrl2Y = arrow.endY;
+            }
         }
     }
     
@@ -3886,6 +3890,7 @@ class TimingGenApp {
         this.measureTextCounter = 0;
         this.textCounter = 0;
         this.counterCounter = 0;
+        this.arrowCounter = 0;
         
         // Reset selections
         this.selectedSignals.clear();
