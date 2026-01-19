@@ -239,6 +239,9 @@ class TimingGenData {
             // Remove header space by setting headerHeight to 0 for SVG export
             app.config.headerHeight = 0;
             
+            // Recalculate arrow positions with new header height
+            app.recalculateArrowPositions();
+            
             // Re-render with hidden header, no highlights, and no header space
             app.render();
             
@@ -260,6 +263,9 @@ class TimingGenData {
             app.selectedMeasureRows = savedMeasureSelection;
             app.hideHeader = savedHideHeader;
             app.config.headerHeight = savedHeaderHeight;
+            
+            // Recalculate arrow positions with restored header height
+            app.recalculateArrowPositions();
             
             // Re-render to restore state
             app.render();
