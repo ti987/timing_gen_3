@@ -4204,12 +4204,12 @@ class TimingGenApp {
             const prevValue = this.getBitValueAtCycle(signal, stateCycle);
             const hasTransition = cycle > 0 && currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X';
             
-            // Calculate slew positions
-            const delayMin = this.config.delayMin || 0;
-            const slew = this.config.slew || 2;
-            const slewStartX = this.config.nameColumnWidth + cycle * this.config.cycleWidth + delayMin;
-            const slewEndX = slewStartX + slew;
-            const slewCenterX = slewStartX + slew / 2;
+            // Calculate slew positions using signal-specific delay and slew values
+            const delayInfo = this.getEffectiveDelay(signal, cycle);
+            const slewPixels = this.getEffectiveSlew(signal, cycle);
+            const slewStartX = this.config.nameColumnWidth + cycle * this.config.cycleWidth + delayInfo.min;
+            const slewEndX = slewStartX + slewPixels;
+            const slewCenterX = slewStartX + slewPixels / 2;
             
             if (poiType === 'low' || (poiType === 'auto' && prevValue === 0)) {
                 x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
