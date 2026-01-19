@@ -4084,17 +4084,30 @@ class TimingGenApp {
         
         // Update the appropriate point
         if (pointIndex === 0) {
-            // Start point - snap to POI (cycle boundary)
+            // Start point - snap to closest POI (cycle boundary) with user-selectable type
             const poi = this.findNearestPOI(x, y);
             if (poi) {
                 const signal = this.getSignalByIndex(poi.signalIndex);
                 if (signal) {
-                    const point = this.getPointOfInterest(signal.name, poi.cycle);
-                    if (point) {
-                        arrow.startX = point.x;
-                        arrow.startY = point.y;
+                    // Get all POI options and find the closest one
+                    const allPOIs = this.getAllPOIsForSignalCycle(signal.name, poi.cycle);
+                    if (allPOIs && allPOIs.length > 0) {
+                        let closestPOI = allPOIs[0];
+                        let minDist = Math.sqrt(Math.pow(x - allPOIs[0].x, 2) + Math.pow(y - allPOIs[0].y, 2));
+                        
+                        for (let i = 1; i < allPOIs.length; i++) {
+                            const dist = Math.sqrt(Math.pow(x - allPOIs[i].x, 2) + Math.pow(y - allPOIs[i].y, 2));
+                            if (dist < minDist) {
+                                minDist = dist;
+                                closestPOI = allPOIs[i];
+                            }
+                        }
+                        
+                        arrow.startX = closestPOI.x;
+                        arrow.startY = closestPOI.y;
                         arrow.signal1Name = signal.name;
                         arrow.cycle1 = poi.cycle;
+                        arrow.poi1Type = closestPOI.poiType;
                     }
                 }
             }
@@ -4107,17 +4120,30 @@ class TimingGenApp {
             arrow.ctrl2X = x;
             arrow.ctrl2Y = y;
         } else if (pointIndex === 3) {
-            // End point - snap to POI (cycle boundary)
+            // End point - snap to closest POI (cycle boundary) with user-selectable type
             const poi = this.findNearestPOI(x, y);
             if (poi) {
                 const signal = this.getSignalByIndex(poi.signalIndex);
                 if (signal) {
-                    const point = this.getPointOfInterest(signal.name, poi.cycle);
-                    if (point) {
-                        arrow.endX = point.x;
-                        arrow.endY = point.y;
+                    // Get all POI options and find the closest one
+                    const allPOIs = this.getAllPOIsForSignalCycle(signal.name, poi.cycle);
+                    if (allPOIs && allPOIs.length > 0) {
+                        let closestPOI = allPOIs[0];
+                        let minDist = Math.sqrt(Math.pow(x - allPOIs[0].x, 2) + Math.pow(y - allPOIs[0].y, 2));
+                        
+                        for (let i = 1; i < allPOIs.length; i++) {
+                            const dist = Math.sqrt(Math.pow(x - allPOIs[i].x, 2) + Math.pow(y - allPOIs[i].y, 2));
+                            if (dist < minDist) {
+                                minDist = dist;
+                                closestPOI = allPOIs[i];
+                            }
+                        }
+                        
+                        arrow.endX = closestPOI.x;
+                        arrow.endY = closestPOI.y;
                         arrow.signal2Name = signal.name;
                         arrow.cycle2 = poi.cycle;
+                        arrow.poi2Type = closestPOI.poiType;
                     }
                 }
             }
@@ -4228,13 +4254,27 @@ class TimingGenApp {
                 y = baseY + this.config.rowHeight * 0.5;
             } else if (poiType === 'slew-start' && hasTransition) {
                 x = slewStartX;
-                y = prevValue === 0 ? baseY + this.config.rowHeight * 0.8 : baseY + this.config.rowHeight * 0.2;
+                // Y position at start of slew (at previous value level)
+                if (prevValue === 0) {
+                    y = baseY + this.config.rowHeight * 0.8;  // Low
+                } else if (prevValue === 1) {
+                    y = baseY + this.config.rowHeight * 0.2;  // High
+                } else {
+                    y = baseY + this.config.rowHeight * 0.5;  // Mid (for Z/X)
+                }
             } else if (poiType === 'slew-center' && hasTransition) {
                 x = slewCenterX;
-                y = baseY + this.config.rowHeight * 0.5;
+                y = baseY + this.config.rowHeight * 0.5;  // Always middle during transition
             } else if (poiType === 'slew-end' && hasTransition) {
                 x = slewEndX;
-                y = currentValue === 0 ? baseY + this.config.rowHeight * 0.8 : baseY + this.config.rowHeight * 0.2;
+                // Y position at end of slew (at current value level)
+                if (currentValue === 0) {
+                    y = baseY + this.config.rowHeight * 0.8;  // Low
+                } else if (currentValue === 1) {
+                    y = baseY + this.config.rowHeight * 0.2;  // High
+                } else {
+                    y = baseY + this.config.rowHeight * 0.5;  // Mid (for Z/X)
+                }
             } else {
                 // Fallback to cycle boundary, middle
                 x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
@@ -4268,9 +4308,17 @@ class TimingGenApp {
             
             // Add slew positions if there's a transition
             const stateCycle = cycle === 0 ? 0 : cycle - 1;
-            const currentValue = this.getBitValueAtCycle(signal, cycle);
-            const prevValue = this.getBitValueAtCycle(signal, stateCycle);
-            const hasTransition = cycle > 0 && currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X';
+            let hasTransition = false;
+            
+            if (signal.type === 'bit') {
+                const currentValue = this.getBitValueAtCycle(signal, cycle);
+                const prevValue = this.getBitValueAtCycle(signal, stateCycle);
+                hasTransition = cycle > 0 && currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X';
+            } else if (signal.type === 'bus') {
+                const currentValue = this.getBusValueAtCycle(signal, cycle);
+                const prevValue = this.getBusValueAtCycle(signal, stateCycle);
+                hasTransition = cycle > 0 && currentValue !== prevValue;
+            }
             
             if (hasTransition) {
                 pois.push(this.getPointOfInterest(signalName, cycle, 'slew-start'));
