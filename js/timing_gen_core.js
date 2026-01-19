@@ -456,6 +456,7 @@ class TimingGenApp {
         document.getElementById('bus-cycle-context-menu').style.display = 'none';
         document.getElementById('cycle-context-menu').style.display = 'none';
         document.getElementById('measure-context-menu').style.display = 'none';
+        document.getElementById('arrow-context-menu').style.display = 'none';
         document.getElementById('text-context-menu').style.display = 'none';
         document.getElementById('text-row-name-context-menu').style.display = 'none';
         document.getElementById('measure-row-name-context-menu').style.display = 'none';
@@ -1082,6 +1083,37 @@ class TimingGenApp {
             }
         }
         
+        // Handle arrow mode clicks
+        if (this.arrowMode) {
+            if (this.arrowState === 'first-point') {
+                // First click: select start point at nearest transition
+                const point = this.findNearestTransition(event.point);
+                if (point) {
+                    this.currentArrow.startX = point.x;
+                    this.currentArrow.startY = point.y;
+                    this.currentArrow.signal1Name = point.signalName;
+                    this.currentArrow.cycle1 = point.cycle;
+                    
+                    this.arrowState = 'second-point';
+                    this.showInstruction("Click at the end point (result)");
+                }
+                return;
+            } else if (this.arrowState === 'second-point') {
+                // Second click: select end point at nearest transition
+                const point = this.findNearestTransition(event.point);
+                if (point) {
+                    this.currentArrow.endX = point.x;
+                    this.currentArrow.endY = point.y;
+                    this.currentArrow.signal2Name = point.signalName;
+                    this.currentArrow.cycle2 = point.cycle;
+                    
+                    // Finalize the arrow
+                    this.finalizeArrow();
+                }
+                return;
+            }
+        }
+        
         // Handle moving measure to another row
         if (this.isMovingMeasureRow) {
             const row = this.getRowAtY(yPos);
@@ -1351,6 +1383,14 @@ class TimingGenApp {
     }
     
     handleCanvasMouseDrag(event) {
+        // Handle arrow point dragging
+        if (this.isDraggingArrowPoint && this.currentEditingArrowName) {
+            const xPos = event.point.x;
+            const yPos = event.point.y;
+            this.updateArrowPoint(this.currentEditingArrowName, this.draggingArrowPointIndex, xPos, yPos);
+            return;
+        }
+        
         // Handle text dragging
         if (this.textDragState) {
             const xPos = event.point.x;
@@ -1385,6 +1425,13 @@ class TimingGenApp {
     }
     
     handleCanvasMouseUp(event) {
+        // End arrow point dragging
+        if (this.isDraggingArrowPoint) {
+            this.isDraggingArrowPoint = false;
+            this.draggingArrowPointIndex = null;
+            this.canvas.style.cursor = 'default';
+        }
+        
         // End text dragging
         if (this.textDragState) {
             this.textDragState = null;
@@ -3490,6 +3537,298 @@ class TimingGenApp {
         this.tool.onMouseMove = (event) => this.handleMeasureMouseMove(event);
     }
     
+    // ===========================
+    // Arrow Functions
+    // ===========================
+    
+    startArrowMode() {
+        this.arrowMode = true;
+        this.arrowState = 'first-point';
+        // Generate unique arrow name
+        const arrowName = `A${this.arrowCounter}`;
+        this.arrowCounter++;
+        
+        this.currentArrow = {
+            name: arrowName,
+            signal1Name: null,
+            cycle1: null,
+            signal2Name: null,
+            cycle2: null,
+            startX: null,
+            startY: null,
+            endX: null,
+            endY: null,
+            ctrl1X: null,
+            ctrl1Y: null,
+            ctrl2X: null,
+            ctrl2Y: null,
+            width: 2,  // Default arrow width
+            color: '#0000FF'  // Default blue color
+        };
+        this.canvas.style.cursor = 'crosshair';
+        
+        // Show instruction
+        this.showInstruction("Click at the start point (trigger)");
+        
+        // Add onMouseMove handler for visual feedback
+        this.originalOnMouseMove = this.tool.onMouseMove;
+        this.tool.onMouseMove = (event) => this.handleArrowMouseMove(event);
+    }
+    
+    handleArrowMouseMove(event) {
+        // Show visual feedback while creating arrow
+        if (!this.arrowMode) return;
+        
+        // Clear any temporary graphics
+        if (this.tempArrowGraphics) {
+            this.tempArrowGraphics.remove();
+            this.tempArrowGraphics = null;
+        }
+        
+        const point = this.findNearestTransition(event.point);
+        if (point) {
+            // Draw a small highlight circle at the snap point
+            this.tempArrowGraphics = new paper.Group();
+            const circle = new paper.Path.Circle({
+                center: [point.x, point.y],
+                radius: 5,
+                fillColor: '#0000FF',
+                opacity: 0.5
+            });
+            this.tempArrowGraphics.addChild(circle);
+            paper.view.draw();
+        }
+    }
+    
+    cancelArrow() {
+        this.arrowMode = false;
+        this.arrowState = null;
+        this.currentArrow = null;
+        this.arrowEditMode = false;
+        this.currentEditingArrowName = null;
+        this.canvas.style.cursor = 'default';
+        
+        // Clear temporary graphics
+        if (this.tempArrowGraphics) {
+            this.tempArrowGraphics.remove();
+            this.tempArrowGraphics = null;
+        }
+        
+        // Restore original mouse move handler
+        if (this.originalOnMouseMove !== undefined) {
+            this.tool.onMouseMove = this.originalOnMouseMove;
+            this.originalOnMouseMove = undefined;
+        }
+        
+        this.hideInstruction();
+        this.render();
+    }
+    
+    finalizeArrow() {
+        // Calculate control points for bezier curve
+        const dx = this.currentArrow.endX - this.currentArrow.startX;
+        const dy = this.currentArrow.endY - this.currentArrow.startY;
+        
+        // Control points should create somewhat horizontal exit/entry
+        // The "somewhat" is because signals are often in different rows and close in X
+        const horizontalBias = Math.min(Math.abs(dx) * 0.5, 100); // Max 100px horizontal bias
+        
+        // Control point 1: exit somewhat horizontally to the right
+        this.currentArrow.ctrl1X = this.currentArrow.startX + horizontalBias;
+        this.currentArrow.ctrl1Y = this.currentArrow.startY;
+        
+        // Control point 2: enter somewhat horizontally from the left
+        this.currentArrow.ctrl2X = this.currentArrow.endX - horizontalBias;
+        this.currentArrow.ctrl2Y = this.currentArrow.endY;
+        
+        // Store in arrowsData
+        this.arrowsData.set(this.currentArrow.name, { ...this.currentArrow });
+        
+        // Clear temporary state
+        this.arrowMode = false;
+        this.arrowState = null;
+        this.currentArrow = null;
+        this.canvas.style.cursor = 'default';
+        
+        // Clear temporary graphics
+        if (this.tempArrowGraphics) {
+            this.tempArrowGraphics.remove();
+            this.tempArrowGraphics = null;
+        }
+        
+        // Restore original mouse move handler
+        if (this.originalOnMouseMove !== undefined) {
+            this.tool.onMouseMove = this.originalOnMouseMove;
+            this.originalOnMouseMove = undefined;
+        }
+        
+        this.hideInstruction();
+        this.render();
+    }
+    
+    deleteArrow() {
+        if (this.currentEditingArrowName) {
+            this.arrowsData.delete(this.currentEditingArrowName);
+            this.currentEditingArrowName = null;
+            this.arrowEditMode = false;
+            this.hideAllMenus();
+            this.render();
+        }
+    }
+    
+    showArrowOptionsDialog() {
+        if (!this.currentEditingArrowName) return;
+        
+        const arrow = this.arrowsData.get(this.currentEditingArrowName);
+        if (!arrow) return;
+        
+        // Populate dialog with current values
+        document.getElementById('arrow-width-input').value = arrow.width || 2;
+        document.getElementById('arrow-color-input').value = arrow.color || '#0000FF';
+        
+        // Show dialog
+        document.getElementById('arrow-options-dialog').style.display = 'flex';
+        this.hideAllMenus();
+    }
+    
+    hideArrowOptionsDialog() {
+        document.getElementById('arrow-options-dialog').style.display = 'none';
+    }
+    
+    applyArrowOptions() {
+        if (!this.currentEditingArrowName) {
+            this.hideArrowOptionsDialog();
+            return;
+        }
+        
+        const arrow = this.arrowsData.get(this.currentEditingArrowName);
+        if (!arrow) {
+            this.hideArrowOptionsDialog();
+            return;
+        }
+        
+        // Get values from dialog
+        arrow.width = parseInt(document.getElementById('arrow-width-input').value) || 2;
+        arrow.color = document.getElementById('arrow-color-input').value || '#0000FF';
+        
+        this.hideArrowOptionsDialog();
+        this.render();
+    }
+    
+    showArrowContextMenu(event, arrowName) {
+        this.currentEditingArrowName = arrowName;
+        this.hideAllMenus();
+        
+        const menu = document.getElementById('arrow-context-menu');
+        menu.style.display = 'block';
+        menu.style.left = `${event.pageX}px`;
+        menu.style.top = `${event.pageY}px`;
+    }
+    
+    startEditingArrow(arrowName) {
+        this.arrowEditMode = true;
+        this.currentEditingArrowName = arrowName;
+        this.render();
+    }
+    
+    stopEditingArrow() {
+        this.arrowEditMode = false;
+        this.currentEditingArrowName = null;
+        this.isDraggingArrowPoint = false;
+        this.draggingArrowPointIndex = null;
+        this.render();
+    }
+    
+    startDraggingArrowPoint(arrowName, pointIndex, event) {
+        this.isDraggingArrowPoint = true;
+        this.draggingArrowPointIndex = pointIndex;
+        this.currentEditingArrowName = arrowName;
+        this.canvas.style.cursor = 'move';
+    }
+    
+    updateArrowPoint(arrowName, pointIndex, x, y) {
+        const arrow = this.arrowsData.get(arrowName);
+        if (!arrow) return;
+        
+        // Update the appropriate point
+        if (pointIndex === 0) {
+            // Start point - snap to transition
+            const point = this.findNearestTransition(new paper.Point(x, y));
+            if (point) {
+                arrow.startX = point.x;
+                arrow.startY = point.y;
+                arrow.signal1Name = point.signalName;
+                arrow.cycle1 = point.cycle;
+            }
+        } else if (pointIndex === 1) {
+            // Control point 1 - free positioning
+            arrow.ctrl1X = x;
+            arrow.ctrl1Y = y;
+        } else if (pointIndex === 2) {
+            // Control point 2 - free positioning
+            arrow.ctrl2X = x;
+            arrow.ctrl2Y = y;
+        } else if (pointIndex === 3) {
+            // End point - snap to transition
+            const point = this.findNearestTransition(new paper.Point(x, y));
+            if (point) {
+                arrow.endX = point.x;
+                arrow.endY = point.y;
+                arrow.signal2Name = point.signalName;
+                arrow.cycle2 = point.cycle;
+            }
+        }
+        
+        this.render();
+    }
+    
+    recalculateArrowPositions() {
+        // Recalculate arrow positions when signals move
+        for (const [name, arrow] of this.arrowsData.entries()) {
+            // Recalculate start point
+            if (arrow.signal1Name !== null && arrow.cycle1 !== null) {
+                const point = this.getTransitionPoint(arrow.signal1Name, arrow.cycle1);
+                if (point) {
+                    arrow.startX = point.x;
+                    arrow.startY = point.y;
+                }
+            }
+            
+            // Recalculate end point
+            if (arrow.signal2Name !== null && arrow.cycle2 !== null) {
+                const point = this.getTransitionPoint(arrow.signal2Name, arrow.cycle2);
+                if (point) {
+                    arrow.endX = point.x;
+                    arrow.endY = point.y;
+                }
+            }
+            
+            // Recalculate control points based on new positions
+            const dx = arrow.endX - arrow.startX;
+            const horizontalBias = Math.min(Math.abs(dx) * 0.5, 100);
+            arrow.ctrl1X = arrow.startX + horizontalBias;
+            arrow.ctrl1Y = arrow.startY;
+            arrow.ctrl2X = arrow.endX - horizontalBias;
+            arrow.ctrl2Y = arrow.endY;
+        }
+    }
+    
+    getTransitionPoint(signalName, cycle) {
+        // Get the screen coordinates for a signal transition at a given cycle
+        const signal = this.getSignalByName(signalName);
+        if (!signal) return null;
+        
+        const signals = this.getSignals();
+        const signalIndex = signals.findIndex(s => s.name === signalName);
+        if (signalIndex < 0) return null;
+        
+        const signalRow = this.rowManager.signalIndexToRowIndex(signalIndex);
+        const y = this.rowManager.getRowYPosition(signalRow) + this.config.rowHeight / 2;
+        const x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
+        
+        return { x, y, signalName, cycle };
+    }
+    
     handleNewDocument() {
         // Check if there's any data
         const hasData = this.rows.length > 0;
@@ -3507,6 +3846,7 @@ class TimingGenApp {
         this.measuresData.clear();
         this.textData.clear();
         this.counterData.clear();
+        this.arrowsData.clear();
         
         // Reset counters (keep measureCounter for unique internal names)
         // Only reset display counters

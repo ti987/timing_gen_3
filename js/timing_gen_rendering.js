@@ -70,6 +70,12 @@ class TimingGenRendering {
             });
         }
         
+        // Draw arrows (not in rows, drawn on top of signals)
+        app.measureLayer.activate();
+        for (const [name, arrow] of app.arrowsData.entries()) {
+            TimingGenRendering.drawArrow(app, arrow, name);
+        }
+        
         paper.view.draw();
     }
     
@@ -976,6 +982,134 @@ class TimingGenRendering {
                 }
             }
         };
+    }
+    
+    static drawArrow(app, arrow, arrowName) {
+        // Draw arrow as a bezier curve from start to end point
+        // with control points for smooth curvature
+        
+        const arrowGroup = new paper.Group();
+        arrowGroup.data = { type: 'arrow', arrowName: arrowName };
+        
+        // Draw the bezier curve
+        const curve = new paper.Path({
+            segments: [
+                [arrow.startX, arrow.startY],
+                [arrow.ctrl1X, arrow.ctrl1Y],
+                [arrow.ctrl2X, arrow.ctrl2Y],
+                [arrow.endX, arrow.endY]
+            ],
+            strokeColor: arrow.color || '#0000FF',
+            strokeWidth: arrow.width || 2
+        });
+        
+        // Make it a bezier curve
+        curve.smooth({ type: 'catmull-rom', factor: 0.5 });
+        curve.data = { type: 'arrow-curve', arrowName: arrowName };
+        arrowGroup.addChild(curve);
+        
+        // Draw small circle at start point (smaller than measure marker)
+        const startCircle = new paper.Path.Circle({
+            center: [arrow.startX, arrow.startY],
+            radius: 3,
+            fillColor: arrow.color || '#0000FF'
+        });
+        startCircle.data = { type: 'arrow-start', arrowName: arrowName };
+        arrowGroup.addChild(startCircle);
+        
+        // Draw arrow head at end point
+        const arrowHead = TimingGenRendering.drawBezierArrowHead(
+            arrow.endX, arrow.endY,
+            arrow.ctrl2X, arrow.ctrl2Y,
+            arrow.color || '#0000FF',
+            8
+        );
+        arrowHead.data = { type: 'arrow-head', arrowName: arrowName };
+        arrowGroup.addChild(arrowHead);
+        
+        // If in edit mode for this arrow, show control points
+        if (app.arrowEditMode && app.currentEditingArrowName === arrowName) {
+            // Draw control point squares
+            const controlPoints = [
+                { x: arrow.startX, y: arrow.startY, index: 0, label: 'Start' },
+                { x: arrow.ctrl1X, y: arrow.ctrl1Y, index: 1, label: 'Ctrl1' },
+                { x: arrow.ctrl2X, y: arrow.ctrl2Y, index: 2, label: 'Ctrl2' },
+                { x: arrow.endX, y: arrow.endY, index: 3, label: 'End' }
+            ];
+            
+            controlPoints.forEach(point => {
+                const square = new paper.Path.Rectangle({
+                    center: [point.x, point.y],
+                    size: [8, 8],
+                    fillColor: '#FFD700',
+                    strokeColor: '#000000',
+                    strokeWidth: 1
+                });
+                square.data = { type: 'arrow-control-point', arrowName: arrowName, pointIndex: point.index };
+                arrowGroup.addChild(square);
+            });
+            
+            // Draw lines from control points to their respective endpoints
+            const ctrlLine1 = new paper.Path.Line({
+                from: [arrow.startX, arrow.startY],
+                to: [arrow.ctrl1X, arrow.ctrl1Y],
+                strokeColor: '#00FF00',
+                strokeWidth: 1,
+                dashArray: [4, 4]
+            });
+            arrowGroup.addChild(ctrlLine1);
+            
+            const ctrlLine2 = new paper.Path.Line({
+                from: [arrow.ctrl2X, arrow.ctrl2Y],
+                to: [arrow.endX, arrow.endY],
+                strokeColor: '#00FF00',
+                strokeWidth: 1,
+                dashArray: [4, 4]
+            });
+            arrowGroup.addChild(ctrlLine2);
+        }
+        
+        // Make the group interactive
+        arrowGroup.onMouseDown = function(event) {
+            if (event.event.button === 0) {
+                // Left click - check what was clicked
+                const clickedItem = event.target;
+                if (clickedItem.data && clickedItem.data.type === 'arrow-control-point') {
+                    // Start dragging control point
+                    app.startDraggingArrowPoint(arrowName, clickedItem.data.pointIndex, event);
+                } else {
+                    // Toggle edit mode for the arrow
+                    if (app.arrowEditMode && app.currentEditingArrowName === arrowName) {
+                        app.stopEditingArrow();
+                    } else {
+                        app.startEditingArrow(arrowName);
+                    }
+                }
+            } else if (event.event.button === 2) {
+                // Right click - show context menu
+                app.showArrowContextMenu(event.event, arrowName);
+            }
+        };
+    }
+    
+    static drawBezierArrowHead(endX, endY, ctrlX, ctrlY, color, size) {
+        // Calculate angle of arrow based on control point direction
+        const dx = endX - ctrlX;
+        const dy = endY - ctrlY;
+        const angle = Math.atan2(dy, dx);
+        
+        // Create arrow head triangle
+        const arrowHead = new paper.Path({
+            segments: [
+                [endX, endY],
+                [endX - size * Math.cos(angle - Math.PI / 6), endY - size * Math.sin(angle - Math.PI / 6)],
+                [endX - size * Math.cos(angle + Math.PI / 6), endY - size * Math.sin(angle + Math.PI / 6)]
+            ],
+            fillColor: color,
+            closed: true
+        });
+        
+        return arrowHead;
     }
     
     static drawSmallCross(xPos, yPos) {
