@@ -4098,9 +4098,9 @@ class TimingGenApp {
             const hasTransition = cycle > 0 && currentValue !== prevValue && currentValue !== 'X' && prevValue !== 'X';
             
             // Calculate slew positions
-            const delayInfo = this.getDelayInfo(signalIndex);
+            const delayMin = this.config.delayMin || 0;
             const slew = this.config.slew || 2;
-            const slewStartX = this.config.nameColumnWidth + cycle * this.config.cycleWidth + delayInfo.min;
+            const slewStartX = this.config.nameColumnWidth + cycle * this.config.cycleWidth + delayMin;
             const slewEndX = slewStartX + slew;
             const slewCenterX = slewStartX + slew / 2;
             
