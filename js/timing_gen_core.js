@@ -1142,28 +1142,17 @@ class TimingGenApp {
                     if (signal) {
                         // Get all POI options and find the closest one
                         const allPOIs = this.getAllPOIsForSignalCycle(signal.name, poi.cycle);
-                        if (allPOIs && allPOIs.length > 0) {
-                            let closestPOI = allPOIs[0];
-                            let minDist = Math.sqrt(Math.pow(mouseX - allPOIs[0].x, 2) + Math.pow(mouseY - allPOIs[0].y, 2));
+                        const closestPOI = this.findClosestPOI(allPOIs, mouseX, mouseY);
+                        
+                        if (closestPOI) {
+                            this.currentArrow.startX = closestPOI.x;
+                            this.currentArrow.startY = closestPOI.y;
+                            this.currentArrow.signal1Name = signal.name;
+                            this.currentArrow.cycle1 = poi.cycle;
+                            this.currentArrow.poi1Type = closestPOI.poiType;
                             
-                            for (let i = 1; i < allPOIs.length; i++) {
-                                const dist = Math.sqrt(Math.pow(mouseX - allPOIs[i].x, 2) + Math.pow(mouseY - allPOIs[i].y, 2));
-                                if (dist < minDist) {
-                                    minDist = dist;
-                                    closestPOI = allPOIs[i];
-                                }
-                            }
-                            
-                            if (closestPOI) {
-                                this.currentArrow.startX = closestPOI.x;
-                                this.currentArrow.startY = closestPOI.y;
-                                this.currentArrow.signal1Name = signal.name;
-                                this.currentArrow.cycle1 = poi.cycle;
-                                this.currentArrow.poi1Type = closestPOI.poiType;
-                                
-                                this.arrowState = 'second-point';
-                                this.showInstruction("Click at the end point (result)");
-                            }
+                            this.arrowState = 'second-point';
+                            this.showInstruction("Click at the end point (result)");
                         }
                     }
                 }
@@ -1178,28 +1167,17 @@ class TimingGenApp {
                     if (signal) {
                         // Get all POI options and find the closest one
                         const allPOIs = this.getAllPOIsForSignalCycle(signal.name, poi.cycle);
-                        if (allPOIs && allPOIs.length > 0) {
-                            let closestPOI = allPOIs[0];
-                            let minDist = Math.sqrt(Math.pow(mouseX - allPOIs[0].x, 2) + Math.pow(mouseY - allPOIs[0].y, 2));
+                        const closestPOI = this.findClosestPOI(allPOIs, mouseX, mouseY);
+                        
+                        if (closestPOI) {
+                            this.currentArrow.endX = closestPOI.x;
+                            this.currentArrow.endY = closestPOI.y;
+                            this.currentArrow.signal2Name = signal.name;
+                            this.currentArrow.cycle2 = poi.cycle;
+                            this.currentArrow.poi2Type = closestPOI.poiType;
                             
-                            for (let i = 1; i < allPOIs.length; i++) {
-                                const dist = Math.sqrt(Math.pow(mouseX - allPOIs[i].x, 2) + Math.pow(mouseY - allPOIs[i].y, 2));
-                                if (dist < minDist) {
-                                    minDist = dist;
-                                    closestPOI = allPOIs[i];
-                                }
-                            }
-                            
-                            if (closestPOI) {
-                                this.currentArrow.endX = closestPOI.x;
-                                this.currentArrow.endY = closestPOI.y;
-                                this.currentArrow.signal2Name = signal.name;
-                                this.currentArrow.cycle2 = poi.cycle;
-                                this.currentArrow.poi2Type = closestPOI.poiType;
-                                
-                                // Finalize the arrow
-                                this.finalizeArrow();
-                            }
+                            // Finalize the arrow
+                            this.finalizeArrow();
                         }
                     }
                 }
@@ -3822,20 +3800,9 @@ class TimingGenApp {
             if (signal) {
                 // Get all available POIs for this signal and cycle
                 const allPOIs = this.getAllPOIsForSignalCycle(signal.name, poi.cycle);
+                const closestPOI = this.findClosestPOI(allPOIs, mouseX, mouseY);
                 
-                if (allPOIs.length > 0) {
-                    // Find the closest POI to the mouse position
-                    let closestPOI = allPOIs[0];
-                    let minDist = Math.sqrt(Math.pow(mouseX - allPOIs[0].x, 2) + Math.pow(mouseY - allPOIs[0].y, 2));
-                    
-                    for (let i = 1; i < allPOIs.length; i++) {
-                        const dist = Math.sqrt(Math.pow(mouseX - allPOIs[i].x, 2) + Math.pow(mouseY - allPOIs[i].y, 2));
-                        if (dist < minDist) {
-                            minDist = dist;
-                            closestPOI = allPOIs[i];
-                        }
-                    }
-                    
+                if (closestPOI) {
                     // Draw only the closest POI as a highlight circle
                     this.tempArrowGraphics = new paper.Group();
                     const circle = new paper.Path.Circle({
@@ -4078,6 +4045,25 @@ class TimingGenApp {
         this.canvas.style.cursor = 'move';
     }
     
+    findClosestPOI(allPOIs, x, y) {
+        // Find the closest POI to the given (x, y) coordinates
+        // Uses squared distances for performance (avoids Math.sqrt)
+        if (!allPOIs || allPOIs.length === 0) return null;
+        
+        let closestPOI = allPOIs[0];
+        let minDistSq = (x - allPOIs[0].x) ** 2 + (y - allPOIs[0].y) ** 2;
+        
+        for (let i = 1; i < allPOIs.length; i++) {
+            const distSq = (x - allPOIs[i].x) ** 2 + (y - allPOIs[i].y) ** 2;
+            if (distSq < minDistSq) {
+                minDistSq = distSq;
+                closestPOI = allPOIs[i];
+            }
+        }
+        
+        return closestPOI;
+    }
+    
     updateArrowPoint(arrowName, pointIndex, x, y) {
         const arrow = this.arrowsData.get(arrowName);
         if (!arrow) return;
@@ -4091,18 +4077,9 @@ class TimingGenApp {
                 if (signal) {
                     // Get all POI options and find the closest one
                     const allPOIs = this.getAllPOIsForSignalCycle(signal.name, poi.cycle);
-                    if (allPOIs && allPOIs.length > 0) {
-                        let closestPOI = allPOIs[0];
-                        let minDist = Math.sqrt(Math.pow(x - allPOIs[0].x, 2) + Math.pow(y - allPOIs[0].y, 2));
-                        
-                        for (let i = 1; i < allPOIs.length; i++) {
-                            const dist = Math.sqrt(Math.pow(x - allPOIs[i].x, 2) + Math.pow(y - allPOIs[i].y, 2));
-                            if (dist < minDist) {
-                                minDist = dist;
-                                closestPOI = allPOIs[i];
-                            }
-                        }
-                        
+                    const closestPOI = this.findClosestPOI(allPOIs, x, y);
+                    
+                    if (closestPOI) {
                         arrow.startX = closestPOI.x;
                         arrow.startY = closestPOI.y;
                         arrow.signal1Name = signal.name;
@@ -4127,18 +4104,9 @@ class TimingGenApp {
                 if (signal) {
                     // Get all POI options and find the closest one
                     const allPOIs = this.getAllPOIsForSignalCycle(signal.name, poi.cycle);
-                    if (allPOIs && allPOIs.length > 0) {
-                        let closestPOI = allPOIs[0];
-                        let minDist = Math.sqrt(Math.pow(x - allPOIs[0].x, 2) + Math.pow(y - allPOIs[0].y, 2));
-                        
-                        for (let i = 1; i < allPOIs.length; i++) {
-                            const dist = Math.sqrt(Math.pow(x - allPOIs[i].x, 2) + Math.pow(y - allPOIs[i].y, 2));
-                            if (dist < minDist) {
-                                minDist = dist;
-                                closestPOI = allPOIs[i];
-                            }
-                        }
-                        
+                    const closestPOI = this.findClosestPOI(allPOIs, x, y);
+                    
+                    if (closestPOI) {
                         arrow.endX = closestPOI.x;
                         arrow.endY = closestPOI.y;
                         arrow.signal2Name = signal.name;
