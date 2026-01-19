@@ -1019,6 +1019,10 @@ class TimingGenApp {
                         this.currentEditingMeasureName = null;
                         this.canvas.style.cursor = 'default';
                         this.hideInstruction();
+                        
+                        // Restore original onMouseMove handler
+                        this.tool.onMouseMove = this.originalOnMouseMove;
+                        
                         this.render();
                     }
                 }
@@ -1041,6 +1045,10 @@ class TimingGenApp {
                         this.currentEditingMeasureName = null;
                         this.canvas.style.cursor = 'default';
                         this.hideInstruction();
+                        
+                        // Restore original onMouseMove handler
+                        this.tool.onMouseMove = this.originalOnMouseMove;
+                        
                         this.render();
                     }
                 }
@@ -1085,6 +1093,10 @@ class TimingGenApp {
                     this.measureState = null;
                     this.canvas.style.cursor = 'default';
                     this.hideInstruction();
+                    
+                    // Restore original onMouseMove handler
+                    this.tool.onMouseMove = this.originalOnMouseMove;
+                    
                     this.render();
                 }
             }
@@ -3387,6 +3399,10 @@ class TimingGenApp {
         this.measureState = pointIndex === 1 ? 'rechoose-point-1' : 'rechoose-point-2';
         this.canvas.style.cursor = 'crosshair';
         
+        // Set up onMouseMove handler for visual feedback
+        this.originalOnMouseMove = this.tool.onMouseMove;
+        this.tool.onMouseMove = (event) => this.handleMeasureMouseMove(event);
+        
         console.log('[startRechooseMeasurePoint] Entering rechoose mode for point', pointIndex);
         this.showInstruction(`Click to re-choose point ${pointIndex}`);
     }
@@ -3427,6 +3443,10 @@ class TimingGenApp {
         // Enable measure mode so handleMeasureMouseMove is called for visual feedback
         this.measureMode = true;
         this.measureState = null; // No specific measure state, just moving
+        
+        // Set up onMouseMove handler for visual feedback
+        this.originalOnMouseMove = this.tool.onMouseMove;
+        this.tool.onMouseMove = (event) => this.handleMeasureMouseMove(event);
     }
     
     handleNewDocument() {

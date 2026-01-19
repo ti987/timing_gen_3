@@ -880,32 +880,36 @@ class TimingGenRendering {
         } else {
             // Outward pointing arrows - split line with text in middle
             if (measure.text) {
-                // Left arrow segment
-                const leftLine = new paper.Path.Line({
-                    from: [minX, arrowY],
-                    to: [textX - textGap, arrowY],
-                    strokeColor: '#FF0000',
-                    strokeWidth: 2
-                });
-                leftLine.data = { type: 'arrow', measureIndex: index };
-                measureGroup.addChild(leftLine);
+                // Only draw line segments if they stay within the vbar bounds
+                // Left arrow segment - only draw if text is to the right of left vbar
+                if (textX - textGap > minX) {
+                    const leftLine = new paper.Path.Line({
+                        from: [minX, arrowY],
+                        to: [textX - textGap, arrowY],
+                        strokeColor: '#FF0000',
+                        strokeWidth: 2
+                    });
+                    leftLine.data = { type: 'arrow', measureIndex: index };
+                    measureGroup.addChild(leftLine);
+                }
                 
-                // Right arrow segment
-                const rightLine = new paper.Path.Line({
-                    from: [textX + textWidth + textGap, arrowY],
-                    to: [maxX, arrowY],
-                    strokeColor: '#FF0000',
-                    strokeWidth: 2
-                });
-                rightLine.data = { type: 'arrow', measureIndex: index };
-                measureGroup.addChild(rightLine);
+                // Right arrow segment - only draw if text is to the left of right vbar
+                if (textX + textWidth + textGap < maxX) {
+                    const rightLine = new paper.Path.Line({
+                        from: [textX + textWidth + textGap, arrowY],
+                        to: [maxX, arrowY],
+                        strokeColor: '#FF0000',
+                        strokeWidth: 2
+                    });
+                    rightLine.data = { type: 'arrow', measureIndex: index };
+                    measureGroup.addChild(rightLine);
+                }
                 
-                // Left arrow head
+                // Arrowheads always at vbar positions
                 const arrow1 = TimingGenRendering.drawArrowHead(minX, arrowY, 'left', arrowSize);
                 arrow1.data = { type: 'arrow', measureIndex: index };
                 measureGroup.addChild(arrow1);
                 
-                // Right arrow head
                 const arrow2 = TimingGenRendering.drawArrowHead(maxX, arrowY, 'right', arrowSize);
                 arrow2.data = { type: 'arrow', measureIndex: index };
                 measureGroup.addChild(arrow2);
