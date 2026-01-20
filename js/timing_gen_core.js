@@ -927,16 +927,14 @@ class TimingGenApp {
             return;
         }
         
-        // Calculate coordinates manually to avoid Paper.js coordinate transformation issues
-        // Use same approach as handleCanvasRightClick which works correctly
-        const rect = this.canvas.getBoundingClientRect();
-        const xPos = event.event.clientX - rect.left;
-        const yPos = event.event.clientY - rect.top;
-        const point = new paper.Point(xPos, yPos);
+        // Use Paper.js's event.point for accurate canvas coordinates
+        // This is the same approach used by measure handlers which work correctly
+        const xPos = event.point.x;
+        const yPos = event.point.y;
         
         // Check if clicking on a measure element (Paper.js tool handlers prevent item handlers from firing)
         // Use hitTestAll to get all items at the point, not just the topmost group
-        const hitResults = paper.project.hitTestAll(point, this.getHitTestOptions());
+        const hitResults = paper.project.hitTestAll(event.point, this.getHitTestOptions());
         
         if (hitResults && hitResults.length > 0) {
             // Look for arrow elements first
@@ -1490,10 +1488,9 @@ class TimingGenApp {
     }
     
     handleCanvasMouseDrag(event) {
-        // Calculate coordinates manually to avoid Paper.js coordinate transformation issues
-        const rect = this.canvas.getBoundingClientRect();
-        const xPos = event.event.clientX - rect.left;
-        const yPos = event.event.clientY - rect.top;
+        // Use Paper.js's event.point for accurate canvas coordinates
+        const xPos = event.point.x;
+        const yPos = event.point.y;
         
         // Handle arrow point dragging
         if (this.isDraggingArrowPoint && this.currentEditingArrowName) {
@@ -3802,10 +3799,9 @@ class TimingGenApp {
             this.tempArrowGraphics = null;
         }
         
-        // Calculate coordinates manually to avoid Paper.js coordinate transformation issues
-        const rect = this.canvas.getBoundingClientRect();
-        const mouseX = event.event.clientX - rect.left;
-        const mouseY = event.event.clientY - rect.top;
+        // Use Paper.js's event.point for accurate canvas coordinates
+        const mouseX = event.point.x;
+        const mouseY = event.point.y;
         
         const poi = this.findNearestPOI(mouseX, mouseY);
         if (poi) {
