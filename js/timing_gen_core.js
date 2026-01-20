@@ -130,6 +130,10 @@ class TimingGenApp {
         this.canvas.width = width;
         this.canvas.height = height;
         paper.view.viewSize = new paper.Size(width, height);
+        
+        // Force Paper.js to update its internal coordinate transformation
+        // This helps fix coordinate offset issues on some browsers (especially Linux/Chromium)
+        paper.view.update();
     }
     
     setupEventListeners() {
