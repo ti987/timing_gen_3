@@ -952,8 +952,13 @@ class TimingGenApp {
                     // If we found the arrow group and it has a handler, emit the event to it
                     if (arrowGroup && arrowGroup.onMouseDown) {
                         // Emit the mousedown event to the arrow group's handler
-                        // This allows the item's own handler to process the event with correct coordinates
-                        arrowGroup.emit('mousedown', event);
+                        // Pass the actual clicked item so the handler knows what was clicked
+                        const customEvent = {
+                            ...event,
+                            clickedItem: item,  // The actual item that was clicked
+                            target: item        // Set target to the clicked item for handler
+                        };
+                        arrowGroup.emit('mousedown', customEvent);
                         return;
                     }
                     
