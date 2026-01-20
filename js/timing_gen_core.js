@@ -4415,7 +4415,7 @@ window.addEventListener('DOMContentLoaded', () => {
     printData = function() {
         const app = window.timingGenApp;
         const data = {
-            version: '3.2.0',
+            version: '3.3.3',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,
