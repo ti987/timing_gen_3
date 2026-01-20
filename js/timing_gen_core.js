@@ -927,9 +927,16 @@ class TimingGenApp {
             return;
         }
         
+        // Calculate coordinates manually to avoid Paper.js coordinate transformation issues
+        // Use same approach as handleCanvasRightClick which works correctly
+        const rect = this.canvas.getBoundingClientRect();
+        const xPos = event.event.clientX - rect.left;
+        const yPos = event.event.clientY - rect.top;
+        const point = new paper.Point(xPos, yPos);
+        
         // Check if clicking on a measure element (Paper.js tool handlers prevent item handlers from firing)
         // Use hitTestAll to get all items at the point, not just the topmost group
-        const hitResults = paper.project.hitTestAll(event.point, this.getHitTestOptions());
+        const hitResults = paper.project.hitTestAll(point, this.getHitTestOptions());
         
         if (hitResults && hitResults.length > 0) {
             // Look for arrow elements first
@@ -1010,8 +1017,7 @@ class TimingGenApp {
             }
         }
         
-        const xPos = event.point.x;
-        const yPos = event.point.y;
+        // xPos and yPos already calculated above
         const nativeEvent = event.event;
         
         // Handle measure mode clicks
@@ -1484,17 +1490,19 @@ class TimingGenApp {
     }
     
     handleCanvasMouseDrag(event) {
+        // Calculate coordinates manually to avoid Paper.js coordinate transformation issues
+        const rect = this.canvas.getBoundingClientRect();
+        const xPos = event.event.clientX - rect.left;
+        const yPos = event.event.clientY - rect.top;
+        
         // Handle arrow point dragging
         if (this.isDraggingArrowPoint && this.currentEditingArrowName) {
-            const xPos = event.point.x;
-            const yPos = event.point.y;
             this.updateArrowPoint(this.currentEditingArrowName, this.draggingArrowPointIndex, xPos, yPos);
             return;
         }
         
         // Handle text dragging
         if (this.textDragState) {
-            const xPos = event.point.x;
             const textData = this.textData.get(this.textDragState.textName);
             if (textData) {
                 // Calculate new offset based on drag distance
@@ -1516,7 +1524,6 @@ class TimingGenApp {
         
         // Handle measure text dragging
         if (this.isDraggingMeasureText && this.draggingMeasure) {
-            const xPos = event.point.x;
             const deltaX = xPos - this.dragStartX;
             const newTextX = (this.originalTextX ?? 0) + deltaX;
             console.log('[Drag Move] deltaX:', deltaX, 'newTextX:', newTextX);
@@ -3795,8 +3802,10 @@ class TimingGenApp {
             this.tempArrowGraphics = null;
         }
         
-        const mouseX = event.point.x;
-        const mouseY = event.point.y;
+        // Calculate coordinates manually to avoid Paper.js coordinate transformation issues
+        const rect = this.canvas.getBoundingClientRect();
+        const mouseX = event.event.clientX - rect.left;
+        const mouseY = event.event.clientY - rect.top;
         
         const poi = this.findNearestPOI(mouseX, mouseY);
         if (poi) {
