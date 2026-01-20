@@ -937,13 +937,41 @@ class TimingGenApp {
         const hitResults = paper.project.hitTestAll(event.point, this.getHitTestOptions());
         
         if (hitResults && hitResults.length > 0) {
-            // Look for arrow elements first and emit events to their group handlers
+            // Look for arrow elements first, prioritizing control points over curves
+            // First pass: look for control points specifically
             for (const result of hitResults) {
                 const item = result.item;
                 
-                // Check if this is an arrow element
+                if (item.data && item.data.arrowName && item.data.type === 'arrow-control-point') {
+                    // Found a control point - prioritize this
+                    let arrowGroup = item;
+                    while (arrowGroup && (!arrowGroup.data || arrowGroup.data.type !== 'arrow')) {
+                        arrowGroup = arrowGroup.parent;
+                    }
+                    
+                    if (arrowGroup && arrowGroup.onMouseDown) {
+                        const customEvent = {
+                            ...event,
+                            clickedItem: item,
+                            target: item
+                        };
+                        arrowGroup.emit('mousedown', customEvent);
+                        return;
+                    }
+                    
+                    // Fallback: handle directly
+                    this.startDraggingArrowPoint(item.data.arrowName, item.data.pointIndex, event);
+                    return;
+                }
+            }
+            
+            // Second pass: look for other arrow elements (curves, etc)
+            for (const result of hitResults) {
+                const item = result.item;
+                
+                // Check if this is an arrow element (but not control point which we handled above)
                 if (item.data && item.data.arrowName) {
-                    // Find the arrow group (parent with type='arrow')
+                    // Find the arrow group
                     let arrowGroup = item;
                     while (arrowGroup && (!arrowGroup.data || arrowGroup.data.type !== 'arrow')) {
                         arrowGroup = arrowGroup.parent;
@@ -951,12 +979,10 @@ class TimingGenApp {
                     
                     // If we found the arrow group and it has a handler, emit the event to it
                     if (arrowGroup && arrowGroup.onMouseDown) {
-                        // Emit the mousedown event to the arrow group's handler
-                        // Pass the actual clicked item so the handler knows what was clicked
                         const customEvent = {
                             ...event,
-                            clickedItem: item,  // The actual item that was clicked
-                            target: item        // Set target to the clicked item for handler
+                            clickedItem: item,
+                            target: item
                         };
                         arrowGroup.emit('mousedown', customEvent);
                         return;
@@ -964,11 +990,7 @@ class TimingGenApp {
                     
                     // Fallback: handle directly if group not found or no handler
                     const arrowName = item.data.arrowName;
-                    if (item.data.type === 'arrow-control-point') {
-                        // Start dragging control point
-                        this.startDraggingArrowPoint(arrowName, item.data.pointIndex, event);
-                        return;
-                    } else if (item.data.type === 'arrow-curve' || item.data.type === 'arrow-curve-visual' || 
+                    if (item.data.type === 'arrow-curve' || item.data.type === 'arrow-curve-visual' || 
                                item.data.type === 'arrow-start' || item.data.type === 'arrow-head') {
                         // Toggle edit mode for the arrow
                         if (this.arrowEditMode && this.currentEditingArrowName === arrowName) {
