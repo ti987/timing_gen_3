@@ -937,14 +937,28 @@ class TimingGenApp {
         const hitResults = paper.project.hitTestAll(event.point, this.getHitTestOptions());
         
         if (hitResults && hitResults.length > 0) {
-            // Look for arrow elements first
+            // Look for arrow elements first and emit events to their group handlers
             for (const result of hitResults) {
                 const item = result.item;
                 
                 // Check if this is an arrow element
                 if (item.data && item.data.arrowName) {
-                    const arrowName = item.data.arrowName;
+                    // Find the arrow group (parent with type='arrow')
+                    let arrowGroup = item;
+                    while (arrowGroup && (!arrowGroup.data || arrowGroup.data.type !== 'arrow')) {
+                        arrowGroup = arrowGroup.parent;
+                    }
                     
+                    // If we found the arrow group and it has a handler, emit the event to it
+                    if (arrowGroup && arrowGroup.onMouseDown) {
+                        // Emit the mousedown event to the arrow group's handler
+                        // This allows the item's own handler to process the event with correct coordinates
+                        arrowGroup.emit('mousedown', event);
+                        return;
+                    }
+                    
+                    // Fallback: handle directly if group not found or no handler
+                    const arrowName = item.data.arrowName;
                     if (item.data.type === 'arrow-control-point') {
                         // Start dragging control point
                         this.startDraggingArrowPoint(arrowName, item.data.pointIndex, event);
