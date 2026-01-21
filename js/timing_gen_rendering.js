@@ -1004,7 +1004,7 @@ class TimingGenRendering {
             null
         ));
         hitArea.strokeColor = new paper.Color(0, 0, 0, 0.01);  // Almost transparent but still registers hits
-        hitArea.strokeWidth = 20;  // Much wider for easier clicking (20px instead of 12px)
+        hitArea.strokeWidth = 10;  // Transparent hit area for easier clicking
         hitArea.data = { type: 'arrow-curve', arrowName: arrowName };
         arrowGroup.addChild(hitArea);
         
@@ -1129,6 +1129,9 @@ class TimingGenRendering {
         
         // Make the group interactive
         arrowGroup.onMouseDown = function(event) {
+            // Stop event propagation to prevent multiple invocations
+            event.stopPropagation();
+            
             if (event.event.button === 0) {
                 // Left click - check what was clicked
                 // Use clickedItem passed from tool handler, fallback to event.target
