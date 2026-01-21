@@ -1134,10 +1134,17 @@ class TimingGenRendering {
                 event.event.stopPropagation();
             }
             
+            // Do hit testing to find what was actually clicked
+            const hitResult = arrowGroup.hitTest(event.point, {
+                fill: true,
+                stroke: true,
+                tolerance: 0
+            });
+            
+            const clickedItem = hitResult ? hitResult.item : event.target;
+            
             if (event.event.button === 0) {
                 // Left click - check what was clicked
-                // Use clickedItem passed from tool handler, fallback to event.target
-                const clickedItem = event.clickedItem || event.target;
                 if (clickedItem.data && clickedItem.data.type === 'arrow-control-point') {
                     // Start dragging control point
                     app.startDraggingArrowPoint(arrowName, clickedItem.data.pointIndex, event);
@@ -1151,7 +1158,6 @@ class TimingGenRendering {
                 }
             } else if (event.event.button === 2) {
                 // Right click - check what was clicked
-                const clickedItem = event.clickedItem || event.target;
                 if (clickedItem.data && clickedItem.data.type === 'arrow-text') {
                     // Show text context menu
                     app.currentEditingArrowName = arrowName;
