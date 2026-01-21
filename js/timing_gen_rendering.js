@@ -1161,6 +1161,9 @@ class TimingGenRendering {
                     app.showArrowContextMenu(event.event, arrowName);
                 }
             }
+            
+            // Return false to prevent Paper.js event bubbling to parent/children
+            return false;
         };
     }
     
