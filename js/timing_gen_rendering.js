@@ -1130,7 +1130,9 @@ class TimingGenRendering {
         // Make the group interactive
         arrowGroup.onMouseDown = function(event) {
             // Stop event propagation to prevent multiple invocations
-            event.stopPropagation();
+            if (event.event && event.event.stopPropagation) {
+                event.event.stopPropagation();
+            }
             
             if (event.event.button === 0) {
                 // Left click - check what was clicked
