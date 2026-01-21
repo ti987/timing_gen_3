@@ -966,11 +966,21 @@ class TimingGenApp {
             }
             
             // Second pass: look for other arrow elements (curves, etc)
+            // Track which arrow groups we've already handled to avoid multiple invocations
+            const handledArrows = new Set();
+            
             for (const result of hitResults) {
                 const item = result.item;
                 
                 // Check if this is an arrow element (but not control point which we handled above)
                 if (item.data && item.data.arrowName) {
+                    const arrowName = item.data.arrowName;
+                    
+                    // Skip if we've already handled this arrow in this click
+                    if (handledArrows.has(arrowName)) {
+                        continue;
+                    }
+                    
                     // Find the arrow group
                     let arrowGroup = item;
                     while (arrowGroup && (!arrowGroup.data || arrowGroup.data.type !== 'arrow')) {
@@ -979,6 +989,9 @@ class TimingGenApp {
                     
                     // If we found the arrow group and it has a handler, emit the event to it
                     if (arrowGroup && arrowGroup.onMouseDown) {
+                        // Mark this arrow as handled
+                        handledArrows.add(arrowName);
+                        
                         const customEvent = {
                             ...event,
                             clickedItem: item,
@@ -989,9 +1002,11 @@ class TimingGenApp {
                     }
                     
                     // Fallback: handle directly if group not found or no handler
-                    const arrowName = item.data.arrowName;
                     if (item.data.type === 'arrow-curve' || item.data.type === 'arrow-curve-visual' || 
                                item.data.type === 'arrow-start' || item.data.type === 'arrow-head') {
+                        // Mark this arrow as handled
+                        handledArrows.add(arrowName);
+                        
                         // Toggle edit mode for the arrow
                         if (this.arrowEditMode && this.currentEditingArrowName === arrowName) {
                             this.stopEditingArrow();
