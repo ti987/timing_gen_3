@@ -1093,6 +1093,32 @@ class TimingGenRendering {
                     fillColor: new paper.Color(0, 0, 0, 0.01)  // Almost transparent but still registers hits
                 });
                 hitArea.data = { type: 'arrow-control-point', arrowName: arrowName, pointIndex: point.index };
+                
+                // Add event handlers directly to the control point hit area
+                hitArea.onMouseDown = function(event) {
+                    if (event.event && event.event.stopPropagation) {
+                        event.event.stopPropagation();
+                    }
+                    if (event.event.button === 0) {
+                        app.startDraggingArrowPoint(arrowName, point.index, event);
+                    }
+                    return false;
+                };
+                
+                hitArea.onMouseDrag = function(event) {
+                    if (app.draggingArrowPoint && app.draggingArrowPoint.arrowName === arrowName) {
+                        app.handleCanvasMouseDrag(event);
+                    }
+                    return false;
+                };
+                
+                hitArea.onMouseUp = function(event) {
+                    if (app.draggingArrowPoint && app.draggingArrowPoint.arrowName === arrowName) {
+                        app.draggingArrowPoint = null;
+                    }
+                    return false;
+                };
+                
                 arrowGroup.addChild(hitArea);
                 
                 // Draw visible square on top (also larger)
@@ -1127,7 +1153,7 @@ class TimingGenRendering {
             arrowGroup.addChild(ctrlLine2);
         }
         
-        // Make the group interactive
+        // Make the group interactive (control points have their own handlers)
         arrowGroup.onMouseDown = function(event) {
             // Stop event propagation to prevent multiple invocations
             if (event.event && event.event.stopPropagation) {
@@ -1144,17 +1170,12 @@ class TimingGenRendering {
             const clickedItem = hitResult ? hitResult.item : event.target;
             
             if (event.event.button === 0) {
-                // Left click - check what was clicked
-                if (clickedItem.data && clickedItem.data.type === 'arrow-control-point') {
-                    // Start dragging control point
-                    app.startDraggingArrowPoint(arrowName, clickedItem.data.pointIndex, event);
+                // Left click - toggle edit mode for the arrow
+                // (control points handle their own clicks via their own handlers)
+                if (app.arrowEditMode && app.currentEditingArrowName === arrowName) {
+                    app.stopEditingArrow();
                 } else {
-                    // Toggle edit mode for the arrow
-                    if (app.arrowEditMode && app.currentEditingArrowName === arrowName) {
-                        app.stopEditingArrow();
-                    } else {
-                        app.startEditingArrow(arrowName);
-                    }
+                    app.startEditingArrow(arrowName);
                 }
             } else if (event.event.button === 2) {
                 // Right click - check what was clicked
