@@ -955,7 +955,7 @@ class TimingGenApp {
                             clickedItem: item,
                             target: item
                         };
-                        arrowGroup.emit('mousedown', customEvent);
+                        //arrowGroup.emit('mousedown', customEvent);
                         return;
                     }
                     
@@ -997,7 +997,7 @@ class TimingGenApp {
                             clickedItem: item,
                             target: item
                         };
-                        arrowGroup.emit('mousedown', customEvent);
+                        //arrowGroup.emit('mousedown', customEvent);
                         return;
                     }
                     

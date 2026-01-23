@@ -1119,7 +1119,7 @@ class TimingGenRendering {
                     return false;
                 };
                 
-                arrowGroup.addChild(hitArea);
+                //arrowGroup.addChild(hitArea);
                 
                 // Draw visible square on top (also larger)
                 const square = new paper.Path.Rectangle({
@@ -1130,7 +1130,7 @@ class TimingGenRendering {
                     strokeWidth: 1
                 });
                 square.data = { type: 'arrow-control-point-visual', arrowName: arrowName, pointIndex: point.index };
-                arrowGroup.addChild(square);
+                //arrowGroup.addChild(square);
             });
             
             // Draw lines from control points to their respective endpoints
