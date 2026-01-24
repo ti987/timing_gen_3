@@ -250,6 +250,34 @@ class TimingGenApp {
         document.getElementById('ac-table-dialog-ok-btn').addEventListener('click', () => this.addACTable());
         document.getElementById('ac-table-dialog-cancel-btn').addEventListener('click', () => this.hideAddACTableDialog());
         
+        // AC Table cell edit dialog
+        document.getElementById('edit-ac-cell-ok-btn').addEventListener('click', () => this.updateACCell());
+        document.getElementById('edit-ac-cell-cancel-btn').addEventListener('click', () => this.hideEditACCellDialog());
+        
+        // AC Table cell font dialog
+        document.getElementById('ac-cell-font-ok-btn').addEventListener('click', () => this.updateACCellFont());
+        document.getElementById('ac-cell-font-cancel-btn').addEventListener('click', () => this.hideACCellFontDialog());
+        
+        // AC Table row span dialog
+        document.getElementById('ac-rowspan-ok-btn').addEventListener('click', () => this.updateACRowSpan());
+        document.getElementById('ac-rowspan-cancel-btn').addEventListener('click', () => this.hideACRowSpanDialog());
+        
+        // AC Table context menus
+        document.getElementById('edit-ac-cell-menu').addEventListener('click', () => this.showEditACCellDialog());
+        document.getElementById('font-ac-cell-menu').addEventListener('click', () => this.showACCellFontDialog());
+        document.getElementById('cancel-ac-cell-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        document.getElementById('edit-ac-param-menu').addEventListener('click', () => this.showEditACCellDialog());
+        document.getElementById('font-ac-param-menu').addEventListener('click', () => this.showACCellFontDialog());
+        document.getElementById('rowspan-ac-param-menu').addEventListener('click', () => this.showACRowSpanDialog());
+        document.getElementById('delete-ac-param-menu').addEventListener('click', () => this.deleteACTableRow());
+        document.getElementById('cancel-ac-param-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        document.getElementById('move-ac-table-top-menu').addEventListener('click', () => this.moveACTableTo('top'));
+        document.getElementById('move-ac-table-bottom-menu').addEventListener('click', () => this.moveACTableTo('bottom'));
+        document.getElementById('delete-ac-table-menu').addEventListener('click', () => this.deleteCurrentACTable());
+        document.getElementById('cancel-ac-table-menu').addEventListener('click', () => this.hideAllMenus());
+        
         // Measure context menu
         document.getElementById('delete-measure-menu').addEventListener('click', () => this.deleteMeasure());
         document.getElementById('cancel-measure-menu').addEventListener('click', () => this.hideAllMenus());
@@ -986,6 +1014,246 @@ class TimingGenApp {
         }
     }
     
+    // AC Table cell editing methods
+    
+    showEditACCellDialog() {
+        if (this.currentEditingACCell) {
+            const { tableName, cellType, rowIndex, colName } = this.currentEditingACCell;
+            const tableData = this.acTablesData.get(tableName);
+            
+            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
+                const row = tableData.rows[rowIndex];
+                let currentValue = '';
+                
+                if (cellType === 'data') {
+                    currentValue = row[colName] || '';
+                } else if (cellType === 'note') {
+                    const noteData = tableData.notes.find(n => n.number === colName);
+                    currentValue = noteData ? noteData.text : '';
+                }
+                
+                document.getElementById('edit-ac-cell-input').value = currentValue;
+                document.getElementById('edit-ac-cell-dialog').style.display = 'flex';
+            }
+        }
+        this.hideAllMenus();
+    }
+    
+    hideEditACCellDialog() {
+        document.getElementById('edit-ac-cell-dialog').style.display = 'none';
+        this.currentEditingACCell = null;
+    }
+    
+    updateACCell() {
+        if (this.currentEditingACCell) {
+            const { tableName, cellType, rowIndex, colName } = this.currentEditingACCell;
+            const tableData = this.acTablesData.get(tableName);
+            const newValue = document.getElementById('edit-ac-cell-input').value.trim();
+            
+            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
+                const row = tableData.rows[rowIndex];
+                
+                if (cellType === 'data') {
+                    // Update cell value
+                    row[colName] = newValue;
+                    
+                    // Mark as manually edited
+                    if (row.manuallyEdited) {
+                        row.manuallyEdited[colName] = true;
+                    }
+                    
+                    // If symbol changed, update measure text (unless measure text was manually edited)
+                    if (colName === 'symbol' && row.measureName) {
+                        const measure = this.measuresData.get(row.measureName);
+                        if (measure) {
+                            measure.text = newValue;
+                        }
+                    }
+                    
+                    // If note column, validate it's integers with commas
+                    if (colName === 'note' && newValue) {
+                        const numbers = newValue.split(',').map(n => n.trim()).filter(n => n);
+                        const allValid = numbers.every(n => /^\d+$/.test(n));
+                        if (!allValid) {
+                            alert('Note column must contain only integers separated by commas');
+                            return;
+                        }
+                        
+                        // Update note field - add any new note numbers
+                        numbers.forEach(num => {
+                            if (!tableData.notes.find(n => n.number === num)) {
+                                tableData.notes.push({ number: num, text: '' });
+                            }
+                        });
+                        
+                        // Sort notes by number
+                        tableData.notes.sort((a, b) => parseInt(a.number) - parseInt(b.number));
+                    }
+                } else if (cellType === 'note') {
+                    // Update note text
+                    let noteData = tableData.notes.find(n => n.number === colName);
+                    if (noteData) {
+                        noteData.text = newValue;
+                    } else {
+                        tableData.notes.push({ number: colName, text: newValue });
+                    }
+                }
+                
+                this.hideEditACCellDialog();
+                this.render();
+            }
+        }
+    }
+    
+    showACCellFontDialog() {
+        if (this.currentEditingACCell) {
+            const { tableName, rowIndex } = this.currentEditingACCell;
+            const tableData = this.acTablesData.get(tableName);
+            
+            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
+                const row = tableData.rows[rowIndex];
+                document.getElementById('ac-cell-font-family-select').value = row.fontFamily || 'Arial';
+                document.getElementById('ac-cell-font-size-input').value = row.fontSize || 12;
+                document.getElementById('ac-cell-font-color-input').value = row.color || '#000000';
+                document.getElementById('ac-cell-font-dialog').style.display = 'flex';
+            }
+        }
+        this.hideAllMenus();
+    }
+    
+    hideACCellFontDialog() {
+        document.getElementById('ac-cell-font-dialog').style.display = 'none';
+    }
+    
+    updateACCellFont() {
+        if (this.currentEditingACCell) {
+            const { tableName, rowIndex } = this.currentEditingACCell;
+            const tableData = this.acTablesData.get(tableName);
+            
+            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
+                const row = tableData.rows[rowIndex];
+                row.fontFamily = document.getElementById('ac-cell-font-family-select').value;
+                row.fontSize = parseInt(document.getElementById('ac-cell-font-size-input').value);
+                row.color = document.getElementById('ac-cell-font-color-input').value;
+                
+                this.hideACCellFontDialog();
+                this.render();
+            }
+        }
+    }
+    
+    showACRowSpanDialog() {
+        if (this.currentEditingACCell) {
+            const { tableName, rowIndex } = this.currentEditingACCell;
+            const tableData = this.acTablesData.get(tableName);
+            
+            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
+                const row = tableData.rows[rowIndex];
+                const currentRowSpan = row.rowSpan || 1;
+                
+                // Set radio button based on current rowSpan
+                const radio1 = document.querySelector('input[name="rowspan"][value="1"]');
+                const radio2 = document.querySelector('input[name="rowspan"][value="2"]');
+                if (currentRowSpan === 2) {
+                    radio2.checked = true;
+                } else {
+                    radio1.checked = true;
+                }
+                
+                document.getElementById('ac-rowspan-dialog').style.display = 'flex';
+            }
+        }
+        this.hideAllMenus();
+    }
+    
+    hideACRowSpanDialog() {
+        document.getElementById('ac-rowspan-dialog').style.display = 'none';
+    }
+    
+    updateACRowSpan() {
+        if (this.currentEditingACCell) {
+            const { tableName, rowIndex } = this.currentEditingACCell;
+            const tableData = this.acTablesData.get(tableName);
+            
+            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
+                const row = tableData.rows[rowIndex];
+                const selectedRowSpan = document.querySelector('input[name="rowspan"]:checked').value;
+                row.rowSpan = parseInt(selectedRowSpan);
+                
+                this.hideACRowSpanDialog();
+                this.render();
+            }
+        }
+    }
+    
+    deleteACTableRow() {
+        if (this.currentEditingACCell) {
+            const { tableName, rowIndex } = this.currentEditingACCell;
+            const tableData = this.acTablesData.get(tableName);
+            
+            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
+                if (confirm('Delete this row from the AC table?')) {
+                    tableData.rows.splice(rowIndex, 1);
+                    this.hideAllMenus();
+                    this.render();
+                }
+            }
+        }
+    }
+    
+    moveACTableTo(position) {
+        if (this.currentEditingACTable) {
+            this.moveACTableToPosition(this.currentEditingACTable, position);
+            this.hideAllMenus();
+        }
+    }
+    
+    deleteCurrentACTable() {
+        if (this.currentEditingACTable) {
+            if (confirm('Delete this AC table?')) {
+                this.deleteACTable(this.currentEditingACTable);
+                this.hideAllMenus();
+            }
+        }
+    }
+    
+    flashMeasure(measureName) {
+        // Flash the measure corresponding to the measureName
+        const measure = this.measuresData.get(measureName);
+        if (!measure) return;
+        
+        // Find measure row index
+        const rowIndex = this.rows.findIndex(r => r.type === 'measure' && r.name === measureName);
+        if (rowIndex < 0) return;
+        
+        // Create a temporary flashing effect
+        // Store original render state
+        const originalRender = TimingGenRendering.render;
+        let flashCount = 0;
+        const maxFlashes = 3;
+        
+        const flashInterval = setInterval(() => {
+            if (flashCount >= maxFlashes * 2) {
+                clearInterval(flashInterval);
+                this.render(); // Final render to ensure normal state
+                return;
+            }
+            
+            // Toggle visibility by re-rendering with different color
+            const isVisible = flashCount % 2 === 0;
+            
+            // Temporarily change measure color for flashing effect
+            if (measure) {
+                const originalColor = measure.textColor || '#FF0000';
+                measure.textColor = isVisible ? '#FFFF00' : originalColor; // Flash yellow
+                this.render();
+                measure.textColor = originalColor;
+            }
+            
+            flashCount++;
+        }, 200);
+    }
+    
     addSignal() {
         const name = document.getElementById('signal-name-input').value.trim();
         const type = document.getElementById('signal-type-select').value;
@@ -1227,6 +1495,17 @@ class TimingGenApp {
                         }
                         return;
                     }
+                }
+            }
+            
+            // Check for AC Table cell clicks (before measure check)
+            for (const result of hitResults) {
+                const item = result.item;
+                
+                if (item.data && item.data.type === 'ac-table-cell' && item.data.measureName) {
+                    // Left-click on AC Table cell - flash the corresponding measure
+                    this.flashMeasure(item.data.measureName);
+                    return;
                 }
             }
             
@@ -1686,6 +1965,49 @@ class TimingGenApp {
                 // Right-click on text row - show text context menu
                 this.currentEditingText = row.name;
                 TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
+                return;
+            } else if (row.type === 'ac-table') {
+                // Right-click on AC Table - check what was clicked
+                if (hitResults && hitResults.length > 0) {
+                    for (const result of hitResults) {
+                        const item = result.item;
+                        
+                        if (item.data && item.data.tableName === row.name) {
+                            if (item.data.type === 'ac-table-cell') {
+                                // Right-click on a cell
+                                this.currentEditingACCell = {
+                                    tableName: row.name,
+                                    cellType: 'data',
+                                    rowIndex: item.data.rowIndex,
+                                    colIndex: item.data.colIndex,
+                                    colName: ['parameter', 'symbol', 'min', 'max', 'unit', 'note'][item.data.colIndex]
+                                };
+                                
+                                // Show parameter context menu if it's parameter column (index 0)
+                                if (item.data.colIndex === 0) {
+                                    TimingGenUI.showContextMenu('ac-param-context-menu', ev.clientX, ev.clientY);
+                                } else {
+                                    TimingGenUI.showContextMenu('ac-cell-context-menu', ev.clientX, ev.clientY);
+                                }
+                                return;
+                            } else if (item.data.type === 'ac-table-note-text') {
+                                // Right-click on note field text
+                                this.currentEditingACCell = {
+                                    tableName: row.name,
+                                    cellType: 'note',
+                                    colName: item.data.noteNum
+                                };
+                                TimingGenUI.showContextMenu('ac-cell-context-menu', ev.clientX, ev.clientY);
+                                return;
+                            } else if (item.data.type === 'ac-table-title' || item.data.type === 'ac-table-border') {
+                                // Right-click on table title or border - show table menu
+                                this.currentEditingACTable = row.name;
+                                TimingGenUI.showContextMenu('ac-table-context-menu', ev.clientX, ev.clientY);
+                                return;
+                            }
+                        }
+                    }
+                }
                 return;
             } else if (row.type === 'measure') {
                 // Right-click on measure row - check what element was clicked
@@ -3706,6 +4028,9 @@ class TimingGenApp {
         // Store measure in Map
         this.measuresData.set(this.currentMeasure.name, this.currentMeasure);
         
+        // Add row to all existing AC tables
+        this.addACTableRowForMeasure(this.currentMeasure.name, this.currentMeasure);
+        
         // Insert new measure row
         this.rows.splice(measureRowIndex, 0, {
             type: 'measure',
@@ -3823,6 +4148,9 @@ class TimingGenApp {
         if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
             const measureToDelete = measures[this.currentEditingMeasure];
             const measureName = measureToDelete.name;
+            
+            // Remove from AC tables first
+            this.removeACTableRowForMeasure(measureName);
             
             // Remove from Map
             this.measuresData.delete(measureName);
@@ -4659,6 +4987,9 @@ class TimingGenApp {
             
             const row = this.rows[this.currentEditingMeasureRow];
             if (row && row.type === 'measure') {
+                // Remove from AC tables first
+                this.removeACTableRowForMeasure(row.name);
+                
                 // Remove from measures data
                 this.measuresData.delete(row.name);
                 // Remove from rows array
