@@ -1088,11 +1088,11 @@ class TimingGenRendering {
                         arrowName: arrowName,
                         startX: event.point.x,
                         startY: event.point.y,
-                        originalTextX: textX,
-                        originalTextY: textY
+                        originalTextX: this.getPosition().x, //textX,
+                        originalTextY: this.getPosition().y, //textY
                     };
                 }
-                return false;
+                return; // false;
             };
             
             text.onMouseDrag = function(event) {
@@ -1107,7 +1107,7 @@ class TimingGenRendering {
                     text.position = new paper.Point(newTextX, newTextY);
                     
                     // Update text position in arrow object
-                    const arrow = app.arrows[arrowName];
+                    const arrow = app.arrowsData.get(arrowName);
                     if (arrow) {
                         arrow.textX = newTextX;
                         arrow.textY = newTextY;
