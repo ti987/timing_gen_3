@@ -1223,9 +1223,10 @@ class TimingGenRendering {
             if (event.event.button === 0) {
                 // Left click
                 // Skip handling if text was clicked (let text handle its own drag)
+                // Don't return false - just don't handle it, allowing event to propagate to text
                 if (clickedItem.data && clickedItem.data.type === 'arrow-text') {
-                    // Let text drag handler handle this
-                    return false;
+                    // Don't handle this event, let it propagate to text naturally
+                    return;  // Don't return false, just return undefined to allow propagation
                 }
                 
                 // Toggle edit mode for the arrow
