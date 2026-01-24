@@ -1,10 +1,10 @@
 // Timing Gen 3 - Data Management Module
-// Version 3.3.4
+// Version 3.4.0
 // Handles save/load functionality and data import/export
 
 class TimingGenData {
     static saveToJSON(app) {
-        // Save in unified row-based format (v3.3.4)
+        // Save in unified row-based format (v3.4.0)
         // Embed actual data from Maps into rows for serialization
         const rowsWithData = app.rows.map(row => {
             if (row.type === 'signal') {
@@ -53,7 +53,7 @@ class TimingGenData {
         }
         
         const data = {
-            version: '3.3.4',
+            version: '3.4.0',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,

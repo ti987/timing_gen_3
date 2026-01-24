@@ -1,5 +1,5 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Version 3.3.4
+// Version 3.4.0
 // Main JavaScript Application using Paper.js
 //
 // Key Features:
@@ -43,7 +43,7 @@ class TimingGenApp {
             backgroundColor: '#ffffff'
         };
         
-        // Data model v3.3.4 - Extended with AC Table widget
+        // Data model v3.4.0 - Extended with AC Table widget
         // rows: defines order only - Array of {type: 'signal'|'measure'|'text'|'counter'|'ac-table', name: string}
         // signalsData: Map<name, signalObject> - actual signal data
         // measuresData: Map<name, measureObject> - actual measure data
