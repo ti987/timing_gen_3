@@ -1077,6 +1077,12 @@ class TimingGenRendering {
             });
             text.data = { type: 'arrow-text', arrowName: arrowName };
             
+            // Highlight text if this arrow is in edit mode
+            if (app.arrowEditMode && app.currentEditingArrowName === arrowName) {
+                text.fillColor = '#FF0000';  // Red color for highlighting
+                text.fontWeight = 'bold';     // Make it bold
+            }
+            
             // Add drag handlers to make text draggable
             text.onMouseDown = function(event) {
                 if (event.event && event.event.stopPropagation) {
