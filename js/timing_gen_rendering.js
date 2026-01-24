@@ -1,5 +1,5 @@
 // Timing Gen 3 - Rendering Module
-// Version 3.3.3
+// Version 3.3.4
 // Handles all waveform rendering functionality using Paper.js
 
 class TimingGenRendering {
@@ -27,7 +27,7 @@ class TimingGenRendering {
             TimingGenRendering.drawHeader(app);
         }
         
-        // Draw rows (signals, measures, text, counter) from unified rows array
+        // Draw rows (signals, measures, text, counter, ac-table) from unified rows array
         if (app.rows && app.rows.length > 0) {
             app.rows.forEach((row, rowIndex) => {
                 if (row.type === 'signal') {
@@ -65,6 +65,13 @@ class TimingGenRendering {
                     const counterData = app.counterData.get(row.name);
                     if (counterData) {
                         TimingGenRendering.drawCounterRow(app, counterData, rowIndex);
+                    }
+                } else if (row.type === 'ac-table') {
+                    // Draw AC Table widget - get data from Map
+                    app.signalLayer.activate();
+                    const acTableData = app.acTablesData.get(row.name);
+                    if (acTableData) {
+                        TimingGenRendering.drawACTable(app, acTableData, row.name, rowIndex);
                     }
                 }
             });
@@ -1478,5 +1485,237 @@ class TimingGenRendering {
         }
         
         return labels;
+    }
+    
+    // ========================================
+    // AC Table Drawing
+    // ========================================
+    
+    static drawACTable(app, tableData, tableName, rowIndex) {
+        const yPos = app.rowManager.getRowYPosition(rowIndex);
+        const tableWidth = 900; // Fixed total width
+        const cellPadding = 5;
+        const rowHeight = 25;
+        const titleHeight = 30;
+        const headerHeight = 25;
+        
+        // Calculate column positions based on column widths
+        const colWidths = tableData.columnWidths || [400, 100, 100, 100, 100, 100];
+        const colPositions = [0];
+        for (let i = 0; i < colWidths.length; i++) {
+            colPositions.push(colPositions[i] + colWidths[i]);
+        }
+        
+        const startX = app.config.nameColumnWidth + 10;
+        const startY = yPos;
+        
+        // Draw title
+        const titleText = new paper.PointText({
+            point: [startX, startY + titleHeight / 2 + 5],
+            content: tableData.title || 'Read Cycle',
+            fillColor: tableData.titleColor || '#000000',
+            fontFamily: tableData.titleFont || 'Arial',
+            fontSize: tableData.titleSize || 14,
+            fontWeight: 'bold'
+        });
+        titleText.data = { 
+            type: 'ac-table-title', 
+            tableName: tableName 
+        };
+        
+        // Draw table border
+        const tableHeight = titleHeight + headerHeight + (tableData.rows.length * rowHeight) + 100; // Extra for notes
+        const tableBorder = new paper.Path.Rectangle({
+            point: [startX, startY + titleHeight],
+            size: [tableWidth, tableHeight],
+            strokeColor: '#000000',
+            strokeWidth: 1
+        });
+        tableBorder.data = { 
+            type: 'ac-table-border', 
+            tableName: tableName 
+        };
+        
+        // Draw header row background
+        const headerBg = new paper.Path.Rectangle({
+            point: [startX, startY + titleHeight],
+            size: [tableWidth, headerHeight],
+            fillColor: '#f0f0f0',
+            strokeColor: '#000000',
+            strokeWidth: 1
+        });
+        headerBg.data = { 
+            type: 'ac-table-header-bg', 
+            tableName: tableName 
+        };
+        
+        // Draw column dividers in header
+        const headers = ['Parameter', 'Symbol', 'Min.', 'Max.', 'Unit', 'Note'];
+        for (let i = 0; i <= colWidths.length; i++) {
+            const x = startX + colPositions[i];
+            const divider = new paper.Path.Line({
+                from: [x, startY + titleHeight],
+                to: [x, startY + titleHeight + headerHeight],
+                strokeColor: '#000000',
+                strokeWidth: 1
+            });
+            divider.data = { 
+                type: 'ac-table-col-divider', 
+                tableName: tableName,
+                colIndex: i
+            };
+            
+            // Draw header text
+            if (i < headers.length) {
+                const headerText = new paper.PointText({
+                    point: [x + cellPadding, startY + titleHeight + headerHeight / 2 + 5],
+                    content: headers[i],
+                    fillColor: tableData.headerColor || '#000000',
+                    fontFamily: tableData.headerFont || 'Arial',
+                    fontSize: tableData.headerSize || 12,
+                    fontWeight: 'bold'
+                });
+                headerText.data = { 
+                    type: 'ac-table-header-text', 
+                    tableName: tableName,
+                    colIndex: i
+                };
+            }
+        }
+        
+        // Draw data rows
+        let currentY = startY + titleHeight + headerHeight;
+        tableData.rows.forEach((row, dataRowIndex) => {
+            const actualRowHeight = rowHeight * (row.rowSpan || 1);
+            
+            // Draw row border
+            const rowBorder = new paper.Path.Rectangle({
+                point: [startX, currentY],
+                size: [tableWidth, actualRowHeight],
+                strokeColor: '#000000',
+                strokeWidth: 1
+            });
+            rowBorder.data = { 
+                type: 'ac-table-row-border', 
+                tableName: tableName,
+                rowIndex: dataRowIndex
+            };
+            
+            // Draw column dividers for this row
+            for (let i = 0; i <= colWidths.length; i++) {
+                const x = startX + colPositions[i];
+                const divider = new paper.Path.Line({
+                    from: [x, currentY],
+                    to: [x, currentY + actualRowHeight],
+                    strokeColor: '#000000',
+                    strokeWidth: 1
+                });
+                divider.data = { 
+                    type: 'ac-table-col-divider', 
+                    tableName: tableName,
+                    rowIndex: dataRowIndex,
+                    colIndex: i
+                };
+            }
+            
+            // Draw cell contents
+            const cellData = [
+                row.parameter || '',
+                row.symbol || '',
+                row.min || '',
+                row.max || '',
+                row.unit || '',
+                row.note || ''
+            ];
+            
+            cellData.forEach((content, colIndex) => {
+                if (content) {
+                    const x = startX + colPositions[colIndex] + cellPadding;
+                    const y = currentY + actualRowHeight / 2 + 5;
+                    
+                    const cellText = new paper.PointText({
+                        point: [x, y],
+                        content: String(content),
+                        fillColor: row.color || tableData.cellColor || '#000000',
+                        fontFamily: row.fontFamily || tableData.cellFont || 'Arial',
+                        fontSize: row.fontSize || tableData.cellSize || 12
+                    });
+                    cellText.data = { 
+                        type: 'ac-table-cell', 
+                        tableName: tableName,
+                        rowIndex: dataRowIndex,
+                        colIndex: colIndex,
+                        measureName: row.measureName
+                    };
+                }
+            });
+            
+            currentY += actualRowHeight;
+        });
+        
+        // Draw note field at the bottom
+        const noteFieldY = currentY;
+        const noteFieldHeight = 20 + (tableData.notes.length * 20);
+        
+        // Draw "Note" label
+        const noteLabel = new paper.PointText({
+            point: [startX + cellPadding, noteFieldY + 15],
+            content: 'Note',
+            fillColor: '#000000',
+            fontFamily: 'Arial',
+            fontSize: 12,
+            fontWeight: 'bold'
+        });
+        noteLabel.data = { 
+            type: 'ac-table-note-label', 
+            tableName: tableName 
+        };
+        
+        // Draw note rows
+        const uniqueNotes = new Set();
+        tableData.rows.forEach(row => {
+            if (row.note) {
+                const numbers = row.note.split(',').map(n => n.trim()).filter(n => n);
+                numbers.forEach(num => uniqueNotes.add(num));
+            }
+        });
+        
+        const sortedNotes = Array.from(uniqueNotes).sort((a, b) => parseInt(a) - parseInt(b));
+        sortedNotes.forEach((noteNum, index) => {
+            const noteY = noteFieldY + 15 + (index * 20);
+            
+            // Note number
+            const noteNumText = new paper.PointText({
+                point: [startX + 60, noteY],
+                content: noteNum,
+                fillColor: '#000000',
+                fontFamily: 'Arial',
+                fontSize: 11
+            });
+            noteNumText.data = { 
+                type: 'ac-table-note-num', 
+                tableName: tableName,
+                noteNum: noteNum
+            };
+            
+            // Note text (find in notes array)
+            const noteData = tableData.notes.find(n => n.number === noteNum);
+            const noteTextContent = noteData ? noteData.text : '';
+            
+            if (noteTextContent) {
+                const noteTextObj = new paper.PointText({
+                    point: [startX + 90, noteY],
+                    content: noteTextContent,
+                    fillColor: '#000000',
+                    fontFamily: 'Arial',
+                    fontSize: 11
+                });
+                noteTextObj.data = { 
+                    type: 'ac-table-note-text', 
+                    tableName: tableName,
+                    noteNum: noteNum
+                };
+            }
+        });
     }
 }

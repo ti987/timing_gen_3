@@ -1,5 +1,5 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Version 3.3.3
+// Version 3.3.4
 // Main JavaScript Application using Paper.js
 //
 // Key Features:
@@ -43,19 +43,21 @@ class TimingGenApp {
             backgroundColor: '#ffffff'
         };
         
-        // Data model v3.3.0 - Extended with text and counter widgets
-        // rows: defines order only - Array of {type: 'signal'|'measure'|'text'|'counter', name: string}
+        // Data model v3.3.4 - Extended with AC Table widget
+        // rows: defines order only - Array of {type: 'signal'|'measure'|'text'|'counter'|'ac-table', name: string}
         // signalsData: Map<name, signalObject> - actual signal data
         // measuresData: Map<name, measureObject> - actual measure data
         // textData: Map<name, textObject> - actual text data
         // counterData: Map<name, counterObject> - actual counter data
         // arrowsData: Map<name, arrowObject> - actual arrow data
+        // acTablesData: Map<name, acTableObject> - actual AC table data
         this.rows = [];
         this.signalsData = new Map();  // Key: signal name, Value: signal object
         this.measuresData = new Map(); // Key: measure name (auto-generated), Value: measure object
         this.textData = new Map();     // Key: text name (auto-generated), Value: text object
         this.counterData = new Map();  // Key: counter name (auto-generated), Value: counter object
         this.arrowsData = new Map();   // Key: arrow name (auto-generated), Value: arrow object
+        this.acTablesData = new Map(); // Key: table name (auto-generated), Value: AC table object
         
         // Counter for auto-generating unique measure names
         this.measureCounter = 0;
@@ -63,6 +65,7 @@ class TimingGenApp {
         this.textCounter = 0;
         this.counterCounter = 0;
         this.arrowCounter = 0;
+        this.acTableCounter = 0;
         
         // Row manager for unified row system
         this.rowManager = new RowManager(this);
@@ -98,6 +101,14 @@ class TimingGenApp {
         this.isDraggingArrowPoint = false; // For dragging arrow control points
         this.draggingArrowPointIndex = null; // Which point is being dragged (0=start, 1=ctrl1, 2=ctrl2, 3=end)
         this.arrowEditMode = false; // Whether arrow is in edit mode (showing control points)
+        
+        // AC Table state
+        this.currentEditingACTable = null; // Name of AC table being edited
+        this.currentEditingACCell = null; // {tableName, cellType, rowIndex, colName}
+        this.isDraggingACColumnDivider = false; // For resizing columns
+        this.draggingACTableName = null; // Which table's column is being resized
+        this.draggingACColumnIndex = null; // Which column divider is being dragged
+        this.acColumnDragStartX = null; // Starting X position for column resize
         
         // Insert/Delete cycle mode tracking
         this.insertCycleMode = null; // 'global' or 'signal'
@@ -171,6 +182,10 @@ class TimingGenApp {
             document.getElementById('add-submenu').style.display = 'none';
             this.showAddCounterDialog();
         });
+        document.getElementById('add-ac-table-menu').addEventListener('click', () => {
+            document.getElementById('add-submenu').style.display = 'none';
+            this.showAddACTableDialog();
+        });
         
         // Help menu and submenu
         document.getElementById('help-menu-btn').addEventListener('click', (e) => {
@@ -230,6 +245,10 @@ class TimingGenApp {
         // Edit counter dialog
         document.getElementById('edit-counter-ok-btn').addEventListener('click', () => this.updateCounterValue());
         document.getElementById('edit-counter-cancel-btn').addEventListener('click', () => this.hideEditCounterDialog());
+        
+        // AC Table dialog
+        document.getElementById('ac-table-dialog-ok-btn').addEventListener('click', () => this.addACTable());
+        document.getElementById('ac-table-dialog-cancel-btn').addEventListener('click', () => this.hideAddACTableDialog());
         
         // Measure context menu
         document.getElementById('delete-measure-menu').addEventListener('click', () => this.deleteMeasure());
@@ -772,6 +791,199 @@ class TimingGenApp {
         
         this.hideAddCounterDialog();
         this.render();
+    }
+    
+    // ========================================
+    // AC Table Methods
+    // ========================================
+    
+    showAddACTableDialog() {
+        document.getElementById('ac-table-title-input').value = 'Read Cycle';
+        document.getElementById('add-ac-table-dialog').style.display = 'flex';
+    }
+    
+    hideAddACTableDialog() {
+        document.getElementById('add-ac-table-dialog').style.display = 'none';
+    }
+    
+    addACTable() {
+        const title = document.getElementById('ac-table-title-input').value.trim();
+        
+        if (!title) {
+            alert('Please enter a table title');
+            return;
+        }
+        
+        // Generate unique name
+        const name = `ACT${this.acTableCounter}`;
+        this.acTableCounter++;
+        
+        // Create AC Table data object
+        const acTableData = {
+            title: title,
+            position: 'bottom', // 'top' or 'bottom'
+            columnWidths: [400, 100, 100, 100, 100, 100], // Parameter, Symbol, Min., Max., Unit, Note
+            rows: [],
+            notes: [], // Array of {number, text}
+            titleFont: 'Arial',
+            titleSize: 14,
+            titleColor: '#000000',
+            headerFont: 'Arial',
+            headerSize: 12,
+            headerColor: '#000000',
+            cellFont: 'Arial',
+            cellSize: 12,
+            cellColor: '#000000'
+        };
+        
+        // Initialize rows from existing measures
+        this.initializeACTableRows(acTableData);
+        
+        // Add to data store
+        this.acTablesData.set(name, acTableData);
+        
+        // Add to rows array at the bottom
+        this.rows.push({
+            type: 'ac-table',
+            name: name
+        });
+        
+        this.hideAddACTableDialog();
+        this.render();
+    }
+    
+    initializeACTableRows(acTableData) {
+        // Create a row for each existing measure
+        for (const [measureName, measure] of this.measuresData.entries()) {
+            const row = this.createACTableRowFromMeasure(measureName, measure);
+            acTableData.rows.push(row);
+        }
+    }
+    
+    createACTableRowFromMeasure(measureName, measure) {
+        // Calculate min and max from cycle period and delays
+        const cyclePeriod = this.config.clockPeriod;
+        const delayMin = this.config.delayMin;
+        const delayMax = this.config.delayMax;
+        const unit = this.config.clockPeriodUnit;
+        
+        // Calculate cycle difference
+        const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
+        const timeValue = cyclePeriod * cycleDiff;
+        
+        // Min = timeValue + delayMin, Max = timeValue + delayMax
+        const minValue = delayMin !== 0 ? (timeValue + delayMin).toFixed(2) : '';
+        const maxValue = delayMax !== 0 ? (timeValue + delayMax).toFixed(2) : '';
+        
+        return {
+            measureName: measureName, // Link to measure
+            parameter: '',
+            symbol: measure.text || '', // Copy from measure text (t1, t2, etc.)
+            min: minValue,
+            max: maxValue,
+            unit: unit,
+            note: '',
+            rowSpan: 1, // 1 or 2
+            manuallyEdited: {
+                parameter: false,
+                symbol: false,
+                min: false,
+                max: false,
+                unit: false,
+                note: false
+            },
+            fontFamily: 'Arial',
+            fontSize: 12,
+            color: '#000000'
+        };
+    }
+    
+    updateACTableForMeasureChange(measureName, measure) {
+        // Update all AC tables when a measure changes
+        for (const [tableName, tableData] of this.acTablesData.entries()) {
+            const rowIndex = tableData.rows.findIndex(r => r.measureName === measureName);
+            if (rowIndex >= 0) {
+                const row = tableData.rows[rowIndex];
+                
+                // Update symbol if not manually edited
+                if (!row.manuallyEdited.symbol && measure.text) {
+                    row.symbol = measure.text;
+                }
+                
+                // Recalculate min/max if not manually edited
+                if (!row.manuallyEdited.min || !row.manuallyEdited.max) {
+                    const cyclePeriod = this.config.clockPeriod;
+                    const delayMin = this.config.delayMin;
+                    const delayMax = this.config.delayMax;
+                    
+                    const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
+                    const timeValue = cyclePeriod * cycleDiff;
+                    
+                    if (!row.manuallyEdited.min) {
+                        row.min = delayMin !== 0 ? (timeValue + delayMin).toFixed(2) : '';
+                    }
+                    if (!row.manuallyEdited.max) {
+                        row.max = delayMax !== 0 ? (timeValue + delayMax).toFixed(2) : '';
+                    }
+                }
+                
+                // Update unit if not manually edited
+                if (!row.manuallyEdited.unit) {
+                    row.unit = this.config.clockPeriodUnit;
+                }
+            }
+        }
+    }
+    
+    addACTableRowForMeasure(measureName, measure) {
+        // Add a row to all AC tables when a new measure is added
+        for (const [tableName, tableData] of this.acTablesData.entries()) {
+            const row = this.createACTableRowFromMeasure(measureName, measure);
+            tableData.rows.push(row);
+        }
+    }
+    
+    removeACTableRowForMeasure(measureName) {
+        // Remove row from all AC tables when a measure is deleted
+        for (const [tableName, tableData] of this.acTablesData.entries()) {
+            const rowIndex = tableData.rows.findIndex(r => r.measureName === measureName);
+            if (rowIndex >= 0) {
+                tableData.rows.splice(rowIndex, 1);
+            }
+        }
+    }
+    
+    deleteACTable(tableName) {
+        // Remove from data store
+        this.acTablesData.delete(tableName);
+        
+        // Remove from rows
+        const rowIndex = this.rows.findIndex(r => r.type === 'ac-table' && r.name === tableName);
+        if (rowIndex >= 0) {
+            this.rows.splice(rowIndex, 1);
+        }
+        
+        this.render();
+    }
+    
+    moveACTableToPosition(tableName, position) {
+        const tableData = this.acTablesData.get(tableName);
+        if (tableData) {
+            tableData.position = position;
+            
+            // Move row in rows array
+            const rowIndex = this.rows.findIndex(r => r.type === 'ac-table' && r.name === tableName);
+            if (rowIndex >= 0) {
+                const [row] = this.rows.splice(rowIndex, 1);
+                if (position === 'top') {
+                    this.rows.unshift(row);
+                } else {
+                    this.rows.push(row);
+                }
+            }
+            
+            this.render();
+        }
     }
     
     addSignal() {

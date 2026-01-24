@@ -1,10 +1,10 @@
 // Timing Gen 3 - Data Management Module
-// Version 3.3.3
+// Version 3.3.4
 // Handles save/load functionality and data import/export
 
 class TimingGenData {
     static saveToJSON(app) {
-        // Save in unified row-based format (v3.3.0)
+        // Save in unified row-based format (v3.3.4)
         // Embed actual data from Maps into rows for serialization
         const rowsWithData = app.rows.map(row => {
             if (row.type === 'signal') {
@@ -35,6 +35,13 @@ class TimingGenData {
                     name: row.name,
                     data: counterData
                 };
+            } else if (row.type === 'ac-table') {
+                const acTableData = app.acTablesData.get(row.name);
+                return {
+                    type: 'ac-table',
+                    name: row.name,
+                    data: acTableData
+                };
             }
             return row;
         });
@@ -46,7 +53,7 @@ class TimingGenData {
         }
         
         const data = {
-            version: '3.3.3',
+            version: '3.3.4',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,
@@ -186,6 +193,19 @@ class TimingGenData {
                             const counterNum = parseInt(row.name.replace('C', ''));
                             if (!isNaN(counterNum) && counterNum >= app.counterCounter) {
                                 app.counterCounter = counterNum + 1;
+                            }
+                        } else if (row.type === 'ac-table' && row.data) {
+                            // Store AC table data in Map
+                            app.acTablesData.set(row.name, row.data);
+                            // Add to rows array (ordering only)
+                            app.rows.push({
+                                type: 'ac-table',
+                                name: row.name
+                            });
+                            // Update AC table counter for future tables
+                            const tableNum = parseInt(row.name.replace('ACT', ''));
+                            if (!isNaN(tableNum) && tableNum >= app.acTableCounter) {
+                                app.acTableCounter = tableNum + 1;
                             }
                         }
                     });

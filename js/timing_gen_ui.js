@@ -1,5 +1,5 @@
 // Timing Gen 3 - UI Management Module
-// Version 3.2.1
+// Version 3.3.4
 // Handles dialog management and user interface interactions
 
 class TimingGenUI {
