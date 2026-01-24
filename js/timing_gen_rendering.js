@@ -1221,7 +1221,14 @@ class TimingGenRendering {
             const clickedItem = hitResult ? hitResult.item : event.target;
             
             if (event.event.button === 0) {
-                // Left click - toggle edit mode for the arrow
+                // Left click
+                // Skip handling if text was clicked (let text handle its own drag)
+                if (clickedItem.data && clickedItem.data.type === 'arrow-text') {
+                    // Let text drag handler handle this
+                    return false;
+                }
+                
+                // Toggle edit mode for the arrow
                 // (control points handle their own clicks via their own handlers)
                 if (app.arrowEditMode && app.currentEditingArrowName === arrowName) {
                     app.stopEditingArrow();
