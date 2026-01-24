@@ -533,6 +533,9 @@ class TimingGenApp {
         document.getElementById('text-context-menu').style.display = 'none';
         document.getElementById('text-row-name-context-menu').style.display = 'none';
         document.getElementById('measure-row-name-context-menu').style.display = 'none';
+        document.getElementById('ac-cell-context-menu').style.display = 'none';
+        document.getElementById('ac-param-context-menu').style.display = 'none';
+        document.getElementById('ac-table-context-menu').style.display = 'none';
         
         // Reset measure text context flag
         this.isMeasureTextContext = false;
@@ -928,6 +931,9 @@ class TimingGenApp {
     
     updateACTableForMeasureChange(measureName, measure) {
         // Update all AC tables when a measure changes
+        // NOTE: This method is called automatically when global options (clockPeriod, delays) change
+        // or when measures are modified. Currently, measure text editing after creation is not
+        // implemented in the UI, but this method is ready for future use.
         for (const [tableName, tableData] of this.acTablesData.entries()) {
             const rowIndex = tableData.rows.findIndex(r => r.measureName === measureName);
             if (rowIndex >= 0) {
