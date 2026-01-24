@@ -1103,14 +1103,14 @@ class TimingGenRendering {
                     const newTextX = app.draggingArrowText.originalTextX + dx;
                     const newTextY = app.draggingArrowText.originalTextY + dy;
                     
+                    // Update text position directly (visual feedback)
+                    text.position = new paper.Point(newTextX, newTextY);
+                    
                     // Update text position in arrow object
                     const arrow = app.arrows[arrowName];
                     if (arrow) {
                         arrow.textX = newTextX;
                         arrow.textY = newTextY;
-                        
-                        // Redraw arrows to update text position
-                        app.renderSignals();
                     }
                 }
                 return false;
