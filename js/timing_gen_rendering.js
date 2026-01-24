@@ -1063,8 +1063,12 @@ class TimingGenRendering {
             const midX = (arrow.startX + arrow.endX) / 2;
             const midY = (arrow.startY + arrow.endY) / 2;
             
+            // Use stored text position or default position
+            const textX = arrow.textX !== undefined ? arrow.textX : midX;
+            const textY = arrow.textY !== undefined ? arrow.textY : midY - 10;
+            
             const text = new paper.PointText({
-                point: [midX, midY - 10],  // Offset above the arrow
+                point: [textX, textY],
                 content: arrow.text,
                 fillColor: arrow.textColor || arrow.color || '#0000FF',
                 fontFamily: arrow.textFont || 'Arial',
@@ -1072,6 +1076,53 @@ class TimingGenRendering {
                 justification: 'center'
             });
             text.data = { type: 'arrow-text', arrowName: arrowName };
+            
+            // Add drag handlers to make text draggable
+            text.onMouseDown = function(event) {
+                if (event.event && event.event.stopPropagation) {
+                    event.event.stopPropagation();
+                }
+                if (event.event.button === 0) {
+                    // Left click - start dragging text
+                    app.draggingArrowText = {
+                        arrowName: arrowName,
+                        startX: event.point.x,
+                        startY: event.point.y,
+                        originalTextX: textX,
+                        originalTextY: textY
+                    };
+                }
+                return false;
+            };
+            
+            text.onMouseDrag = function(event) {
+                if (app.draggingArrowText && app.draggingArrowText.arrowName === arrowName) {
+                    // Calculate new text position
+                    const dx = event.point.x - app.draggingArrowText.startX;
+                    const dy = event.point.y - app.draggingArrowText.startY;
+                    const newTextX = app.draggingArrowText.originalTextX + dx;
+                    const newTextY = app.draggingArrowText.originalTextY + dy;
+                    
+                    // Update text position in arrow object
+                    const arrow = app.arrows[arrowName];
+                    if (arrow) {
+                        arrow.textX = newTextX;
+                        arrow.textY = newTextY;
+                        
+                        // Redraw arrows to update text position
+                        app.renderSignals();
+                    }
+                }
+                return false;
+            };
+            
+            text.onMouseUp = function(event) {
+                if (app.draggingArrowText && app.draggingArrowText.arrowName === arrowName) {
+                    app.draggingArrowText = null;
+                }
+                return false;
+            };
+            
             arrowGroup.addChild(text);
         }
         
