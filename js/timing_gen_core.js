@@ -2076,6 +2076,49 @@ class TimingGenApp {
                                 };
                                 TimingGenUI.showContextMenu('ac-cell-context-menu', ev.clientX, ev.clientY);
                                 return;
+                            } else if (item.data.type === 'ac-table-row-border') {
+                                // Right-click on empty AC table cell area (cell border without text)
+                                const tableName = row.name;
+                                const tableData = this.acTablesData.get(tableName);
+                                if (!tableData) return;
+                                
+                                const rect = this.canvas.getBoundingClientRect();
+                                const xPos = ev.clientX - rect.left;
+                                const startX = this.config.nameColumnWidth + 10;
+                                const colWidths = tableData.columnWidths || [400, 100, 100, 100, 100, 100];
+                                const colPositions = [0];
+                                for (let i = 0; i < colWidths.length; i++) {
+                                    colPositions.push(colPositions[i] + colWidths[i]);
+                                }
+                                
+                                // Determine which column was clicked
+                                const clickX = xPos - startX;
+                                let colIndex = -1;
+                                for (let i = 0; i < colPositions.length - 1; i++) {
+                                    if (clickX >= colPositions[i] && clickX < colPositions[i + 1]) {
+                                        colIndex = i;
+                                        break;
+                                    }
+                                }
+                                
+                                if (colIndex >= 0 && colIndex < 6) {
+                                    // Set up editing context for this cell (even if empty)
+                                    this.currentEditingACCell = {
+                                        tableName: tableName,
+                                        cellType: 'data',
+                                        rowIndex: item.data.rowIndex,
+                                        colIndex: colIndex,
+                                        colName: ['parameter', 'symbol', 'min', 'max', 'unit', 'note'][colIndex]
+                                    };
+                                    
+                                    // Show parameter context menu if it's parameter column (index 0)
+                                    if (colIndex === 0) {
+                                        TimingGenUI.showContextMenu('ac-param-context-menu', ev.clientX, ev.clientY);
+                                    } else {
+                                        TimingGenUI.showContextMenu('ac-cell-context-menu', ev.clientX, ev.clientY);
+                                    }
+                                    return;
+                                }
                             } else if (item.data.type === 'ac-table-title' || item.data.type === 'ac-table-border') {
                                 // Right-click on table title or border - show table menu
                                 this.currentEditingACTable = row.name;
@@ -2636,6 +2679,12 @@ class TimingGenApp {
             newIndex++; // Insert below
         }
         
+        // Prevent inserting after AC tables - find first AC table and cap insertion index
+        const firstACTableIndex = this.rows.findIndex(r => r.type === 'ac-table');
+        if (firstACTableIndex >= 0 && newIndex > firstACTableIndex) {
+            newIndex = firstACTableIndex;
+        }
+        
         // Insert at new position
         this.rows.splice(newIndex, 0, measureRow);
         
@@ -2775,6 +2824,12 @@ class TimingGenApp {
                 }
             } else {
                 insertRowIndex = totalRows; // Insert at end
+            }
+            
+            // Prevent inserting after AC tables - find first AC table and cap insertion index
+            const firstACTableIndex = this.rows.findIndex(r => r.type === 'ac-table');
+            if (firstACTableIndex >= 0 && insertRowIndex > firstACTableIndex) {
+                insertRowIndex = firstACTableIndex;
             }
             
             // Get the row indices of selected signals
@@ -4438,14 +4493,12 @@ class TimingGenApp {
         // Show context menu for measure text
         this.currentEditingMeasure = measureIndex;
         
-        const menu = document.getElementById('text-context-menu');
+        const menu = document.getElementById('measure-text-context-menu');
         menu.style.left = event.clientX + 'px';
         menu.style.top = event.clientY + 'px';
         menu.style.display = 'block';
         
         event.preventDefault();
-        
-        // This function is no longer used since we have a dedicated measure text context menu
     }
     
     startRechooseMeasurePoint(measureRowIndex, pointIndex) {
