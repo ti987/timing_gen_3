@@ -1410,6 +1410,9 @@ class TimingGenApp {
                 // Start text drag mode
                 const textData = this.textData.get(clickedRow.name);
                 if (textData && textData.text) {
+                    // Capture state before action
+                    this.undoRedoManager.captureState();
+                    
                     this.textDragState = {
                         textName: clickedRow.name,
                         startX: xPos,
@@ -3555,6 +3558,9 @@ class TimingGenApp {
     }
     
     finalizeMeasureWithBlankRow() {
+        // Capture state before action
+        this.undoRedoManager.captureState();
+        
         // After selecting row, auto-assign text as t1, t2, t3, etc.
         const measureRowIndex = this.currentMeasure.measureRow;
         
@@ -3727,6 +3733,9 @@ class TimingGenApp {
             console.log('[startDragMeasureText] Measure not found, aborting');
             return;
         }
+        
+        // Capture state before action
+        this.undoRedoManager.captureState();
         
         const startX = event.point.x;
         
@@ -3989,6 +3998,9 @@ class TimingGenApp {
     }
     
     finalizeArrow() {
+        // Capture state before action
+        this.undoRedoManager.captureState();
+        
         // Calculate control points for bezier curve
         const dx = this.currentArrow.endX - this.currentArrow.startX;
         const dy = this.currentArrow.endY - this.currentArrow.startY;
@@ -4032,6 +4044,9 @@ class TimingGenApp {
     
     deleteArrow() {
         if (this.currentEditingArrowName) {
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
             this.arrowsData.delete(this.currentEditingArrowName);
             this.currentEditingArrowName = null;
             this.arrowEditMode = false;
@@ -4070,6 +4085,9 @@ class TimingGenApp {
             this.hideArrowOptionsDialog();
             return;
         }
+        
+        // Capture state before action
+        this.undoRedoManager.captureState();
         
         // Get values from dialog
         arrow.width = parseInt(document.getElementById('arrow-width-input').value) || 2;
@@ -4126,6 +4144,9 @@ class TimingGenApp {
             return;
         }
         
+        // Capture state before action
+        this.undoRedoManager.captureState();
+        
         arrow.text = document.getElementById('edit-arrow-text-input').value;
         this.hideEditArrowTextDialog();
         this.render();
@@ -4160,6 +4181,9 @@ class TimingGenApp {
             return;
         }
         
+        // Capture state before action
+        this.undoRedoManager.captureState();
+        
         arrow.textFont = document.getElementById('arrow-text-font-select').value;
         arrow.textSize = parseInt(document.getElementById('arrow-text-size-input').value, 10) || 12;
         arrow.textColor = document.getElementById('arrow-text-color-input').value;
@@ -4182,6 +4206,9 @@ class TimingGenApp {
     }
     
     startDraggingArrowPoint(arrowName, pointIndex, event) {
+        // Capture state before action
+        this.undoRedoManager.captureState();
+        
         this.isDraggingArrowPoint = true;
         this.draggingArrowPointIndex = pointIndex;
         this.currentEditingArrowName = arrowName;
