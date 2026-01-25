@@ -2145,13 +2145,7 @@ class TimingGenApp {
             );
             
             // Check if reordering will actually happen
-            let willReorder = false;
-            for (let i = 0; i < selectedSignalRows.length; i++) {
-                if (selectedSignalRows[i] !== insertRowIndex + i) {
-                    willReorder = true;
-                    break;
-                }
-            }
+            const willReorder = selectedSignalRows.some((row, i) => row !== insertRowIndex + i);
             
             if (!willReorder) {
                 return; // No actual reordering needed
