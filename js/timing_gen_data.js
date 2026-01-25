@@ -229,6 +229,9 @@ class TimingGenData {
                     return;
                 }
                 
+                // Clear undo/redo history when loading new document
+                app.undoRedoManager.clearHistory();
+                
                 app.initializeCanvas();
                 app.render();
             } catch (err) {
