@@ -93,7 +93,6 @@ class TimingGenApp {
         this.rechoosingPointIndex = null; // Which point is being rechosen (1 or 2)
         this.isMovingMeasureRow = false; // Flag for moving measure to another row
         this.movingMeasureRowIndex = null; // Row index of measure being moved
-        this.isMeasureTextContext = false; // Flag for measure text context menu
         
         // Arrow mode state
         this.arrowMode = false;
@@ -315,6 +314,12 @@ class TimingGenApp {
         document.getElementById('color-text-menu').addEventListener('click', () => this.showColorDialog());
         document.getElementById('cancel-text-menu').addEventListener('click', () => this.hideAllMenus());
         
+        // Measure text context menu
+        document.getElementById('edit-measure-text-menu').addEventListener('click', () => this.showEditMeasureTextDialog());
+        document.getElementById('font-measure-text-menu').addEventListener('click', () => this.showMeasureTextFontDialog());
+        document.getElementById('color-measure-text-menu').addEventListener('click', () => this.showMeasureTextColorDialog());
+        document.getElementById('cancel-measure-text-menu').addEventListener('click', () => this.hideAllMenus());
+        
         // Text row name context menu
         document.getElementById('delete-text-row-menu').addEventListener('click', () => this.deleteTextRow());
         document.getElementById('cancel-text-row-menu').addEventListener('click', () => this.hideAllMenus());
@@ -419,6 +424,7 @@ class TimingGenApp {
         this.tool.onMouseDown = (event) => this.handleCanvasClick(event);
         this.tool.onMouseDrag = (event) => this.handleCanvasMouseDrag(event);
         this.tool.onMouseUp = (event) => this.handleCanvasMouseUp(event);
+        this.tool.onDoubleClick = (event) => this.handleCanvasDoubleClick(event);
         
         // Context menu
         this.canvas.addEventListener('contextmenu', (ev) => this.handleCanvasRightClick(ev));
@@ -542,8 +548,7 @@ class TimingGenApp {
         document.getElementById('ac-param-context-menu').style.display = 'none';
         document.getElementById('ac-table-context-menu').style.display = 'none';
         
-        // Reset measure text context flag
-        this.isMeasureTextContext = false;
+        // Hide all menu items
     }
     
     showAboutDialog() {
@@ -564,15 +569,7 @@ class TimingGenApp {
     }
     
     showEditTextDialog() {
-        if (this.isMeasureTextContext) {
-            // Handle measure text editing
-            const measures = this.getMeasures();
-            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
-                const measure = measures[this.currentEditingMeasure];
-                document.getElementById('edit-text-input').value = measure.text || '';
-                document.getElementById('edit-text-dialog').style.display = 'flex';
-            }
-        } else if (this.currentEditingText) {
+        if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 document.getElementById('edit-text-input').value = textData.text || '';
@@ -587,16 +584,7 @@ class TimingGenApp {
     }
     
     showFontDialog() {
-        if (this.isMeasureTextContext) {
-            // Handle measure text font
-            const measures = this.getMeasures();
-            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
-                const measure = measures[this.currentEditingMeasure];
-                document.getElementById('font-family-select').value = measure.textFont || 'Arial';
-                document.getElementById('font-size-input').value = measure.textSize || 12;
-                document.getElementById('font-dialog').style.display = 'flex';
-            }
-        } else if (this.currentEditingText) {
+        if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 document.getElementById('font-family-select').value = textData.fontFamily || 'Arial';
@@ -612,15 +600,7 @@ class TimingGenApp {
     }
     
     showColorDialog() {
-        if (this.isMeasureTextContext) {
-            // Handle measure text color
-            const measures = this.getMeasures();
-            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
-                const measure = measures[this.currentEditingMeasure];
-                document.getElementById('text-color-input').value = measure.textColor || '#FF0000';
-                document.getElementById('color-dialog').style.display = 'flex';
-            }
-        } else if (this.currentEditingText) {
+        if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 document.getElementById('text-color-input').value = textData.color || '#000000';
@@ -635,19 +615,18 @@ class TimingGenApp {
     }
     
     updateTextRow() {
-        if (this.isMeasureTextContext) {
+        // Check if we're editing a measure's text (currentEditingMeasure is set)
+        const measures = this.getMeasures();
+        if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
             // Update measure text
-            const measures = this.getMeasures();
-            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
-                // Capture state before action
-                this.undoRedoManager.captureState();
-                
-                const measure = measures[this.currentEditingMeasure];
-                measure.text = document.getElementById('edit-text-input').value;
-                this.hideEditTextDialog();
-                this.isMeasureTextContext = false;
-                this.render();
-            }
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
+            const measure = measures[this.currentEditingMeasure];
+            measure.text = document.getElementById('edit-text-input').value;
+            this.hideEditTextDialog();
+            this.currentEditingMeasure = null;
+            this.render();
         } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
@@ -662,25 +641,24 @@ class TimingGenApp {
     }
     
     updateTextFont() {
-        if (this.isMeasureTextContext) {
+        // Check if we're editing a measure's text (currentEditingMeasure is set)
+        const measures = this.getMeasures();
+        if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
             // Update measure text font
-            const measures = this.getMeasures();
-            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
-                // Capture state before action
-                this.undoRedoManager.captureState();
-                
-                const measure = measures[this.currentEditingMeasure];
-                measure.textFont = document.getElementById('font-family-select').value;
-                const fontSize = parseInt(document.getElementById('font-size-input').value);
-                if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
-                    measure.textSize = fontSize;
-                } else {
-                    measure.textSize = 12; // Default fallback
-                }
-                this.hideFontDialog();
-                this.isMeasureTextContext = false;
-                this.render();
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
+            const measure = measures[this.currentEditingMeasure];
+            measure.textFont = document.getElementById('font-family-select').value;
+            const fontSize = parseInt(document.getElementById('font-size-input').value);
+            if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
+                measure.textSize = fontSize;
+            } else {
+                measure.textSize = 12; // Default fallback
             }
+            this.hideFontDialog();
+            this.currentEditingMeasure = null;
+            this.render();
         } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
@@ -702,19 +680,18 @@ class TimingGenApp {
     }
     
     updateTextColor() {
-        if (this.isMeasureTextContext) {
+        // Check if we're editing a measure's text (currentEditingMeasure is set)
+        const measures = this.getMeasures();
+        if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
             // Update measure text color
-            const measures = this.getMeasures();
-            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
-                // Capture state before action
-                this.undoRedoManager.captureState();
-                
-                const measure = measures[this.currentEditingMeasure];
-                measure.textColor = document.getElementById('text-color-input').value;
-                this.hideColorDialog();
-                this.isMeasureTextContext = false;
-                this.render();
-            }
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
+            const measure = measures[this.currentEditingMeasure];
+            measure.textColor = document.getElementById('text-color-input').value;
+            this.hideColorDialog();
+            this.currentEditingMeasure = null;
+            this.render();
         } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
@@ -726,6 +703,38 @@ class TimingGenApp {
                 this.render();
             }
         }
+    }
+    
+    // Measure text editing functions (dedicated for measure text context menu)
+    showEditMeasureTextDialog() {
+        const measures = this.getMeasures();
+        if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+            const measure = measures[this.currentEditingMeasure];
+            document.getElementById('edit-text-input').value = measure.text || '';
+            document.getElementById('edit-text-dialog').style.display = 'flex';
+        }
+        this.hideAllMenus();
+    }
+    
+    showMeasureTextFontDialog() {
+        const measures = this.getMeasures();
+        if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+            const measure = measures[this.currentEditingMeasure];
+            document.getElementById('font-family-select').value = measure.textFont || 'Arial';
+            document.getElementById('font-size-input').value = measure.textSize || 12;
+            document.getElementById('font-dialog').style.display = 'flex';
+        }
+        this.hideAllMenus();
+    }
+    
+    showMeasureTextColorDialog() {
+        const measures = this.getMeasures();
+        if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+            const measure = measures[this.currentEditingMeasure];
+            document.getElementById('text-color-input').value = measure.textColor || '#FF0000';
+            document.getElementById('color-dialog').style.display = 'flex';
+        }
+        this.hideAllMenus();
     }
     
     showAddCounterDialog() {
@@ -1338,11 +1347,21 @@ class TimingGenApp {
         // Add to data store
         this.signalsData.set(name, signal);
         
-        // Add to rows array
-        this.rows.push({
-            type: 'signal',
-            name: name
-        });
+        // Add to rows array - insert before AC tables to keep them at the bottom
+        const acTableIndex = this.rows.findIndex(r => r.type === 'ac-table');
+        if (acTableIndex >= 0) {
+            // Insert before the first AC table
+            this.rows.splice(acTableIndex, 0, {
+                type: 'signal',
+                name: name
+            });
+        } else {
+            // No AC table, add at end
+            this.rows.push({
+                type: 'signal',
+                name: name
+            });
+        }
         
         TimingGenUI.hideAddSignalDialog();
         this.render();
@@ -2102,11 +2121,10 @@ class TimingGenApp {
                         
                         // Check if clicking on text specifically
                         if (hitItem && hitItem.data && hitItem.data.type === 'text') {
-                            this.isMeasureTextContext = true;
-                            TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
+                            // Show dedicated measure text context menu
+                            TimingGenUI.showContextMenu('measure-text-context-menu', ev.clientX, ev.clientY);
                         } else {
                             // General measure context menu
-                            this.isMeasureTextContext = false;
                             this.showMeasureContextMenu(ev, measureIndex);
                         }
                         return;
@@ -2128,6 +2146,78 @@ class TimingGenApp {
                         this.currentEditingCycle = cycle;
                         TimingGenUI.showBusCycleContextMenu(this, ev.clientX, ev.clientY);
                     }
+                }
+            }
+        }
+    }
+    
+    handleCanvasDoubleClick(event) {
+        // Handle double-click events on the canvas
+        const xPos = event.point.x;
+        const yPos = event.point.y;
+        
+        // Use Paper.js hitTest to find what was clicked
+        const hitResults = paper.project.hitTestAll(event.point, {
+            fill: true,
+            stroke: true,
+            segments: true,
+            tolerance: 5
+        });
+        
+        if (!hitResults || hitResults.length === 0) return;
+        
+        // Check for AC Table cell double-click
+        for (const result of hitResults) {
+            const item = result.item;
+            
+            if (item.data && item.data.type === 'ac-table-cell') {
+                // Double-click on AC Table cell - open edit dialog
+                this.currentEditingACCell = {
+                    tableName: item.data.tableName,
+                    cellType: 'data',
+                    rowIndex: item.data.rowIndex,
+                    colIndex: item.data.colIndex,
+                    colName: ['parameter', 'symbol', 'min', 'max', 'unit', 'note'][item.data.colIndex]
+                };
+                this.showEditACCellDialog();
+                return;
+            }
+            
+            // Check for empty AC table cell area (cell border without text)
+            if (item.data && item.data.type === 'ac-table-row-border') {
+                // Find which column was clicked
+                const tableName = item.data.tableName;
+                const tableData = this.acTablesData.get(tableName);
+                if (!tableData) return;
+                
+                const startX = this.config.nameColumnWidth + 10;
+                const colWidths = tableData.columnWidths || [400, 100, 100, 100, 100, 100];
+                const colPositions = [0];
+                for (let i = 0; i < colWidths.length; i++) {
+                    colPositions.push(colPositions[i] + colWidths[i]);
+                }
+                
+                // Determine which column was clicked
+                const clickX = xPos - startX;
+                let colIndex = -1;
+                for (let i = 0; i < colPositions.length - 1; i++) {
+                    if (clickX >= colPositions[i] && clickX < colPositions[i + 1]) {
+                        colIndex = i;
+                        break;
+                    }
+                }
+                
+                if (colIndex >= 0 && colIndex < 6) {
+                    // Open edit dialog for this cell (even if empty)
+                    this.currentEditingACCell = {
+                        tableName: tableName,
+                        cellType: 'data',
+                        rowIndex: item.data.rowIndex,
+                        colIndex: colIndex,
+                        colName: ['parameter', 'symbol', 'min', 'max', 'unit', 'note'][colIndex]
+                    };
+                    this.showEditACCellDialog();
+                    return;
                 }
             }
         }
@@ -2567,6 +2657,9 @@ class TimingGenApp {
                 }
             }
         });
+        
+        // Recalculate arrow positions when measures move (arrows may be positioned relative to measures)
+        this.recalculateArrowPositions();
     }
     
     updateDragIndicator(yPos) {
@@ -4115,8 +4208,15 @@ class TimingGenApp {
         // Add row to all existing AC tables
         this.addACTableRowForMeasure(this.currentMeasure.name, this.currentMeasure);
         
-        // Insert new measure row
-        this.rows.splice(measureRowIndex, 0, {
+        // Insert new measure row - ensure it's before any AC tables to keep them at bottom
+        let finalMeasureRowIndex = measureRowIndex;
+        const firstACTableIndex = this.rows.findIndex(r => r.type === 'ac-table');
+        if (firstACTableIndex >= 0 && finalMeasureRowIndex >= firstACTableIndex) {
+            // Adjust to insert before AC tables
+            finalMeasureRowIndex = firstACTableIndex;
+        }
+        
+        this.rows.splice(finalMeasureRowIndex, 0, {
             type: 'measure',
             name: this.currentMeasure.name
         });
@@ -4343,8 +4443,7 @@ class TimingGenApp {
         
         event.preventDefault();
         
-        // Update menu handlers to work with measure text
-        this.isMeasureTextContext = true;
+        // This function is no longer used since we have a dedicated measure text context menu
     }
     
     startRechooseMeasurePoint(measureRowIndex, pointIndex) {
