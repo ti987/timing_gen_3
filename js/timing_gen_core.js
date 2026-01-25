@@ -67,6 +67,9 @@ class TimingGenApp {
         // Row manager for unified row system
         this.rowManager = new RowManager(this);
         
+        // Undo/Redo manager
+        this.undoRedoManager = new UndoRedoManager(this);
+        
         this.currentEditingSignal = null;
         this.currentEditingCycle = null;
         this.currentEditingText = null; // Current text row being edited
@@ -139,6 +142,8 @@ class TimingGenApp {
     setupEventListeners() {
         // Menu buttons
         document.getElementById('new-btn').addEventListener('click', () => this.handleNewDocument());
+        document.getElementById('undo-btn').addEventListener('click', () => this.undoRedoManager.undo());
+        document.getElementById('redo-btn').addEventListener('click', () => this.undoRedoManager.redo());
         document.getElementById('add-signal-btn').addEventListener('click', () => TimingGenUI.showAddSignalDialog(this));
         document.getElementById('global-option-btn').addEventListener('click', () => TimingGenUI.showGlobalOptionDialog(this));
         document.getElementById('save-btn').addEventListener('click', () => TimingGenData.saveToJSON(this));
@@ -584,6 +589,9 @@ class TimingGenApp {
             // Update measure text
             const measures = this.getMeasures();
             if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
                 const measure = measures[this.currentEditingMeasure];
                 measure.text = document.getElementById('edit-text-input').value;
                 this.hideEditTextDialog();
@@ -593,6 +601,9 @@ class TimingGenApp {
         } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
                 textData.text = document.getElementById('edit-text-input').value;
                 this.hideEditTextDialog();
                 this.render();
@@ -605,6 +616,9 @@ class TimingGenApp {
             // Update measure text font
             const measures = this.getMeasures();
             if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
                 const measure = measures[this.currentEditingMeasure];
                 measure.textFont = document.getElementById('font-family-select').value;
                 const fontSize = parseInt(document.getElementById('font-size-input').value);
@@ -620,6 +634,9 @@ class TimingGenApp {
         } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
                 textData.fontFamily = document.getElementById('font-family-select').value;
                 const fontSize = parseInt(document.getElementById('font-size-input').value);
                 // Validate fontSize is a valid number within range
@@ -639,6 +656,9 @@ class TimingGenApp {
             // Update measure text color
             const measures = this.getMeasures();
             if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
                 const measure = measures[this.currentEditingMeasure];
                 measure.textColor = document.getElementById('text-color-input').value;
                 this.hideColorDialog();
@@ -648,6 +668,9 @@ class TimingGenApp {
         } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
                 textData.color = document.getElementById('text-color-input').value;
                 this.hideColorDialog();
                 this.render();
@@ -680,6 +703,9 @@ class TimingGenApp {
         if (this.currentEditingCounter) {
             const counterData = this.counterData.get(this.currentEditingCounter.name);
             if (counterData) {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
                 const newValue = document.getElementById('edit-counter-value-input').value.trim();
                 const cycle = this.currentEditingCounter.cycle;
                 
@@ -712,6 +738,9 @@ class TimingGenApp {
     
     addTextRow() {
         const text = document.getElementById('text-row-input').value;
+        
+        // Capture state before action
+        this.undoRedoManager.captureState();
         
         // Generate unique name
         const name = `T${this.textCounter}`;
@@ -747,6 +776,9 @@ class TimingGenApp {
             alert('Please enter a start value');
             return;
         }
+        
+        // Capture state before action
+        this.undoRedoManager.captureState();
         
         // Generate unique name
         const name = `C${this.counterCounter}`;
@@ -788,6 +820,9 @@ class TimingGenApp {
             alert(`Signal "${name}" already exists`);
             return;
         }
+        
+        // Capture state before action
+        this.undoRedoManager.captureState();
         
         const signal = {
             name: name,
@@ -837,6 +872,9 @@ class TimingGenApp {
                 return;
             }
             
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
             const signal = this.getSignalByIndex(this.currentEditingSignal);
             const oldType = signal.type;
             signal.name = name;
@@ -871,6 +909,9 @@ class TimingGenApp {
         if (this.currentEditingSignal !== null) {
             const signal = this.getSignalByIndex(this.currentEditingSignal);
             if (signal && confirm(`Delete signal "${signal.name}"?`)) {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
                 // Delete from Maps
                 this.signalsData.delete(signal.name);
                 
@@ -891,6 +932,9 @@ class TimingGenApp {
             const radix = document.getElementById('bus-radix-select').value;
             const value = document.getElementById('bus-value-input').value.trim();
             
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
             const signal = this.getSignalByIndex(this.currentEditingSignal);
             
             if (radix === 'X' || radix === 'Z') {
@@ -905,6 +949,9 @@ class TimingGenApp {
     }
     
     updateCycles(newCycles) {
+        // Capture state before action
+        this.undoRedoManager.captureState();
+        
         this.config.cycles = parseInt(newCycles);
         this.initializeCanvas();
         this.render();
@@ -1609,6 +1656,9 @@ class TimingGenApp {
     }
     
     toggleBitSignal(signalIndex, cycle) {
+        // Capture state before action
+        this.undoRedoManager.captureState();
+        
         const signal = this.getSignalByIndex(signalIndex);
         const currentValue = this.getBitValueAtCycle(signal, cycle);
         const newValue = (currentValue === 0 || currentValue === 'X' || currentValue === 'Z') ? 1 : 0;
@@ -1618,6 +1668,9 @@ class TimingGenApp {
     
     setBitValue(signalIndex, cycle, value) {
         if (signalIndex !== null && cycle !== null) {
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
             const signal = this.getSignalByIndex(signalIndex);
             if (value === 'X' || value === 'Z') {
                 signal.values[cycle] = value;
@@ -1630,6 +1683,9 @@ class TimingGenApp {
     
     removeBitChange() {
         if (this.currentEditingSignal !== null && this.currentEditingCycle !== null) {
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
             const signal = this.getSignalByIndex(this.currentEditingSignal);
             delete signal.values[this.currentEditingCycle];
             // Also remove cycle options if they exist
@@ -1646,6 +1702,9 @@ class TimingGenApp {
     
     removeBusChange() {
         if (this.currentEditingSignal !== null && this.currentEditingCycle !== null) {
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
             const signal = this.getSignalByIndex(this.currentEditingSignal);
             delete signal.values[this.currentEditingCycle];
             // Also remove cycle options if they exist
@@ -1919,6 +1978,9 @@ class TimingGenApp {
             return; // Invalid drop location or same position
         }
         
+        // Capture state before action
+        this.undoRedoManager.captureState();
+        
         // Extract the measure row being moved
         const measureRow = this.rows[this.draggedMeasureRow];
         
@@ -2081,6 +2143,22 @@ class TimingGenApp {
             const selectedSignalRows = selectedIndices.map(idx => 
                 this.rowManager.signalIndexToRowIndex(idx)
             );
+            
+            // Check if reordering will actually happen
+            let willReorder = false;
+            for (let i = 0; i < selectedSignalRows.length; i++) {
+                if (selectedSignalRows[i] !== insertRowIndex + i) {
+                    willReorder = true;
+                    break;
+                }
+            }
+            
+            if (!willReorder) {
+                return; // No actual reordering needed
+            }
+            
+            // Capture state before action
+            this.undoRedoManager.captureState();
             
             // Extract selected signals data
             const selectedSignalsData = selectedIndices.map(idx => this.getSignalByIndex(idx));
@@ -3533,6 +3611,9 @@ class TimingGenApp {
             return;
         }
         
+        // Capture state before action
+        this.undoRedoManager.captureState();
+        
         this.currentMeasure.text = text;
         
         const measureName = this.currentMeasure.name;
@@ -3609,6 +3690,9 @@ class TimingGenApp {
         // Delete measure based on currentEditingMeasure (measure index)
         const measures = this.getMeasures();
         if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
             const measureToDelete = measures[this.currentEditingMeasure];
             const measureName = measureToDelete.name;
             
@@ -4410,6 +4494,9 @@ class TimingGenApp {
         this.selectedSignals.clear();
         this.selectedMeasureRows.clear();
         
+        // Clear undo/redo history
+        this.undoRedoManager.clearHistory();
+        
         // Render empty canvas
         this.render();
     }
@@ -4421,6 +4508,9 @@ class TimingGenApp {
                 this.hideAllMenus();
                 return;
             }
+            
+            // Capture state before action
+            this.undoRedoManager.captureState();
             
             // Find row index
             const rowIndex = this.rows.findIndex(row => row.type === 'text' && row.name === this.currentEditingText);
@@ -4444,6 +4534,9 @@ class TimingGenApp {
                 this.hideAllMenus();
                 return;
             }
+            
+            // Capture state before action
+            this.undoRedoManager.captureState();
             
             const row = this.rows[this.currentEditingMeasureRow];
             if (row && row.type === 'measure') {
