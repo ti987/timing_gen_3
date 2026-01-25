@@ -539,6 +539,7 @@ class TimingGenApp {
         document.getElementById('bus-cycle-context-menu').style.display = 'none';
         document.getElementById('cycle-context-menu').style.display = 'none';
         document.getElementById('measure-context-menu').style.display = 'none';
+        document.getElementById('measure-text-context-menu').style.display = 'none';
         document.getElementById('arrow-context-menu').style.display = 'none';
         document.getElementById('arrow-text-context-menu').style.display = 'none';
         document.getElementById('text-context-menu').style.display = 'none';
@@ -548,7 +549,8 @@ class TimingGenApp {
         document.getElementById('ac-param-context-menu').style.display = 'none';
         document.getElementById('ac-table-context-menu').style.display = 'none';
         
-        // Hide all menu items
+        // Clear editing state to prevent stale references
+        // Note: Don't clear everything as some dialogs might still need the state
     }
     
     showAboutDialog() {
