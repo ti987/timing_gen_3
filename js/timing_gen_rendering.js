@@ -1622,9 +1622,9 @@ class TimingGenRendering {
             // If double-row, draw horizontal dividers for columns 1-5 (not parameter column)
             if (isDoubleRow) {
                 const midY = currentY + rowHeight;
-                for (let i = 1; i <= colWidths.length; i++) {
+                for (let i = 1; i < colWidths.length; i++) {
                     const fromX = startX + colPositions[i];
-                    const toX = startX + colPositions[i === colWidths.length ? i : i + 1];
+                    const toX = startX + colPositions[i + 1];
                     const midDivider = new paper.Path.Line({
                         from: [fromX, midY],
                         to: [toX, midY],
@@ -1654,7 +1654,7 @@ class TimingGenRendering {
                 const cellX = startX + colPositions[colIndex];
                 // For double-row: parameter (col 0) uses full height, others use top half
                 const cellHeight = isDoubleRow && colIndex > 0 ? rowHeight : actualRowHeight;
-                const cellY = currentY + (isDoubleRow && colIndex > 0 ? 0 : 0);
+                const cellY = currentY; // Y position is always currentY for the cell start
                 
                 if (content) {
                     // Draw text for non-empty cells
