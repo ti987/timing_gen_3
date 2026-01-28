@@ -1840,8 +1840,8 @@ class TimingGenApp {
                         name: measureName
                     });
                     
-                    // Update measure row reference
-                    measure.measureRow = newRowIndex;
+                    // Update all measure row references and recalculate arrow positions
+                    this.rebuildAfterMeasureRowMove();
                     
                     // Exit moving mode
                     this.isMovingMeasureRow = false;

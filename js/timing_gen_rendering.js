@@ -1587,6 +1587,7 @@ class TimingGenRendering {
         let currentY = startY + titleHeight + headerHeight;
         tableData.rows.forEach((row, dataRowIndex) => {
             const actualRowHeight = rowHeight * (row.rowSpan || 1);
+            const isDoubleRow = (row.rowSpan || 1) === 2;
             
             // Draw row border
             const rowBorder = new paper.Path.Rectangle({
@@ -1618,6 +1619,26 @@ class TimingGenRendering {
                 };
             }
             
+            // If double-row, draw horizontal dividers for columns 1-5 (not parameter column)
+            if (isDoubleRow) {
+                const midY = currentY + rowHeight;
+                for (let i = 1; i <= colWidths.length; i++) {
+                    const fromX = startX + colPositions[i];
+                    const toX = startX + colPositions[i === colWidths.length ? i : i + 1];
+                    const midDivider = new paper.Path.Line({
+                        from: [fromX, midY],
+                        to: [toX, midY],
+                        strokeColor: '#000000',
+                        strokeWidth: 1
+                    });
+                    midDivider.data = { 
+                        type: 'ac-table-mid-divider', 
+                        tableName: tableName,
+                        rowIndex: dataRowIndex
+                    };
+                }
+            }
+            
             // Draw cell contents
             const cellData = [
                 row.parameter || '',
@@ -1629,25 +1650,32 @@ class TimingGenRendering {
             ];
             
             cellData.forEach((content, colIndex) => {
-                if (content) {
-                    const x = startX + colPositions[colIndex] + cellPadding;
-                    const y = currentY + actualRowHeight / 2 + 5;
-                    
-                    const cellText = new paper.PointText({
-                        point: [x, y],
-                        content: String(content),
-                        fillColor: row.color || tableData.cellColor || '#000000',
-                        fontFamily: row.fontFamily || tableData.cellFont || 'Arial',
-                        fontSize: row.fontSize || tableData.cellSize || 12
-                    });
-                    cellText.data = { 
-                        type: 'ac-table-cell', 
-                        tableName: tableName,
-                        rowIndex: dataRowIndex,
-                        colIndex: colIndex,
-                        measureName: row.measureName
-                    };
-                }
+                // Use multi-space for empty cells to make them clickable
+                // Calculate minimum spaces based on cell width
+                const cellWidth = colWidths[colIndex];
+                const minSpaces = Math.max(3, Math.floor(cellWidth / 20)); // ~20 pixels per space
+                const displayContent = content || ' '.repeat(minSpaces);
+                
+                const x = startX + colPositions[colIndex] + cellPadding;
+                // For double-row: parameter (col 0) is centered vertically, others are in top half
+                const yOffset = isDoubleRow && colIndex > 0 ? rowHeight / 2 : actualRowHeight / 2;
+                const y = currentY + yOffset + 5;
+                
+                const cellText = new paper.PointText({
+                    point: [x, y],
+                    content: String(displayContent),
+                    fillColor: row.color || tableData.cellColor || '#000000',
+                    fontFamily: row.fontFamily || tableData.cellFont || 'Arial',
+                    fontSize: row.fontSize || tableData.cellSize || 12
+                });
+                cellText.data = { 
+                    type: 'ac-table-cell', 
+                    tableName: tableName,
+                    rowIndex: dataRowIndex,
+                    colIndex: colIndex,
+                    measureName: row.measureName,
+                    subRow: isDoubleRow && colIndex > 0 ? 0 : undefined  // Top sub-row for double-height non-parameter cells
+                };
             });
             
             currentY += actualRowHeight;
