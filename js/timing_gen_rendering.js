@@ -1650,32 +1650,57 @@ class TimingGenRendering {
             ];
             
             cellData.forEach((content, colIndex) => {
-                // Use multi-space for empty cells to make them clickable
-                // Calculate minimum spaces based on cell width
                 const cellWidth = colWidths[colIndex];
-                const minSpaces = Math.max(3, Math.floor(cellWidth / 20)); // ~20 pixels per space
-                const displayContent = content || ' '.repeat(minSpaces);
+                const cellX = startX + colPositions[colIndex];
+                // For double-row: parameter (col 0) uses full height, others use top half
+                const cellHeight = isDoubleRow && colIndex > 0 ? rowHeight : actualRowHeight;
+                const cellY = currentY + (isDoubleRow && colIndex > 0 ? 0 : 0);
                 
-                const x = startX + colPositions[colIndex] + cellPadding;
-                // For double-row: parameter (col 0) is centered vertically, others are in top half
-                const yOffset = isDoubleRow && colIndex > 0 ? rowHeight / 2 : actualRowHeight / 2;
-                const y = currentY + yOffset + 5;
-                
-                const cellText = new paper.PointText({
-                    point: [x, y],
-                    content: String(displayContent),
-                    fillColor: row.color || tableData.cellColor || '#000000',
-                    fontFamily: row.fontFamily || tableData.cellFont || 'Arial',
-                    fontSize: row.fontSize || tableData.cellSize || 12
-                });
-                cellText.data = { 
-                    type: 'ac-table-cell', 
-                    tableName: tableName,
-                    rowIndex: dataRowIndex,
-                    colIndex: colIndex,
-                    measureName: row.measureName,
-                    subRow: isDoubleRow && colIndex > 0 ? 0 : undefined  // Top sub-row for double-height non-parameter cells
-                };
+                if (content) {
+                    // Draw text for non-empty cells
+                    const x = cellX + cellPadding;
+                    const yOffset = isDoubleRow && colIndex > 0 ? rowHeight / 2 : actualRowHeight / 2;
+                    const y = currentY + yOffset + 5;
+                    
+                    const cellText = new paper.PointText({
+                        point: [x, y],
+                        content: String(content),
+                        fillColor: row.color || tableData.cellColor || '#000000',
+                        fontFamily: row.fontFamily || tableData.cellFont || 'Arial',
+                        fontSize: row.fontSize || tableData.cellSize || 12
+                    });
+                    cellText.data = { 
+                        type: 'ac-table-cell', 
+                        tableName: tableName,
+                        rowIndex: dataRowIndex,
+                        colIndex: colIndex,
+                        measureName: row.measureName,
+                        subRow: isDoubleRow && colIndex > 0 ? 0 : undefined
+                    };
+                } else {
+                    // Draw almost transparent box for empty cells (slightly smaller than cell)
+                    const padding = 2;
+                    const boxX = cellX + padding;
+                    const boxY = cellY + padding;
+                    const boxWidth = cellWidth - (2 * padding);
+                    const boxHeight = cellHeight - (2 * padding);
+                    
+                    const emptyBox = new paper.Path.Rectangle({
+                        point: [boxX, boxY],
+                        size: [boxWidth, boxHeight],
+                        fillColor: new paper.Color(0, 0, 0, 0.02), // Almost transparent
+                        strokeColor: null
+                    });
+                    emptyBox.data = { 
+                        type: 'ac-table-cell', 
+                        tableName: tableName,
+                        rowIndex: dataRowIndex,
+                        colIndex: colIndex,
+                        measureName: row.measureName,
+                        isEmpty: true,
+                        subRow: isDoubleRow && colIndex > 0 ? 0 : undefined
+                    };
+                }
             });
             
             currentY += actualRowHeight;
