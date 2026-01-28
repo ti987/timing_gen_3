@@ -107,6 +107,7 @@ class TimingGenApp {
         // AC Table state
         this.currentEditingACTable = null; // Name of AC table being edited
         this.currentEditingACCell = null; // {tableName, cellType, rowIndex, colName}
+        this.currentEditingNote = null; // {tableName, noteNum} for editing note text
         this.isDraggingACColumnDivider = false; // For resizing columns
         this.draggingACTableName = null; // Which table's column is being resized
         this.draggingACColumnIndex = null; // Which column divider is being dragged
@@ -571,7 +572,17 @@ class TimingGenApp {
     }
     
     showEditTextDialog() {
-        if (this.currentEditingText) {
+        if (this.currentEditingNote) {
+            // Editing AC table note text
+            const { tableName, noteNum } = this.currentEditingNote;
+            const tableData = this.acTablesData.get(tableName);
+            if (tableData) {
+                const noteData = tableData.notes.find(n => n.number === noteNum);
+                const currentValue = noteData ? noteData.text : '';
+                document.getElementById('edit-text-input').value = currentValue;
+                document.getElementById('edit-text-dialog').style.display = 'flex';
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 document.getElementById('edit-text-input').value = textData.text || '';
@@ -586,7 +597,17 @@ class TimingGenApp {
     }
     
     showFontDialog() {
-        if (this.currentEditingText) {
+        if (this.currentEditingNote) {
+            // Editing AC table note text font
+            const { tableName, noteNum } = this.currentEditingNote;
+            const tableData = this.acTablesData.get(tableName);
+            if (tableData) {
+                const noteData = tableData.notes.find(n => n.number === noteNum);
+                document.getElementById('font-family-select').value = (noteData && noteData.fontFamily) || 'Arial';
+                document.getElementById('font-size-input').value = (noteData && noteData.fontSize) || 11;
+                document.getElementById('font-dialog').style.display = 'flex';
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 document.getElementById('font-family-select').value = textData.fontFamily || 'Arial';
@@ -602,7 +623,16 @@ class TimingGenApp {
     }
     
     showColorDialog() {
-        if (this.currentEditingText) {
+        if (this.currentEditingNote) {
+            // Editing AC table note text color
+            const { tableName, noteNum } = this.currentEditingNote;
+            const tableData = this.acTablesData.get(tableName);
+            if (tableData) {
+                const noteData = tableData.notes.find(n => n.number === noteNum);
+                document.getElementById('text-color-input').value = (noteData && noteData.color) || '#000000';
+                document.getElementById('color-dialog').style.display = 'flex';
+            }
+        } else if (this.currentEditingText) {
             const textData = this.textData.get(this.currentEditingText);
             if (textData) {
                 document.getElementById('text-color-input').value = textData.color || '#000000';
@@ -617,92 +647,161 @@ class TimingGenApp {
     }
     
     updateTextRow() {
-        // Check if we're editing a measure's text (currentEditingMeasure is set)
-        const measures = this.getMeasures();
-        if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
-            // Update measure text
-            // Capture state before action
-            this.undoRedoManager.captureState();
-            
-            const measure = measures[this.currentEditingMeasure];
-            measure.text = document.getElementById('edit-text-input').value;
-            this.hideEditTextDialog();
-            this.currentEditingMeasure = null;
-            this.render();
-        } else if (this.currentEditingText) {
-            const textData = this.textData.get(this.currentEditingText);
-            if (textData) {
+        if (this.currentEditingNote) {
+            // Update AC table note text
+            const { tableName, noteNum } = this.currentEditingNote;
+            const tableData = this.acTablesData.get(tableName);
+            if (tableData) {
                 // Capture state before action
                 this.undoRedoManager.captureState();
                 
-                textData.text = document.getElementById('edit-text-input').value;
+                const newValue = document.getElementById('edit-text-input').value;
+                let noteData = tableData.notes.find(n => n.number === noteNum);
+                if (noteData) {
+                    noteData.text = newValue;
+                } else {
+                    tableData.notes.push({ number: noteNum, text: newValue });
+                }
                 this.hideEditTextDialog();
+                this.currentEditingNote = null;
                 this.render();
+            }
+        } else {
+            // Check if we're editing a measure's text (currentEditingMeasure is set)
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                // Update measure text
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
+                const measure = measures[this.currentEditingMeasure];
+                measure.text = document.getElementById('edit-text-input').value;
+                this.hideEditTextDialog();
+                this.currentEditingMeasure = null;
+                this.render();
+            } else if (this.currentEditingText) {
+                const textData = this.textData.get(this.currentEditingText);
+                if (textData) {
+                    // Capture state before action
+                    this.undoRedoManager.captureState();
+                    
+                    textData.text = document.getElementById('edit-text-input').value;
+                    this.hideEditTextDialog();
+                    this.render();
+                }
             }
         }
     }
     
     updateTextFont() {
-        // Check if we're editing a measure's text (currentEditingMeasure is set)
-        const measures = this.getMeasures();
-        if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
-            // Update measure text font
-            // Capture state before action
-            this.undoRedoManager.captureState();
-            
-            const measure = measures[this.currentEditingMeasure];
-            measure.textFont = document.getElementById('font-family-select').value;
-            const fontSize = parseInt(document.getElementById('font-size-input').value);
-            if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
-                measure.textSize = fontSize;
-            } else {
-                measure.textSize = 12; // Default fallback
-            }
-            this.hideFontDialog();
-            this.currentEditingMeasure = null;
-            this.render();
-        } else if (this.currentEditingText) {
-            const textData = this.textData.get(this.currentEditingText);
-            if (textData) {
+        if (this.currentEditingNote) {
+            // Update AC table note text font
+            const { tableName, noteNum } = this.currentEditingNote;
+            const tableData = this.acTablesData.get(tableName);
+            if (tableData) {
                 // Capture state before action
                 this.undoRedoManager.captureState();
                 
-                textData.fontFamily = document.getElementById('font-family-select').value;
+                let noteData = tableData.notes.find(n => n.number === noteNum);
+                if (!noteData) {
+                    noteData = { number: noteNum, text: '' };
+                    tableData.notes.push(noteData);
+                }
+                
+                noteData.fontFamily = document.getElementById('font-family-select').value;
                 const fontSize = parseInt(document.getElementById('font-size-input').value);
-                // Validate fontSize is a valid number within range
                 if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
-                    textData.fontSize = fontSize;
+                    noteData.fontSize = fontSize;
                 } else {
-                    textData.fontSize = 14; // Default fallback
+                    noteData.fontSize = 11; // Default fallback
                 }
                 this.hideFontDialog();
+                this.currentEditingNote = null;
                 this.render();
+            }
+        } else {
+            // Check if we're editing a measure's text (currentEditingMeasure is set)
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                // Update measure text font
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
+                const measure = measures[this.currentEditingMeasure];
+                measure.textFont = document.getElementById('font-family-select').value;
+                const fontSize = parseInt(document.getElementById('font-size-input').value);
+                if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
+                    measure.textSize = fontSize;
+                } else {
+                    measure.textSize = 12; // Default fallback
+                }
+                this.hideFontDialog();
+                this.currentEditingMeasure = null;
+                this.render();
+            } else if (this.currentEditingText) {
+                const textData = this.textData.get(this.currentEditingText);
+                if (textData) {
+                    // Capture state before action
+                    this.undoRedoManager.captureState();
+                    
+                    textData.fontFamily = document.getElementById('font-family-select').value;
+                    const fontSize = parseInt(document.getElementById('font-size-input').value);
+                    // Validate fontSize is a valid number within range
+                    if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
+                        textData.fontSize = fontSize;
+                    } else {
+                        textData.fontSize = 14; // Default fallback
+                    }
+                    this.hideFontDialog();
+                    this.render();
+                }
             }
         }
     }
     
     updateTextColor() {
-        // Check if we're editing a measure's text (currentEditingMeasure is set)
-        const measures = this.getMeasures();
-        if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
-            // Update measure text color
-            // Capture state before action
-            this.undoRedoManager.captureState();
-            
-            const measure = measures[this.currentEditingMeasure];
-            measure.textColor = document.getElementById('text-color-input').value;
-            this.hideColorDialog();
-            this.currentEditingMeasure = null;
-            this.render();
-        } else if (this.currentEditingText) {
-            const textData = this.textData.get(this.currentEditingText);
-            if (textData) {
+        if (this.currentEditingNote) {
+            // Update AC table note text color
+            const { tableName, noteNum } = this.currentEditingNote;
+            const tableData = this.acTablesData.get(tableName);
+            if (tableData) {
                 // Capture state before action
                 this.undoRedoManager.captureState();
                 
-                textData.color = document.getElementById('text-color-input').value;
+                let noteData = tableData.notes.find(n => n.number === noteNum);
+                if (!noteData) {
+                    noteData = { number: noteNum, text: '' };
+                    tableData.notes.push(noteData);
+                }
+                
+                noteData.color = document.getElementById('text-color-input').value;
                 this.hideColorDialog();
+                this.currentEditingNote = null;
                 this.render();
+            }
+        } else {
+            // Check if we're editing a measure's text (currentEditingMeasure is set)
+            const measures = this.getMeasures();
+            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
+                // Update measure text color
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
+                const measure = measures[this.currentEditingMeasure];
+                measure.textColor = document.getElementById('text-color-input').value;
+                this.hideColorDialog();
+                this.currentEditingMeasure = null;
+                this.render();
+            } else if (this.currentEditingText) {
+                const textData = this.textData.get(this.currentEditingText);
+                if (textData) {
+                    // Capture state before action
+                    this.undoRedoManager.captureState();
+                    
+                    textData.color = document.getElementById('text-color-input').value;
+                    this.hideColorDialog();
+                    this.render();
+                }
             }
         }
     }
@@ -2067,14 +2166,13 @@ class TimingGenApp {
                                     TimingGenUI.showContextMenu('ac-cell-context-menu', ev.clientX, ev.clientY);
                                 }
                                 return;
-                            } else if (item.data.type === 'ac-table-note-text') {
-                                // Right-click on note field text
-                                this.currentEditingACCell = {
+                            } else if (item.data.type === 'ac-table-note-text' || item.data.type === 'ac-table-note-num') {
+                                // Right-click on note field text or note number
+                                this.currentEditingNote = {
                                     tableName: row.name,
-                                    cellType: 'note',
-                                    colName: item.data.noteNum
+                                    noteNum: item.data.noteNum
                                 };
-                                TimingGenUI.showContextMenu('ac-cell-context-menu', ev.clientX, ev.clientY);
+                                TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
                                 return;
                             } else if (item.data.type === 'ac-table-row-border') {
                                 // Right-click on empty AC table cell area (cell border without text)

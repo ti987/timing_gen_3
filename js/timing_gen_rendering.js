@@ -1737,6 +1737,9 @@ class TimingGenRendering {
         sortedNotes.forEach((noteNum, index) => {
             const noteY = noteFieldY + 15 + (index * 20);
             
+            // Get note data for font properties
+            const noteData = tableData.notes.find(n => n.number === noteNum);
+            
             // Note number
             const noteNumText = new paper.PointText({
                 point: [startX + 60, noteY],
@@ -1752,16 +1755,15 @@ class TimingGenRendering {
             };
             
             // Note text (find in notes array)
-            const noteData = tableData.notes.find(n => n.number === noteNum);
             const noteTextContent = noteData ? noteData.text : '';
             
             if (noteTextContent) {
                 const noteTextObj = new paper.PointText({
                     point: [startX + 90, noteY],
                     content: noteTextContent,
-                    fillColor: '#000000',
-                    fontFamily: 'Arial',
-                    fontSize: 11
+                    fillColor: (noteData && noteData.color) || '#000000',
+                    fontFamily: (noteData && noteData.fontFamily) || 'Arial',
+                    fontSize: (noteData && noteData.fontSize) || 11
                 });
                 noteTextObj.data = { 
                     type: 'ac-table-note-text', 
