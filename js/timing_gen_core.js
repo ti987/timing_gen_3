@@ -280,6 +280,7 @@ class TimingGenApp {
         
         document.getElementById('move-ac-table-top-menu').addEventListener('click', () => this.moveACTableTo('top'));
         document.getElementById('move-ac-table-bottom-menu').addEventListener('click', () => this.moveACTableTo('bottom'));
+        document.getElementById('update-ac-table-menu').addEventListener('click', () => this.updateCurrentACTable());
         document.getElementById('delete-ac-table-menu').addEventListener('click', () => this.deleteCurrentACTable());
         document.getElementById('cancel-ac-table-menu').addEventListener('click', () => this.hideAllMenus());
         
@@ -1363,6 +1364,63 @@ class TimingGenApp {
                 this.hideAllMenus();
             }
         }
+    }
+    
+    updateCurrentACTable() {
+        if (this.currentEditingACTable) {
+            this.updateACTableValues(this.currentEditingACTable);
+            this.hideAllMenus();
+        }
+    }
+    
+    updateACTableValues(tableName) {
+        // Update AC table by recalculating min/max values for all rows
+        // Respects manually edited cells (won't update those)
+        const tableData = this.acTablesData.get(tableName);
+        if (!tableData) return;
+        
+        // Capture state for undo/redo
+        this.undoRedoManager.captureState();
+        
+        // Get current config values
+        const cyclePeriod = this.config.clockPeriod;
+        const delayMin = this.config.delayMin;
+        const delayMax = this.config.delayMax;
+        const unit = this.config.clockPeriodUnit;
+        
+        // Update each row that's linked to a measure
+        tableData.rows.forEach(row => {
+            if (row.measureName) {
+                const measure = this.measuresData.get(row.measureName);
+                if (measure) {
+                    // Update symbol if not manually edited
+                    if (!row.manuallyEdited.symbol && measure.text) {
+                        row.symbol = measure.text;
+                    }
+                    
+                    // Recalculate min/max based on measure cycles
+                    const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
+                    const timeValue = cyclePeriod * cycleDiff;
+                    
+                    // Update min if not manually edited
+                    if (!row.manuallyEdited.min) {
+                        row.min = delayMin !== 0 ? (timeValue + delayMin).toFixed(2) : '';
+                    }
+                    
+                    // Update max if not manually edited
+                    if (!row.manuallyEdited.max) {
+                        row.max = delayMax !== 0 ? (timeValue + delayMax).toFixed(2) : '';
+                    }
+                    
+                    // Update unit if not manually edited
+                    if (!row.manuallyEdited.unit) {
+                        row.unit = unit;
+                    }
+                }
+            }
+        });
+        
+        this.render();
     }
     
     flashMeasure(measureName) {
