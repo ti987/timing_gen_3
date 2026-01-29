@@ -1587,6 +1587,7 @@ class TimingGenRendering {
         let currentY = startY + titleHeight + headerHeight;
         tableData.rows.forEach((row, dataRowIndex) => {
             const actualRowHeight = rowHeight * (row.rowSpan || 1);
+            const isDoubleRow = (row.rowSpan || 1) === 2;
             
             // Draw row border
             const rowBorder = new paper.Path.Rectangle({
@@ -1618,6 +1619,26 @@ class TimingGenRendering {
                 };
             }
             
+            // If double-row, draw horizontal dividers for columns 1-5 (not parameter column)
+            if (isDoubleRow) {
+                const midY = currentY + rowHeight;
+                for (let i = 1; i < colWidths.length; i++) {
+                    const fromX = startX + colPositions[i];
+                    const toX = startX + colPositions[i + 1];
+                    const midDivider = new paper.Path.Line({
+                        from: [fromX, midY],
+                        to: [toX, midY],
+                        strokeColor: '#000000',
+                        strokeWidth: 1
+                    });
+                    midDivider.data = { 
+                        type: 'ac-table-mid-divider', 
+                        tableName: tableName,
+                        rowIndex: dataRowIndex
+                    };
+                }
+            }
+            
             // Draw cell contents
             const cellData = [
                 row.parameter || '',
@@ -1629,9 +1650,17 @@ class TimingGenRendering {
             ];
             
             cellData.forEach((content, colIndex) => {
+                const cellWidth = colWidths[colIndex];
+                const cellX = startX + colPositions[colIndex];
+                // For double-row: parameter (col 0) uses full height, others use top half
+                const cellHeight = isDoubleRow && colIndex > 0 ? rowHeight : actualRowHeight;
+                const cellY = currentY; // Y position is always currentY for the cell start
+                
                 if (content) {
-                    const x = startX + colPositions[colIndex] + cellPadding;
-                    const y = currentY + actualRowHeight / 2 + 5;
+                    // Draw text for non-empty cells
+                    const x = cellX + cellPadding;
+                    const yOffset = isDoubleRow && colIndex > 0 ? rowHeight / 2 : actualRowHeight / 2;
+                    const y = currentY + yOffset + 5;
                     
                     const cellText = new paper.PointText({
                         point: [x, y],
@@ -1645,7 +1674,31 @@ class TimingGenRendering {
                         tableName: tableName,
                         rowIndex: dataRowIndex,
                         colIndex: colIndex,
-                        measureName: row.measureName
+                        measureName: row.measureName,
+                        subRow: isDoubleRow && colIndex > 0 ? 0 : undefined
+                    };
+                } else {
+                    // Draw almost transparent box for empty cells (slightly smaller than cell)
+                    const padding = 2;
+                    const boxX = cellX + padding;
+                    const boxY = cellY + padding;
+                    const boxWidth = cellWidth - (2 * padding);
+                    const boxHeight = cellHeight - (2 * padding);
+                    
+                    const emptyBox = new paper.Path.Rectangle({
+                        point: [boxX, boxY],
+                        size: [boxWidth, boxHeight],
+                        fillColor: new paper.Color(0, 0, 0, 0.02), // Almost transparent
+                        strokeColor: null
+                    });
+                    emptyBox.data = { 
+                        type: 'ac-table-cell', 
+                        tableName: tableName,
+                        rowIndex: dataRowIndex,
+                        colIndex: colIndex,
+                        measureName: row.measureName,
+                        isEmpty: true,
+                        subRow: isDoubleRow && colIndex > 0 ? 0 : undefined
                     };
                 }
             });
@@ -1684,6 +1737,9 @@ class TimingGenRendering {
         sortedNotes.forEach((noteNum, index) => {
             const noteY = noteFieldY + 15 + (index * 20);
             
+            // Get note data for font properties
+            const noteData = tableData.notes.find(n => n.number === noteNum);
+            
             // Note number
             const noteNumText = new paper.PointText({
                 point: [startX + 60, noteY],
@@ -1699,16 +1755,15 @@ class TimingGenRendering {
             };
             
             // Note text (find in notes array)
-            const noteData = tableData.notes.find(n => n.number === noteNum);
             const noteTextContent = noteData ? noteData.text : '';
             
             if (noteTextContent) {
                 const noteTextObj = new paper.PointText({
                     point: [startX + 90, noteY],
                     content: noteTextContent,
-                    fillColor: '#000000',
-                    fontFamily: 'Arial',
-                    fontSize: 11
+                    fillColor: (noteData && noteData.color) || '#000000',
+                    fontFamily: (noteData && noteData.fontFamily) || 'Arial',
+                    fontSize: (noteData && noteData.fontSize) || 11
                 });
                 noteTextObj.data = { 
                     type: 'ac-table-note-text', 
