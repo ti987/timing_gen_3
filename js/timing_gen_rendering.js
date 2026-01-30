@@ -1701,6 +1701,31 @@ class TimingGenRendering {
                         subRow: isDoubleRow && colIndex > 0 ? 0 : undefined
                     };
                 }
+                
+                // For double-row cells (except parameter column), also create clickable area for bottom sub-row
+                if (isDoubleRow && colIndex > 0) {
+                    const padding = 2;
+                    const boxX = cellX + padding;
+                    const boxY = currentY + rowHeight + padding; // Bottom half starts at rowHeight offset
+                    const boxWidth = cellWidth - (2 * padding);
+                    const boxHeight = rowHeight - (2 * padding);
+                    
+                    const bottomSubRowBox = new paper.Path.Rectangle({
+                        point: [boxX, boxY],
+                        size: [boxWidth, boxHeight],
+                        fillColor: new paper.Color(0, 0, 0, 0.02), // Almost transparent
+                        strokeColor: null
+                    });
+                    bottomSubRowBox.data = { 
+                        type: 'ac-table-cell', 
+                        tableName: tableName,
+                        rowIndex: dataRowIndex,
+                        colIndex: colIndex,
+                        measureName: row.measureName,
+                        isEmpty: true,
+                        subRow: 1  // Bottom sub-row
+                    };
+                }
             });
             
             currentY += actualRowHeight;

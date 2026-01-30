@@ -155,6 +155,7 @@ class TimingGenApp {
         document.getElementById('new-btn').addEventListener('click', () => this.handleNewDocument());
         document.getElementById('undo-btn').addEventListener('click', () => this.undoRedoManager.undo());
         document.getElementById('redo-btn').addEventListener('click', () => this.undoRedoManager.redo());
+        document.getElementById('redraw-btn').addEventListener('click', () => this.redrawAll());
         document.getElementById('add-signal-btn').addEventListener('click', () => TimingGenUI.showAddSignalDialog(this));
         document.getElementById('global-option-btn').addEventListener('click', () => TimingGenUI.showGlobalOptionDialog(this));
         document.getElementById('save-btn').addEventListener('click', () => TimingGenData.saveToJSON(this));
@@ -5339,6 +5340,20 @@ class TimingGenApp {
         const x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
         
         return { x, y, signalName, cycle };
+    }
+    
+    
+    redrawAll() {
+        // Update all AC tables for measure changes
+        for (const [measureName, measure] of this.measuresData.entries()) {
+            this.updateACTableForMeasureChange(measureName, measure);
+        }
+        
+        // Recalculate arrow positions
+        this.recalculateArrowPositions();
+        
+        // Redraw everything
+        this.render();
     }
     
     handleNewDocument() {
