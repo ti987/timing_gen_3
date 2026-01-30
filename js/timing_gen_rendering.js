@@ -1795,6 +1795,21 @@ class TimingGenRendering {
                     tableName: tableName,
                     noteNum: noteNum
                 };
+            } else {
+                // Create transparent clickable box for empty note description
+                const noteTextBoxWidth = tableWidth - 90 - cellPadding;
+                const noteTextBox = new paper.Path.Rectangle({
+                    point: [startX + 90, noteY - 9],
+                    size: [noteTextBoxWidth, 14],
+                    fillColor: new paper.Color(0, 0, 0, 0.02), // Almost transparent
+                    strokeColor: null
+                });
+                noteTextBox.data = { 
+                    type: 'ac-table-note-text', 
+                    tableName: tableName,
+                    noteNum: noteNum,
+                    isEmpty: true
+                };
             }
         });
     }
