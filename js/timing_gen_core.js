@@ -1632,6 +1632,23 @@ class TimingGenApp {
         };
     }
     
+    // Hit test all layers (not just active layer)
+    hitTestAllLayers(point, options) {
+        const allResults = [];
+        const layers = [this.backgroundLayer, this.gridLayer, this.signalLayer, this.measureLayer];
+        
+        layers.forEach(layer => {
+            if (layer) {
+                const results = layer.hitTestAll(point, options);
+                if (results && results.length > 0) {
+                    allResults.push(...results);
+                }
+            }
+        });
+        
+        return allResults;
+    }
+    
     handleCanvasClick(event) {
         // Only handle left mouse button clicks (button 0)
         // Right clicks are handled by handleCanvasRightClick
@@ -1645,8 +1662,8 @@ class TimingGenApp {
         const yPos = event.point.y;
         
         // Check if clicking on a measure element (Paper.js tool handlers prevent item handlers from firing)
-        // Use hitTestAll to get all items at the point, not just the topmost group
-        const hitResults = paper.project.hitTestAll(event.point, this.getHitTestOptions());
+        // Use hitTestAll to get all items at the point - search all layers
+        const hitResults = this.hitTestAllLayers(event.point, this.getHitTestOptions());
         
         if (hitResults && hitResults.length > 0) {
             // Look for arrow elements first, prioritizing control points over curves
@@ -2169,7 +2186,7 @@ class TimingGenApp {
         
         // First check for arrow elements (they overlay signals)
         const point = new paper.Point(xPos, yPos);
-        const hitResults = paper.project.hitTestAll(point, this.getHitTestOptions());
+        const hitResults = this.hitTestAllLayers(point, this.getHitTestOptions());
         
         if (hitResults && hitResults.length > 0) {
             // Look for arrow elements first
@@ -2358,8 +2375,8 @@ class TimingGenApp {
         const xPos = event.point.x;
         const yPos = event.point.y;
         
-        // Use Paper.js hitTest to find what was clicked
-        const hitResults = paper.project.hitTestAll(event.point, {
+        // Use Paper.js hitTest to find what was clicked - search all layers
+        const hitResults = this.hitTestAllLayers(event.point, {
             fill: true,
             stroke: true,
             segments: true,
