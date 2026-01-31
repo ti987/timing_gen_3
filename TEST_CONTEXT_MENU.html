@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AC Table Context Menu Test - No Cache</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .success {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .error {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .test-pass {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+        }
+        .test-fail {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+        }
+        code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .instructions {
+            background: #e8f4f8;
+            padding: 15px;
+            border-left: 4px solid #3498db;
+            margin: 15px 0;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 AC Table Context Menu Fix - Verification Test</h1>
+    
+    <div class="test-section">
+        <h2>Fix Status</h2>
+        <div id="fix-status">Testing...</div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Instructions</h2>
+        <div class="instructions">
+            <p><strong>If you see "Nothing Changed":</strong></p>
+            <ol>
+                <li>Your browser is using a cached version of the JavaScript files</li>
+                <li>Press <code>Ctrl+Shift+R</code> (Windows/Linux) or <code>Cmd+Shift+R</code> (Mac)</li>
+                <li>Or open DevTools (F12) → Network tab → check "Disable cache" → refresh</li>
+                <li>Then reload this test page</li>
+            </ol>
+        </div>
+        
+        <button onclick="window.location.reload(true)">🔄 Hard Reload This Page</button>
+        <button onclick="window.open('index.html?nocache=' + Date.now(), '_blank')">🚀 Open Main App (No Cache)</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Results</h2>
+        <div id="test-results">
+            <p>Loading tests...</p>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>How to Test Manually</h2>
+        <ol>
+            <li>Click "Open Main App (No Cache)" button above</li>
+            <li>Add a signal (e.g., clock)</li>
+            <li>Add a measure</li>
+            <li>Add an AC Table widget</li>
+            <li><strong>Right-click on an empty cell (Min or Max column)</strong></li>
+            <li>✅ You should see a context menu appear!</li>
+        </ol>
+    </div>
+    
+    <script>
+        // Load the main scripts with cache-busting
+        const timestamp = Date.now();
+        const scripts = [
+            `lib/paper-full.min.js?v=${timestamp}`,
+            `js/timing_gen_ui.js?v=${timestamp}`,
+            `js/timing_gen_rendering.js?v=${timestamp}`,
+            `js/timing_gen_core.js?v=${timestamp}`
+        ];
+        
+        let scriptsLoaded = 0;
+        const totalScripts = scripts.length;
+        
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        
+        async function loadAllScripts() {
+            for (const src of scripts) {
+                try {
+                    await loadScript(src);
+                    scriptsLoaded++;
+                    console.log(`✅ Loaded: ${src}`);
+                } catch (error) {
+                    console.error(`❌ Failed to load: ${src}`, error);
+                }
+            }
+        }
+        
+        async function runTests() {
+            await loadAllScripts();
+            
+            // Give a moment for initialization
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            const results = [];
+            
+            // Test 1: Check if app exists
+            const appExists = typeof window.timingGenApp !== 'undefined';
+            results.push({
+                name: 'App Initialization',
+                pass: appExists,
+                message: appExists ? 'TimingGenApp initialized' : 'TimingGenApp not found'
+            });
+            
+            if (appExists) {
+                // Test 2: Check if hitTestAllLayers method exists
+                const hasMethod = typeof window.timingGenApp.hitTestAllLayers === 'function';
+                results.push({
+                    name: 'hitTestAllLayers Method',
+                    pass: hasMethod,
+                    message: hasMethod ? 'Fix is loaded!' : 'Method not found - cache issue!'
+                });
+                
+                if (hasMethod) {
+                    // Test 3: Verify method searches all layers
+                    const methodSource = window.timingGenApp.hitTestAllLayers.toString();
+                    const searchesAllLayers = methodSource.includes('signalLayer') && 
+                                             methodSource.includes('measureLayer') &&
+                                             methodSource.includes('gridLayer') &&
+                                             methodSource.includes('backgroundLayer');
+                    results.push({
+                        name: 'Method Implementation',
+                        pass: searchesAllLayers,
+                        message: searchesAllLayers ? 
+                            'Correctly searches all 4 layers' : 
+                            'Implementation issue detected'
+                    });
+                }
+            }
+            
+            // Display results
+            const statusDiv = document.getElementById('fix-status');
+            const resultsDiv = document.getElementById('test-results');
+            
+            const allPass = results.every(r => r.pass);
+            
+            if (allPass) {
+                statusDiv.innerHTML = '<div class="test-result test-pass"><span class="success">✅ FIX IS WORKING!</span><br>Context menus should now work on AC table cells.</div>';
+            } else {
+                statusDiv.innerHTML = '<div class="test-result test-fail"><span class="error">❌ FIX NOT LOADED</span><br>Please clear your browser cache and reload.</div>';
+            }
+            
+            resultsDiv.innerHTML = results.map(r => `
+                <div class="test-result ${r.pass ? 'test-pass' : 'test-fail'}">
+                    <strong>${r.pass ? '✅' : '❌'} ${r.name}:</strong> ${r.message}
+                </div>
+            `).join('');
+        }
+        
+        // Run tests when page loads
+        runTests().catch(error => {
+            console.error('Test error:', error);
+            document.getElementById('fix-status').innerHTML = 
+                '<div class="test-result test-fail"><span class="error">❌ Error loading tests</span></div>';
+        });
+    </script>
+</body>
+</html>
