@@ -2241,7 +2241,7 @@ class TimingGenApp {
                         if (item.data.type === 'ac-table-cell') {
                                 // Right-click on a cell
                                 this.currentEditingACCell = {
-                                    tableName: row.name,
+                                    tableName: item.data.tableName,
                                     cellType: 'data',
                                     rowIndex: item.data.rowIndex,
                                     colIndex: item.data.colIndex,
@@ -2258,14 +2258,14 @@ class TimingGenApp {
                             } else if (item.data.type === 'ac-table-note-text' || item.data.type === 'ac-table-note-num') {
                                 // Right-click on note field text or note number
                                 this.currentEditingNote = {
-                                    tableName: row.name,
+                                    tableName: item.data.tableName,
                                     noteNum: item.data.noteNum
                                 };
                                 TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
                                 return;
                             } else if (item.data.type === 'ac-table-row-border') {
                                 // Right-click on empty AC table cell area (cell border without text)
-                                const tableName = row.name;
+                                const tableName = item.data.tableName;
                                 const tableData = this.acTablesData.get(tableName);
                                 if (!tableData) return;
                                 
@@ -2307,13 +2307,20 @@ class TimingGenApp {
                                 }
                             } else if (item.data.type === 'ac-table-title' || item.data.type === 'ac-table-border') {
                                 // Right-click on table title or border - show table menu
-                                this.currentEditingACTable = row.name;
+                                this.currentEditingACTable = item.data.tableName;
                                 TimingGenUI.showContextMenu('ac-table-context-menu', ev.clientX, ev.clientY);
                                 return;
                             }
                         }
                     }
                 }
+        }
+        
+        if (row) {
+            if (row.type === 'text') {
+                // Right-click on text row - show text context menu
+                this.currentEditingText = row.name;
+                TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
                 return;
             } else if (row.type === 'measure') {
                 // Right-click on measure row - check what element was clicked
