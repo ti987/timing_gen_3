@@ -2147,9 +2147,15 @@ class TimingGenApp {
         
         this.hideAllMenus();
         
+        // Convert canvas DOM coordinates to Paper.js view coordinates
+        // This accounts for any view transformations (zoom, pan, etc.)
+        const paperPoint = paper.view.viewToProject(new paper.Point(xPos, yPos));
+        const paperX = paperPoint.x;
+        const paperY = paperPoint.y;
+        
         // Check if right-click is in cycle header area (top row with cycle numbers)
-        if (yPos < this.config.headerHeight && xPos >= this.config.nameColumnWidth) {
-            const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
+        if (paperY < this.config.headerHeight && paperX >= this.config.nameColumnWidth) {
+            const cycle = Math.floor((paperX - this.config.nameColumnWidth) / this.config.cycleWidth);
             if (cycle >= 0 && cycle < this.config.cycles) {
                 this.currentEditingCycle = cycle;
                 TimingGenUI.showContextMenu('cycle-context-menu', ev.clientX, ev.clientY);
@@ -2158,11 +2164,11 @@ class TimingGenApp {
         }
         
         // Check if right-click is in signal name area
-        if (xPos < this.config.nameColumnWidth) {
-            const row = this.getRowAtY(yPos);
+        if (paperX < this.config.nameColumnWidth) {
+            const row = this.getRowAtY(paperY);
             if (row) {
                 if (row.type === 'signal') {
-                    const signalIndex = this.getSignalIndexAtY(yPos);
+                    const signalIndex = this.getSignalIndexAtY(paperY);
                     if (signalIndex !== -1) {
                         this.currentEditingSignal = signalIndex;
                         TimingGenUI.showContextMenu('signal-context-menu', ev.clientX, ev.clientY);
@@ -2181,12 +2187,12 @@ class TimingGenApp {
         }
         
         // Check if right-click is in waveform area
-        const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
-        const row = this.getRowAtY(yPos);
+        const cycle = Math.floor((paperX - this.config.nameColumnWidth) / this.config.cycleWidth);
+        const row = this.getRowAtY(paperY);
         
         // First check for arrow elements (they overlay signals)
-        const point = new paper.Point(xPos, yPos);
-        const hitResults = this.hitTestAllLayers(point, this.getHitTestOptions());
+        // Use paperPoint for hit testing (already in Paper.js coordinates)
+        const hitResults = this.hitTestAllLayers(paperPoint, this.getHitTestOptions());
         
         if (hitResults && hitResults.length > 0) {
             // Look for arrow elements first
@@ -2256,8 +2262,7 @@ class TimingGenApp {
                                 const tableData = this.acTablesData.get(tableName);
                                 if (!tableData) return;
                                 
-                                const rect = this.canvas.getBoundingClientRect();
-                                const xPos = ev.clientX - rect.left;
+                                // Use Paper.js coordinates (already converted above)
                                 const startX = this.config.nameColumnWidth + 10;
                                 const colWidths = tableData.columnWidths || [400, 100, 100, 100, 100, 100];
                                 const colPositions = [0];
@@ -2265,8 +2270,8 @@ class TimingGenApp {
                                     colPositions.push(colPositions[i] + colWidths[i]);
                                 }
                                 
-                                // Determine which column was clicked
-                                const clickX = xPos - startX;
+                                // Determine which column was clicked using Paper.js coordinates
+                                const clickX = paperX - startX;
                                 let colIndex = -1;
                                 for (let i = 0; i < colPositions.length - 1; i++) {
                                     if (clickX >= colPositions[i] && clickX < colPositions[i + 1]) {
@@ -2350,7 +2355,7 @@ class TimingGenApp {
                     }
                 }
             } else if (row.type === 'signal') {
-                const signalIndex = this.getSignalIndexAtY(yPos);
+                const signalIndex = this.getSignalIndexAtY(paperY);
                 
                 if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
                     const signal = this.getSignalByIndex(signalIndex);
