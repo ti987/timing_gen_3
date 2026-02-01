@@ -43,14 +43,15 @@ class TimingGenApp {
             backgroundColor: '#ffffff'
         };
         
-        // Data model v3.4.0 - Extended with AC Table widget
-        // rows: defines order only - Array of {type: 'signal'|'measure'|'text'|'counter'|'ac-table', name: string}
+        // Data model v3.4.0 - Extended with AC Table widget and Group row type
+        // rows: defines order only - Array of {type: 'signal'|'measure'|'text'|'counter'|'ac-table'|'group', name: string}
         // signalsData: Map<name, signalObject> - actual signal data
         // measuresData: Map<name, measureObject> - actual measure data
         // textData: Map<name, textObject> - actual text data
         // counterData: Map<name, counterObject> - actual counter data
         // arrowsData: Map<name, arrowObject> - actual arrow data
         // acTablesData: Map<name, acTableObject> - actual AC table data
+        // groupsData: Map<name, groupObject> - actual group data (contains array of measure names)
         this.rows = [];
         this.signalsData = new Map();  // Key: signal name, Value: signal object
         this.measuresData = new Map(); // Key: measure name (auto-generated), Value: measure object
@@ -58,6 +59,7 @@ class TimingGenApp {
         this.counterData = new Map();  // Key: counter name (auto-generated), Value: counter object
         this.arrowsData = new Map();   // Key: arrow name (auto-generated), Value: arrow object
         this.acTablesData = new Map(); // Key: table name (auto-generated), Value: AC table object
+        this.groupsData = new Map();   // Key: group name (auto-generated), Value: {name, measures: [measureNames]}
         
         // Counter for auto-generating unique measure names
         this.measureCounter = 0;
@@ -66,6 +68,7 @@ class TimingGenApp {
         this.counterCounter = 0;
         this.arrowCounter = 0;
         this.acTableCounter = 0;
+        this.groupCounter = 0; // Counter for group names (G0, G1, G2...)
         
         // Row manager for unified row system
         this.rowManager = new RowManager(this);
@@ -125,6 +128,7 @@ class TimingGenApp {
         // Selection state
         this.selectedSignals = new Set(); // Set of signal indices
         this.selectedMeasureRows = new Set(); // Set of measure row indices
+        this.selectedGroupRows = new Set(); // Set of group row indices
         this.isDragging = false;
         
         // Paper.js layers
@@ -179,6 +183,10 @@ class TimingGenApp {
         document.getElementById('add-arrow-menu').addEventListener('click', () => {
             document.getElementById('add-submenu').style.display = 'none';
             this.startArrowMode();
+        });
+        document.getElementById('add-group-menu').addEventListener('click', () => {
+            document.getElementById('add-submenu').style.display = 'none';
+            this.addGroup();
         });
         document.getElementById('add-text-menu').addEventListener('click', () => {
             document.getElementById('add-submenu').style.display = 'none';
@@ -2003,23 +2011,90 @@ class TimingGenApp {
                 if (measure) {
                     const measureName = measure.name;
                     
-                    // Remove from old position
-                    const oldRowIndex = this.rows.findIndex(r => r.type === 'measure' && r.name === measureName);
-                    if (oldRowIndex >= 0) {
-                        this.rows.splice(oldRowIndex, 1);
-                    }
-                    
-                    // Calculate new insertion index
-                    let newRowIndex = row.index;
-                    if (oldRowIndex < newRowIndex) {
-                        newRowIndex--; // Adjust for removal
-                    }
-                    
-                    // Insert at new position
-                    this.rows.splice(newRowIndex, 0, {
-                        type: 'measure',
-                        name: measureName
+                    // Check if measure is currently in a group
+                    const currentGroupRow = this.rows.find(r => {
+                        if (r.type === 'group') {
+                            const group = this.groupsData.get(r.name);
+                            return group && group.measures && group.measures.includes(measureName);
+                        }
+                        return false;
                     });
+                    
+                    // Remove measure from old position (either standalone measure row or from group)
+                    if (currentGroupRow) {
+                        // Remove from group
+                        const group = this.groupsData.get(currentGroupRow.name);
+                        const measureIndex = group.measures.indexOf(measureName);
+                        if (measureIndex >= 0) {
+                            group.measures.splice(measureIndex, 1);
+                        }
+                        // If group is now empty, remove it
+                        if (group.measures.length === 0) {
+                            const groupRowIndex = this.rows.findIndex(r => r.name === currentGroupRow.name);
+                            if (groupRowIndex >= 0) {
+                                this.rows.splice(groupRowIndex, 1);
+                            }
+                            this.groupsData.delete(currentGroupRow.name);
+                        }
+                    } else {
+                        // Remove standalone measure row
+                        const oldRowIndex = this.rows.findIndex(r => r.type === 'measure' && r.name === measureName);
+                        if (oldRowIndex >= 0) {
+                            this.rows.splice(oldRowIndex, 1);
+                        }
+                    }
+                    
+                    // Add to target row (signal, measure, or group)
+                    if (row.type === 'signal') {
+                        // Insert as new measure row after the signal
+                        let newRowIndex = row.index + 1;
+                        this.rows.splice(newRowIndex, 0, {
+                            type: 'measure',
+                            name: measureName
+                        });
+                    } else if (row.type === 'measure') {
+                        // Merge into a new or existing group
+                        const targetMeasure = this.measuresData.get(row.name);
+                        if (targetMeasure) {
+                            // Create a new group with both measures
+                            const groupName = `G${this.groupCounter}`;
+                            this.groupCounter++;
+                            
+                            // Remove the target measure row
+                            const targetRowIndex = this.rows.findIndex(r => r.type === 'measure' && r.name === row.name);
+                            if (targetRowIndex >= 0) {
+                                this.rows.splice(targetRowIndex, 1);
+                            }
+                            
+                            // Create group with both measures
+                            const group = {
+                                name: groupName,
+                                measures: [row.name, measureName]
+                            };
+                            this.groupsData.set(groupName, group);
+                            
+                            // Insert group row at target position
+                            this.rows.splice(row.index, 0, {
+                                type: 'group',
+                                name: groupName
+                            });
+                        }
+                    } else if (row.type === 'group') {
+                        // Add to existing group
+                        const targetGroup = this.groupsData.get(row.name);
+                        if (targetGroup) {
+                            if (!targetGroup.measures.includes(measureName)) {
+                                targetGroup.measures.push(measureName);
+                            }
+                        }
+                    } else {
+                        // For other row types (text, counter, ac-table), insert as measure row
+                        let newRowIndex = row.index;
+                        this.rows.splice(newRowIndex, 0, {
+                            type: 'measure',
+                            name: measureName
+                        });
+                    }
                     
                     // Update all measure row references and recalculate arrow positions
                     this.rebuildAfterMeasureRowMove();
@@ -2070,6 +2145,7 @@ class TimingGenApp {
                             // If not already selected, make it the only selection
                             this.selectedSignals.clear();
                             this.selectedMeasureRows.clear();
+                            this.selectedGroupRows.clear();
                             this.selectedSignals.add(signalIndex);
                             this.render();
                         }
@@ -2082,10 +2158,22 @@ class TimingGenApp {
                     // If not already selected, make it the only selection
                     this.selectedSignals.clear();
                     this.selectedMeasureRows.clear();
+                    this.selectedGroupRows.clear();
                     this.selectedMeasureRows.add(row.index);
                     this.render();
                 }
                 this.startDragMeasureRow(row.index, event);
+            } else if (row && row.type === 'group') {
+                // Handle group row selection - clicking on name column moves entire group
+                if (!this.selectedGroupRows.has(row.index)) {
+                    // If not already selected, make it the only selection
+                    this.selectedSignals.clear();
+                    this.selectedMeasureRows.clear();
+                    this.selectedGroupRows.clear();
+                    this.selectedGroupRows.add(row.index);
+                    this.render();
+                }
+                this.startDragGroupRow(row.index, event);
             } else if (row && (row.type === 'text' || row.type === 'counter')) {
                 // Handle text/counter row selection - reuse measure selection logic
                 // Text and counter rows use selectedMeasureRows for dragging (non-signal widgets)
@@ -2843,6 +2931,88 @@ class TimingGenApp {
         document.addEventListener('mouseup', onMouseUp);
     }
     
+    startDragGroupRow(rowIndex, event) {
+        this.draggedGroupRow = rowIndex;
+        this.isDragging = true;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        
+        const onMouseMove = (moveEvent) => {
+            const yPos = moveEvent.clientY - rect.top;
+            this.updateDragIndicator(yPos);
+        };
+        
+        const onMouseUp = (upEvent) => {
+            const yPos = upEvent.clientY - rect.top;
+            this.dropGroupRow(yPos);
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            this.draggedGroupRow = null;
+            this.isDragging = false;
+            this.removeDragIndicator();
+        };
+        
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+    
+    dropGroupRow(yPos) {
+        const targetRow = this.getRowAtY(yPos);
+        
+        if (!targetRow || targetRow.index === this.draggedGroupRow) {
+            return; // Invalid drop location or same position
+        }
+        
+        // Calculate position within row
+        const targetYPos = this.rowManager.getRowYPosition(targetRow.index);
+        const targetYMid = targetYPos + this.config.rowHeight / 2;
+        
+        // Extract and remove from old position
+        const groupRow = this.rows[this.draggedGroupRow];
+        this.rows.splice(this.draggedGroupRow, 1);
+        
+        // Calculate new insertion index (above or below target row)
+        let newIndex = targetRow.index;
+        
+        // Adjust newIndex if dragged row was before target
+        if (this.draggedGroupRow < targetRow.index) {
+            newIndex--;
+        }
+        
+        // Determine if we should insert above or below the target row
+        if (yPos >= targetYMid) {
+            newIndex++; // Insert below
+        }
+        
+        // Insert at new position
+        this.rows.splice(newIndex, 0, groupRow);
+        
+        // Update measures in the group to reflect new row position
+        this.rebuildAfterGroupRowMove();
+        
+        // Clear selection after drop
+        this.selectedGroupRows.clear();
+        
+        this.render();
+    }
+    
+    rebuildAfterGroupRowMove() {
+        // After moving a group row, update measureRow field in measures within groups
+        this.rows.forEach((row, rowIndex) => {
+            if (row.type === 'group') {
+                const group = this.groupsData.get(row.name);
+                if (group && group.measures) {
+                    group.measures.forEach(measureName => {
+                        const measure = this.measuresData.get(measureName);
+                        if (measure) {
+                            measure.measureRow = rowIndex;
+                        }
+                    });
+                }
+            }
+        });
+    }
+    
     dropMeasureRow(yPos) {
         const targetRow = this.getRowAtY(yPos);
         
@@ -2899,6 +3069,17 @@ class TimingGenApp {
                 const measure = this.measuresData.get(row.name);
                 if (measure) {
                     measure.measureRow = rowIndex;
+                }
+            } else if (row.type === 'group') {
+                // Update measureRow for all measures in group
+                const group = this.groupsData.get(row.name);
+                if (group && group.measures) {
+                    group.measures.forEach(measureName => {
+                        const measure = this.measuresData.get(measureName);
+                        if (measure) {
+                            measure.measureRow = rowIndex;
+                        }
+                    });
                 }
             }
         });
@@ -4785,6 +4966,35 @@ class TimingGenApp {
     // ===========================
     // Arrow Functions
     // ===========================
+    
+    addGroup() {
+        // Create a new empty group
+        const groupName = `G${this.groupCounter}`;
+        this.groupCounter++;
+        
+        const group = {
+            name: groupName,
+            measures: []
+        };
+        
+        // Store in groupsData
+        this.groupsData.set(groupName, group);
+        
+        // Add to rows array at the end (before AC tables if any)
+        const firstACTableIndex = this.rows.findIndex(r => r.type === 'ac-table');
+        const insertIndex = firstACTableIndex >= 0 ? firstACTableIndex : this.rows.length;
+        
+        this.rows.splice(insertIndex, 0, {
+            type: 'group',
+            name: groupName
+        });
+        
+        this.render();
+        
+        // Show instruction
+        this.showInstruction(`Group ${groupName} created. Use measure arrow to move measures into this group.`);
+        setTimeout(() => this.hideInstruction(), 3000);
+    }
     
     startArrowMode() {
         this.arrowMode = true;

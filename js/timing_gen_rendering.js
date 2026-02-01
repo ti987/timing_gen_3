@@ -27,7 +27,7 @@ class TimingGenRendering {
             TimingGenRendering.drawHeader(app);
         }
         
-        // Draw rows (signals, measures, text, counter, ac-table) from unified rows array
+        // Draw rows (signals, measures, text, counter, ac-table, group) from unified rows array
         if (app.rows && app.rows.length > 0) {
             app.rows.forEach((row, rowIndex) => {
                 if (row.type === 'signal') {
@@ -51,6 +51,18 @@ class TimingGenRendering {
                         // Draw measure
                         app.measureLayer.activate();
                         TimingGenRendering.drawMeasure(app, measure, rowIndex);
+                    }
+                } else if (row.type === 'group') {
+                    // Draw group - get data from Map
+                    const group = app.groupsData.get(row.name);
+                    if (group) {
+                        // Draw group row name in name column
+                        app.gridLayer.activate();
+                        TimingGenRendering.drawGroupRowName(app, rowIndex, group.measures.length);
+                        
+                        // Draw measures in group
+                        app.measureLayer.activate();
+                        TimingGenRendering.drawGroup(app, group, rowIndex);
                     }
                 } else if (row.type === 'text') {
                     // Draw text widget - get data from Map
@@ -752,6 +764,52 @@ class TimingGenRendering {
             fontSize: 12,
             fontStyle: 'italic',
             justification: 'right'
+        });
+    }
+    
+    static drawGroupRowName(app, rowIndex, measureCount) {
+        // Draw name column for group row
+        const yPos = app.rowManager.getRowYPosition(rowIndex);
+        
+        // Highlight if selected
+        if (app.selectedGroupRows && app.selectedGroupRows.has(rowIndex)) {
+            const highlightRect = new paper.Path.Rectangle({
+                point: [0, yPos],
+                size: [app.config.nameColumnWidth, app.config.rowHeight],
+                fillColor: '#9b59b6'  // Purple to distinguish from measure and signal selection
+            });
+        }
+        
+        // Draw group row label
+        const nameColor = (app.selectedGroupRows && app.selectedGroupRows.has(rowIndex)) ? 'white' : '#666';
+        const label = measureCount > 1 ? `Group (${measureCount})` : 'Group';
+        const nameText = new paper.PointText({
+            point: [app.config.nameColumnWidth - 10, yPos + app.config.rowHeight / 2 + 5],
+            content: label,
+            fillColor: nameColor,
+            fontFamily: 'Arial',
+            fontSize: 12,
+            fontStyle: 'italic',
+            justification: 'right'
+        });
+    }
+    
+    static drawGroup(app, group, rowIndex) {
+        // Draw all measures in a group horizontally in one row
+        // group.measures is an array of measure names
+        if (!group.measures || group.measures.length === 0) {
+            return;
+        }
+        
+        // Draw each measure in the group
+        group.measures.forEach(measureName => {
+            const measure = app.measuresData.get(measureName);
+            if (measure) {
+                // Set the measureRow to this group's row
+                measure.measureRow = rowIndex;
+                // Draw the measure
+                TimingGenRendering.drawMeasure(app, measure, rowIndex);
+            }
         });
     }
     

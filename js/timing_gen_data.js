@@ -42,6 +42,13 @@ class TimingGenData {
                     name: row.name,
                     data: acTableData
                 };
+            } else if (row.type === 'group') {
+                const groupData = app.groupsData.get(row.name);
+                return {
+                    type: 'group',
+                    name: row.name,
+                    data: groupData
+                };
             }
             return row;
         });
@@ -123,10 +130,12 @@ class TimingGenData {
                     app.measuresData.clear();
                     app.textData.clear();
                     app.counterData.clear();
+                    app.groupsData.clear();
                     app.measureCounter = 0;
                     app.measureTextCounter = 0;
                     app.textCounter = 0;
                     app.counterCounter = 0;
+                    app.groupCounter = 0;
                     
                     // Populate Maps and rows array from saved data
                     data.rows.forEach(row => {
@@ -206,6 +215,19 @@ class TimingGenData {
                             const tableNum = parseInt(row.name.replace('ACT', ''));
                             if (!isNaN(tableNum) && tableNum >= app.acTableCounter) {
                                 app.acTableCounter = tableNum + 1;
+                            }
+                        } else if (row.type === 'group' && row.data) {
+                            // Store group data in Map
+                            app.groupsData.set(row.name, row.data);
+                            // Add to rows array (ordering only)
+                            app.rows.push({
+                                type: 'group',
+                                name: row.name
+                            });
+                            // Update group counter for future groups
+                            const groupNum = parseInt(row.name.replace('G', ''));
+                            if (!isNaN(groupNum) && groupNum >= app.groupCounter) {
+                                app.groupCounter = groupNum + 1;
                             }
                         }
                     });
