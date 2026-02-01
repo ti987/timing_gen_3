@@ -271,4 +271,130 @@ test.describe('Timing Gen 3 Application', () => {
     // Check no errors occurred
     expect(consoleErrors.length).toBe(0);
   });
+
+  test('should create and manage groups', async ({ page }) => {
+    // Create test data with signals and measures
+    const result = await page.evaluate(() => {
+      const app = window.timingGenApp;
+      
+      // Add two signals
+      app.signalsData.set('clk', {
+        name: 'clk',
+        type: 'clock',
+        values: {}
+      });
+      app.rows.push({ type: 'signal', name: 'clk' });
+      
+      app.signalsData.set('data', {
+        name: 'data',
+        type: 'bit',
+        values: { 0: 0 }
+      });
+      app.rows.push({ type: 'signal', name: 'data' });
+      
+      // Add two measures
+      app.measuresData.set('M0', {
+        name: 'M0',
+        signal1Name: 'clk',
+        cycle1: 1,
+        signal2Name: 'clk',
+        cycle2: 3,
+        measureRow: 2,
+        text: 't1'
+      });
+      app.rows.push({ type: 'measure', name: 'M0' });
+      
+      app.measuresData.set('M1', {
+        name: 'M1',
+        signal1Name: 'clk',
+        cycle1: 5,
+        signal2Name: 'clk',
+        cycle2: 7,
+        measureRow: 3,
+        text: 't2'
+      });
+      app.rows.push({ type: 'measure', name: 'M1' });
+      
+      // Create a group
+      const groupName = 'G0';
+      const group = {
+        name: groupName,
+        measures: []
+      };
+      app.groupsData.set(groupName, group);
+      app.rows.push({ type: 'group', name: groupName });
+      
+      app.render();
+      
+      return {
+        rowCount: app.rows.length,
+        groupExists: app.groupsData.has('G0'),
+        measureCount: app.measuresData.size
+      };
+    });
+    
+    // Verify setup
+    expect(result.rowCount).toBe(5); // 2 signals + 2 measures + 1 group
+    expect(result.groupExists).toBe(true);
+    expect(result.measureCount).toBe(2);
+    
+    // Test moving a measure into the group
+    const mergeResult = await page.evaluate(() => {
+      const app = window.timingGenApp;
+      const group = app.groupsData.get('G0');
+      
+      // Simulate moving M0 into group
+      group.measures.push('M0');
+      
+      // Remove M0's standalone row
+      const m0RowIndex = app.rows.findIndex(r => r.type === 'measure' && r.name === 'M0');
+      if (m0RowIndex >= 0) {
+        app.rows.splice(m0RowIndex, 1);
+      }
+      
+      app.rebuildAfterMeasureRowMove();
+      app.render();
+      
+      return {
+        rowCount: app.rows.length,
+        groupMeasureCount: group.measures.length,
+        measureInGroup: group.measures.includes('M0')
+      };
+    });
+    
+    expect(mergeResult.rowCount).toBe(4); // 2 signals + 1 measure + 1 group (with M0)
+    expect(mergeResult.groupMeasureCount).toBe(1);
+    expect(mergeResult.measureInGroup).toBe(true);
+    
+    // Test that group can be saved and loaded
+    const saveLoadResult = await page.evaluate(() => {
+      const app = window.timingGenApp;
+      
+      // Simulate save/load cycle
+      const rowsWithData = app.rows.map(row => {
+        if (row.type === 'group') {
+          const groupData = app.groupsData.get(row.name);
+          return {
+            type: 'group',
+            name: row.name,
+            data: groupData
+          };
+        }
+        return row;
+      });
+      
+      // Find the group in saved data
+      const savedGroup = rowsWithData.find(r => r.type === 'group');
+      
+      return {
+        savedGroupExists: !!savedGroup,
+        savedGroupData: savedGroup ? savedGroup.data : null
+      };
+    });
+    
+    expect(saveLoadResult.savedGroupExists).toBe(true);
+    expect(saveLoadResult.savedGroupData).toBeTruthy();
+    expect(saveLoadResult.savedGroupData.measures).toContain('M0');
+  });
 });
+
