@@ -851,7 +851,7 @@ class TimingGenRendering {
         
         // Create a group for all measure elements for easier interaction
         const measureGroup = new paper.Group();
-        measureGroup.data = { measureIndex: index, type: 'measure' };
+        measureGroup.data = { measureIndex: index, measureName: measure.name, type: 'measure' };
         
         // Draw first vertical line
         const line1 = new paper.Path.Line({

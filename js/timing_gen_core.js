@@ -1802,9 +1802,10 @@ class TimingGenApp {
             if (measureGroup && hitItem) {
                 // Handle based on the specific child element that was clicked
                 const measureIndex = measureGroup.data.measureIndex;
+                const measureName = measureGroup.data.measureName;
                 
                 // Debug logging to help diagnose click issues
-                console.log('[Measure Click] Detected:', hitItem.data.type, 'at measureIndex:', measureIndex);
+                console.log('[Measure Click] Detected:', hitItem.data.type, 'at measureIndex:', measureIndex, 'measureName:', measureName);
                 
                 if (hitItem.data.type === 'text') {
                     // Start dragging text
@@ -1819,7 +1820,7 @@ class TimingGenApp {
                 } else if (hitItem.data.type === 'arrow') {
                     // Start moving measure to another row
                     console.log('[Measure Click] Starting measure row move');
-                    this.startMovingMeasureRow(measureIndex, event);
+                    this.startMovingMeasureRow(measureName, event);
                     return;
                 }
             }
@@ -4920,34 +4921,59 @@ class TimingGenApp {
         this.showInstruction(`Click to re-choose point ${pointIndex}`);
     }
     
-    startMovingMeasureRow(measureRowIndex, event) {
+    startMovingMeasureRow(measureIdentifier, event) {
         // Start moving measure to another row
-        // measureRowIndex is the row index, not the measure array index
-        console.log('[startMovingMeasureRow] Called with measureRowIndex:', measureRowIndex);
+        // measureIdentifier can be either:
+        //   - a measure name (string) when clicking on a measure's arrow
+        //   - a row index (number) for backward compatibility
+        console.log('[startMovingMeasureRow] Called with measureIdentifier:', measureIdentifier);
         
-        if (measureRowIndex < 0 || measureRowIndex >= this.rows.length) {
-            console.log('[startMovingMeasureRow] Invalid measureRowIndex, aborting');
-            return;
-        }
+        let measureName = null;
+        let measureRowIndex = null;
         
-        const row = this.rows[measureRowIndex];
-        if (row.type !== 'measure') {
-            console.log('[startMovingMeasureRow] Row is not a measure, aborting');
-            return;
-        }
-        
-        const measure = this.measuresData.get(row.name);
-        if (!measure) {
-            console.log('[startMovingMeasureRow] Measure not found, aborting');
+        // Determine if we received a measure name or row index
+        if (typeof measureIdentifier === 'string') {
+            // It's a measure name - find it in measuresData and locate its row
+            measureName = measureIdentifier;
+            const measure = this.measuresData.get(measureName);
+            if (!measure) {
+                console.log('[startMovingMeasureRow] Measure not found:', measureName);
+                return;
+            }
+            measureRowIndex = measure.measureRow;
+            console.log('[startMovingMeasureRow] Measure name:', measureName, 'at row:', measureRowIndex);
+        } else if (typeof measureIdentifier === 'number') {
+            // It's a row index - for backward compatibility
+            measureRowIndex = measureIdentifier;
+            
+            if (measureRowIndex < 0 || measureRowIndex >= this.rows.length) {
+                console.log('[startMovingMeasureRow] Invalid measureRowIndex, aborting');
+                return;
+            }
+            
+            const row = this.rows[measureRowIndex];
+            if (row.type !== 'measure') {
+                console.log('[startMovingMeasureRow] Row is not a measure, aborting');
+                return;
+            }
+            
+            measureName = row.name;
+            const measure = this.measuresData.get(measureName);
+            if (!measure) {
+                console.log('[startMovingMeasureRow] Measure not found, aborting');
+                return;
+            }
+        } else {
+            console.log('[startMovingMeasureRow] Invalid measureIdentifier type, aborting');
             return;
         }
         
         // Store measure name for later use
-        this.currentEditingMeasureName = measure.name;
+        this.currentEditingMeasureName = measureName;
         this.movingMeasureRowIndex = measureRowIndex;
         this.canvas.style.cursor = 'move';
         
-        console.log('[startMovingMeasureRow] Entering move mode for row', measureRowIndex);
+        console.log('[startMovingMeasureRow] Entering move mode for measure', measureName, 'at row', measureRowIndex);
         this.showInstruction('Click on a row to move the measure there');
         
         // Set up click handler for selecting new row
