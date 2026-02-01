@@ -2225,20 +2225,20 @@ class TimingGenApp {
             }
         }
         
-        if (row) {
-            if (row.type === 'text') {
-                // Right-click on text row - show text context menu
-                this.currentEditingText = row.name;
-                TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
-                return;
-            } else if (row.type === 'ac-table') {
-                // Right-click on AC Table - check what was clicked
-                if (hitResults && hitResults.length > 0) {
-                    for (const result of hitResults) {
-                        const item = result.item;
-                        
-                        if (item.data && item.data.tableName === row.name) {
-                            if (item.data.type === 'ac-table-cell') {
+        // Check if we clicked on an AC table element (regardless of which row getRowAtY returns)
+        // AC tables are taller than one row, so getRowAtY may return a different row
+        // when clicking on lower parts of the table (2nd data row, notes section, etc.)
+        if (hitResults && hitResults.length > 0) {
+            for (const result of hitResults) {
+                const item = result.item;
+                
+                // Check if this is an AC table element
+                if (item.data && item.data.tableName) {
+                    // Find the AC table row by tableName
+                    const acTableRow = this.rows.find(r => r.type === 'ac-table' && r.name === item.data.tableName);
+                    
+                    if (acTableRow) {
+                        if (item.data.type === 'ac-table-cell') {
                                 // Right-click on a cell
                                 this.currentEditingACCell = {
                                     tableName: row.name,
