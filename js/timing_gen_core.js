@@ -2073,8 +2073,8 @@ class TimingGenApp {
                             };
                             this.groupsData.set(groupName, group);
                             
-                            // Insert group row at target position
-                            this.rows.splice(row.index, 0, {
+                            // Insert group row at target position (adjusted after removal)
+                            this.rows.splice(targetRowIndex, 0, {
                                 type: 'group',
                                 name: groupName
                             });
@@ -3002,13 +3002,20 @@ class TimingGenApp {
             if (row.type === 'group') {
                 const group = this.groupsData.get(row.name);
                 if (group && group.measures) {
-                    group.measures.forEach(measureName => {
-                        const measure = this.measuresData.get(measureName);
-                        if (measure) {
-                            measure.measureRow = rowIndex;
-                        }
-                    });
+                    this.updateGroupMeasureRows(group, rowIndex);
                 }
+            }
+        });
+    }
+    
+    updateGroupMeasureRows(group, rowIndex) {
+        // Helper to update measureRow for all measures in a group
+        if (!group || !group.measures) return;
+        
+        group.measures.forEach(measureName => {
+            const measure = this.measuresData.get(measureName);
+            if (measure) {
+                measure.measureRow = rowIndex;
             }
         });
     }
@@ -3073,13 +3080,8 @@ class TimingGenApp {
             } else if (row.type === 'group') {
                 // Update measureRow for all measures in group
                 const group = this.groupsData.get(row.name);
-                if (group && group.measures) {
-                    group.measures.forEach(measureName => {
-                        const measure = this.measuresData.get(measureName);
-                        if (measure) {
-                            measure.measureRow = rowIndex;
-                        }
-                    });
+                if (group) {
+                    this.updateGroupMeasureRows(group, rowIndex);
                 }
             }
         });
