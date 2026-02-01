@@ -1622,6 +1622,10 @@ class TimingGenApp {
         this.render();
     }
     
+    // ========================================
+    // Canvas Event Handlers
+    // ========================================
+    
     // Helper method for hit testing (used by both click and right-click handlers)
     getHitTestOptions() {
         return {
@@ -1633,6 +1637,7 @@ class TimingGenApp {
     }
     
     // Hit test all layers (not just active layer)
+    // This is essential for finding AC table elements which are in signalLayer
     hitTestAllLayers(point, options) {
         const allResults = [];
         const layers = [this.backgroundLayer, this.gridLayer, this.signalLayer, this.measureLayer];
@@ -1649,6 +1654,7 @@ class TimingGenApp {
         return allResults;
     }
     
+    // Handle left-click events on canvas
     handleCanvasClick(event) {
         // Only handle left mouse button clicks (button 0)
         // Right clicks are handled by handleCanvasRightClick
@@ -2139,6 +2145,7 @@ class TimingGenApp {
         }
     }
     
+    // Handle right-click events on canvas (context menu activation)
     handleCanvasRightClick(ev) {
         ev.preventDefault();
         const rect = this.canvas.getBoundingClientRect();
@@ -2375,6 +2382,7 @@ class TimingGenApp {
         }
     }
     
+    // Handle double-click events on canvas (edit dialogs)
     handleCanvasDoubleClick(event) {
         // Handle double-click events on the canvas
         const xPos = event.point.x;
