@@ -4937,7 +4937,7 @@ class TimingGenApp {
             measureName = measureIdentifier;
             const measure = this.measuresData.get(measureName);
             if (!measure) {
-                console.log('[startMovingMeasureRow] Measure not found:', measureName);
+                console.log('[startMovingMeasureRow] Measure not found, aborting move:', measureName);
                 return;
             }
             measureRowIndex = measure.measureRow;
