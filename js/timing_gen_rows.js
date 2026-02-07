@@ -20,7 +20,36 @@ class RowManager {
      * @returns {number} Y coordinate in pixels
      */
     getRowYPosition(rowIndex) {
-        return this.app.config.headerHeight + rowIndex * this.app.config.rowHeight;
+        let yPos = this.app.config.headerHeight;
+        
+        // Calculate position by summing heights of all rows before this one
+        for (let i = 0; i < rowIndex && i < this.app.rows.length; i++) {
+            yPos += this.getRowHeight(i);
+        }
+        
+        return yPos;
+    }
+    
+    /**
+     * Get height for a specific row
+     * @param {number} rowIndex - The row index (0-based)
+     * @returns {number} Height in pixels
+     */
+    getRowHeight(rowIndex) {
+        const row = this.getRowAt(rowIndex);
+        if (!row) {
+            return this.app.config.signalRowHeight; // default
+        }
+        
+        // Use appropriate height based on row type
+        if (row.type === 'signal') {
+            return this.app.config.signalRowHeight;
+        } else if (row.type === 'measure' || row.type === 'group') {
+            return this.app.config.measureRowHeight;
+        } else {
+            // For text, counter, ac-table, use signal row height
+            return this.app.config.signalRowHeight;
+        }
     }
     
     /**
@@ -31,7 +60,19 @@ class RowManager {
     getRowIndexAtY(y) {
         const relY = y - this.app.config.headerHeight;
         if (relY < 0) return -1;
-        return Math.floor(relY / this.app.config.rowHeight);
+        
+        // Find which row this Y coordinate falls into
+        let currentY = 0;
+        for (let i = 0; i < this.app.rows.length; i++) {
+            const rowHeight = this.getRowHeight(i);
+            if (relY >= currentY && relY < currentY + rowHeight) {
+                return i;
+            }
+            currentY += rowHeight;
+        }
+        
+        // If beyond all rows, return last row index
+        return this.app.rows.length > 0 ? this.app.rows.length - 1 : -1;
     }
     
     /**

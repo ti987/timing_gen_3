@@ -49,6 +49,8 @@ class TimingGenUI {
         // Populate dialog with current values
         document.getElementById('clock-period-input').value = app.config.clockPeriod;
         document.getElementById('clock-period-unit-select').value = app.config.clockPeriodUnit;
+        document.getElementById('signal-row-height-input').value = app.config.signalRowHeight;
+        document.getElementById('measure-row-height-input').value = app.config.measureRowHeight;
         document.getElementById('slew-input').value = app.config.slew;
         document.getElementById('delay-min-input').value = app.config.delayMin;
         document.getElementById('delay-max-input').value = app.config.delayMax;
@@ -69,6 +71,8 @@ class TimingGenUI {
     static saveGlobalOptions(app) {
         const clockPeriod = parseFloat(document.getElementById('clock-period-input').value);
         const clockPeriodUnit = document.getElementById('clock-period-unit-select').value;
+        const signalRowHeight = parseInt(document.getElementById('signal-row-height-input').value);
+        const measureRowHeight = parseInt(document.getElementById('measure-row-height-input').value);
         const slew = parseInt(document.getElementById('slew-input').value);
         const delayMin = parseFloat(document.getElementById('delay-min-input').value);
         const delayMax = parseFloat(document.getElementById('delay-max-input').value);
@@ -76,6 +80,16 @@ class TimingGenUI {
         
         if (isNaN(clockPeriod) || clockPeriod <= 0) {
             alert('Please enter a valid clock period');
+            return;
+        }
+        
+        if (isNaN(signalRowHeight) || signalRowHeight < 40 || signalRowHeight > 200) {
+            alert('Please enter a valid signal row height (40-200 pixels)');
+            return;
+        }
+        
+        if (isNaN(measureRowHeight) || measureRowHeight < 40 || measureRowHeight > 200) {
+            alert('Please enter a valid measure/group row height (40-200 pixels)');
             return;
         }
         
@@ -101,6 +115,9 @@ class TimingGenUI {
         
         app.config.clockPeriod = clockPeriod;
         app.config.clockPeriodUnit = clockPeriodUnit;
+        app.config.signalRowHeight = signalRowHeight;
+        app.config.measureRowHeight = measureRowHeight;
+        app.config.rowHeight = signalRowHeight; // Update deprecated field for backward compatibility
         app.config.slew = slew;
         app.config.delayMin = delayMin;
         app.config.delayMax = delayMax;

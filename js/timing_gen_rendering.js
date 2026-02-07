@@ -101,7 +101,12 @@ class TimingGenRendering {
     static drawGrid(app) {
         // Calculate total rows from unified row system
         const totalRows = app.rowManager.getTotalRows();
-        const maxHeight = app.config.headerHeight + totalRows * app.config.rowHeight;
+        
+        // Calculate total height by summing all row heights
+        let maxHeight = app.config.headerHeight;
+        for (let i = 0; i < totalRows; i++) {
+            maxHeight += app.rowManager.getRowHeight(i);
+        }
         
         // Vertical lines (cycle dividers) - draw to max height based on signals
         for (let idx = 0; idx <= app.config.cycles; idx++) {
@@ -166,12 +171,14 @@ class TimingGenRendering {
     static drawSignal(app, signal, index) {
         // Calculate Y position accounting for blank rows
         const yPos = TimingGenRendering.getSignalYPosition(app, index);
+        const rowIndex = app.rowManager.signalIndexToRowIndex(index);
+        const rowHeight = app.rowManager.getRowHeight(rowIndex);
         
         // Draw selection highlight background if signal is selected
         if (app.selectedSignals.has(index)) {
             const highlightRect = new paper.Path.Rectangle({
                 point: [0, yPos],
-                size: [app.config.nameColumnWidth, app.config.rowHeight],
+                size: [app.config.nameColumnWidth, rowHeight],
                 fillColor: '#3498db'
             });
         }
@@ -179,7 +186,7 @@ class TimingGenRendering {
         // Draw signal name
         const nameColor = app.selectedSignals.has(index) ? 'white' : 'black';
         const nameText = new paper.PointText({
-            point: [app.config.nameColumnWidth - 10, yPos + app.config.rowHeight / 2 + 5],
+            point: [app.config.nameColumnWidth - 10, yPos + rowHeight / 2 + 5],
             content: signal.name,
             fillColor: nameColor,
             fontFamily: 'Arial',
@@ -190,17 +197,17 @@ class TimingGenRendering {
         
         // Draw waveform
         if (signal.type === 'clock') {
-            TimingGenRendering.drawClockWaveform(app, signal, yPos);
+            TimingGenRendering.drawClockWaveform(app, signal, yPos, rowHeight);
         } else if (signal.type === 'bit') {
-            TimingGenRendering.drawBitWaveform(app, signal, yPos);
+            TimingGenRendering.drawBitWaveform(app, signal, yPos, rowHeight);
         } else if (signal.type === 'bus') {
-            TimingGenRendering.drawBusWaveform(app, signal, yPos);
+            TimingGenRendering.drawBusWaveform(app, signal, yPos, rowHeight);
         }
     }
     
-    static drawClockWaveform(app, signal, baseY) {
+    static drawClockWaveform(app, signal, baseY, rowHeight) {
         const highY = baseY + 20;
-        const lowY = baseY + app.config.rowHeight - 20;
+        const lowY = baseY + rowHeight - 20;
         
         const path = new paper.Path();
         path.strokeColor = app.config.signalColor;
@@ -371,10 +378,10 @@ class TimingGenRendering {
         path.strokeColor = null; // No stroke for bus signals
     }
     
-    static drawBitWaveform(app, signal, baseY) {
+    static drawBitWaveform(app, signal, baseY, rowHeight) {
         const highY = baseY + 20;
-        const lowY = baseY + app.config.rowHeight - 20;
-        const midY = baseY + app.config.rowHeight / 2;
+        const lowY = baseY + rowHeight - 20;
+        const midY = baseY + rowHeight / 2;
         
         // First, identify all X spans
         const xSpans = [];
@@ -565,10 +572,10 @@ class TimingGenRendering {
         });
     }
     
-    static drawBusWaveform(app, signal, baseY) {
+    static drawBusWaveform(app, signal, baseY, rowHeight) {
         const topY = baseY + 20;
-        const bottomY = baseY + app.config.rowHeight - 20;
-        const midY = baseY + app.config.rowHeight / 2;
+        const bottomY = baseY + rowHeight - 20;
+        const midY = baseY + rowHeight / 2;
         
         // First pass: identify value spans with their cycles
         let idx = 0;
@@ -743,12 +750,13 @@ class TimingGenRendering {
     static drawMeasureRowName(app, rowIndex, measureCount) {
         // Draw name column for measure row
         const yPos = app.rowManager.getRowYPosition(rowIndex);
+        const rowHeight = app.rowManager.getRowHeight(rowIndex);
         
         // Highlight if selected
         if (app.selectedMeasureRows && app.selectedMeasureRows.has(rowIndex)) {
             const highlightRect = new paper.Path.Rectangle({
                 point: [0, yPos],
-                size: [app.config.nameColumnWidth, app.config.rowHeight],
+                size: [app.config.nameColumnWidth, rowHeight],
                 fillColor: '#e74c3c'  // Red to distinguish from signal selection
             });
         }
@@ -757,7 +765,7 @@ class TimingGenRendering {
         const nameColor = (app.selectedMeasureRows && app.selectedMeasureRows.has(rowIndex)) ? 'white' : '#666';
         const label = measureCount > 1 ? `Measures (${measureCount})` : 'Measure';
         const nameText = new paper.PointText({
-            point: [app.config.nameColumnWidth - 10, yPos + app.config.rowHeight / 2 + 5],
+            point: [app.config.nameColumnWidth - 10, yPos + rowHeight / 2 + 5],
             content: label,
             fillColor: nameColor,
             fontFamily: 'Arial',
@@ -770,12 +778,13 @@ class TimingGenRendering {
     static drawGroupRowName(app, rowIndex, measureCount) {
         // Draw name column for group row
         const yPos = app.rowManager.getRowYPosition(rowIndex);
+        const rowHeight = app.rowManager.getRowHeight(rowIndex);
         
         // Highlight if selected
         if (app.selectedGroupRows && app.selectedGroupRows.has(rowIndex)) {
             const highlightRect = new paper.Path.Rectangle({
                 point: [0, yPos],
-                size: [app.config.nameColumnWidth, app.config.rowHeight],
+                size: [app.config.nameColumnWidth, rowHeight],
                 fillColor: '#9b59b6'  // Purple to distinguish from measure and signal selection
             });
         }
@@ -784,7 +793,7 @@ class TimingGenRendering {
         const nameColor = (app.selectedGroupRows && app.selectedGroupRows.has(rowIndex)) ? 'white' : '#666';
         const label = measureCount > 1 ? `Group (${measureCount})` : 'Group';
         const nameText = new paper.PointText({
-            point: [app.config.nameColumnWidth - 10, yPos + app.config.rowHeight / 2 + 5],
+            point: [app.config.nameColumnWidth - 10, yPos + rowHeight / 2 + 5],
             content: label,
             fillColor: nameColor,
             fontFamily: 'Arial',
@@ -823,8 +832,6 @@ class TimingGenRendering {
             return;
         }
         
-        const rowHeight = app.config.rowHeight;
-        
         // Get row positions dynamically from signal names
         const signal1 = app.getSignalByName(measure.signal1Name);
         const signal2 = app.getSignalByName(measure.signal2Name);
@@ -845,9 +852,16 @@ class TimingGenRendering {
         const row2Pos = app.rowManager.getRowYPosition(row2);
         const measureRowPos = app.rowManager.getRowYPosition(measureRow);
         
-        // Determine the extent of vertical lines
+        // Get the measure row height for arrow positioning
+        const measureRowHeight = app.rowManager.getRowHeight(measureRow);
+        
+        // Determine the extent of vertical lines (need to extend to bottom of involved rows)
+        // Get the bottom-most row's bottom edge
+        const maxRow = Math.max(row1, row2, measureRow);
+        const maxRowHeight = app.rowManager.getRowHeight(maxRow);
+        const maxRowPos = app.rowManager.getRowYPosition(maxRow);
         const lineStart = Math.min(row1Pos, row2Pos, measureRowPos);
-        const lineEnd = Math.max(row1Pos, row2Pos, measureRowPos) + rowHeight;
+        const lineEnd = maxRowPos + maxRowHeight;
         
         // Create a group for all measure elements for easier interaction
         const measureGroup = new paper.Group();
@@ -888,7 +902,7 @@ class TimingGenRendering {
         measureGroup.addChild(cross2.vLine);
         
         // Calculate arrow Y position based on measureRow
-        const arrowY = measureRowPos + rowHeight / 2;
+        const arrowY = measureRowPos + measureRowHeight / 2;
         
         // Draw double-headed arrows
         const arrowSize = 8;
@@ -1435,12 +1449,13 @@ class TimingGenRendering {
     
     static drawTextRow(app, textData, rowIndex) {
         const yPos = app.rowManager.getRowYPosition(rowIndex);
+        const rowHeight = app.rowManager.getRowHeight(rowIndex);
         
         // Draw text in the waveform area (centered vertically in the row)
         if (textData.text) {
             const xPos = app.config.nameColumnWidth + (textData.xOffset || 10);
             const textObj = new paper.PointText({
-                point: [xPos, yPos + app.config.rowHeight / 2 + 5],
+                point: [xPos, yPos + rowHeight / 2 + 5],
                 content: textData.text,
                 fillColor: textData.color || 'black',
                 fontFamily: textData.fontFamily || 'Arial',
@@ -1456,6 +1471,7 @@ class TimingGenRendering {
     
     static drawCounterRow(app, counterData, rowIndex) {
         const yPos = app.rowManager.getRowYPosition(rowIndex);
+        const rowHeight = app.rowManager.getRowHeight(rowIndex);
         
         // Parse counter values and generate labels for each cycle
         const labels = TimingGenRendering.generateCounterLabels(counterData, app.config.cycles);
@@ -1466,7 +1482,7 @@ class TimingGenRendering {
             if (label !== null && label !== undefined && label !== '') {
                 const xPos = app.config.nameColumnWidth + cycle * app.config.cycleWidth + app.config.cycleWidth / 2;
                 const text = new paper.PointText({
-                    point: [xPos, yPos + app.config.rowHeight / 2 + 5],
+                    point: [xPos, yPos + rowHeight / 2 + 5],
                     content: String(label),
                     fillColor: 'black',
                     fontFamily: 'Arial',

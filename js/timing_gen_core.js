@@ -30,7 +30,9 @@ class TimingGenApp {
             cycles: 20,
             nameColumnWidth: 150,
             cycleWidth: 60,
-            rowHeight: 80,
+            rowHeight: 80, // deprecated - kept for backward compatibility
+            signalRowHeight: 80, // height for signal rows
+            measureRowHeight: 80, // height for measure/group rows
             headerHeight: 50,
             slew: 4, // pixels for slew transition (default: 4)
             clockPeriod: 10, // default clock period value
@@ -144,7 +146,7 @@ class TimingGenApp {
     
     initializeCanvas() {
         const width = this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth + 100;
-        const height = this.config.headerHeight + 10 * this.config.rowHeight + 100;
+        const height = this.config.headerHeight + 10 * this.config.signalRowHeight + 100;
         this.canvas.width = width;
         this.canvas.height = height;
         paper.view.viewSize = new paper.Size(width, height);
@@ -3850,9 +3852,11 @@ class TimingGenApp {
         const x1 = this.getTransitionMidpointX(signal1Index, measure.cycle1);
         const x2 = this.getTransitionMidpointX(signal2Index, measure.cycle2);
         
-        // Get Y positions from computed row indices
-        const y1 = this.rowManager.getRowYPosition(signal1Row) + this.config.rowHeight / 2;
-        const y2 = this.rowManager.getRowYPosition(signal2Row) + this.config.rowHeight / 2;
+        // Get Y positions from computed row indices (center of each signal row)
+        const signal1RowHeight = this.rowManager.getRowHeight(signal1Row);
+        const signal2RowHeight = this.rowManager.getRowHeight(signal2Row);
+        const y1 = this.rowManager.getRowYPosition(signal1Row) + signal1RowHeight / 2;
+        const y2 = this.rowManager.getRowYPosition(signal2Row) + signal2RowHeight / 2;
         
         return { x1, y1, x2, y2, signal1Index, signal2Index };
     }
@@ -5481,6 +5485,7 @@ class TimingGenApp {
         
         const signalRow = this.rowManager.signalIndexToRowIndex(signalIndex);
         const baseY = this.rowManager.getRowYPosition(signalRow);
+        const rowHeight = this.rowManager.getRowHeight(signalRow);
         
         let x, y;
         
@@ -5489,15 +5494,15 @@ class TimingGenApp {
             if (poiType === 'rising' || (poiType === 'auto' && cycle > 0)) {
                 // Middle of rising transition (at cycle boundary)
                 x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
-                y = baseY + this.config.rowHeight * 0.5;
+                y = baseY + rowHeight * 0.5;
             } else if (poiType === 'falling') {
                 // Middle of falling transition (at mid-cycle)
                 x = this.config.nameColumnWidth + cycle * this.config.cycleWidth + this.config.cycleWidth * 0.5;
-                y = baseY + this.config.rowHeight * 0.5;
+                y = baseY + rowHeight * 0.5;
             } else {
                 // Default: cycle boundary, middle
                 x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
-                y = baseY + this.config.rowHeight * 0.5;
+                y = baseY + rowHeight * 0.5;
             }
         } else if (signal.type === 'bit' || signal.type === 'bus') {
             // Bit/Bus signal POIs
@@ -5515,45 +5520,45 @@ class TimingGenApp {
             
             if (poiType === 'low' || (poiType === 'auto' && prevValue === 0)) {
                 x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
-                y = baseY + this.config.rowHeight * 0.8;
+                y = baseY + rowHeight * 0.8;
             } else if (poiType === 'high' || (poiType === 'auto' && prevValue === 1)) {
                 x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
-                y = baseY + this.config.rowHeight * 0.2;
+                y = baseY + rowHeight * 0.2;
             } else if (poiType === 'mid' || poiType === 'auto') {
                 x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
-                y = baseY + this.config.rowHeight * 0.5;
+                y = baseY + rowHeight * 0.5;
             } else if (poiType === 'slew-start' && hasTransition) {
                 x = slewStartX;
                 // Y position at start of slew (at previous value level)
                 if (prevValue === 0) {
-                    y = baseY + this.config.rowHeight * 0.8;  // Low
+                    y = baseY + rowHeight * 0.8;  // Low
                 } else if (prevValue === 1) {
-                    y = baseY + this.config.rowHeight * 0.2;  // High
+                    y = baseY + rowHeight * 0.2;  // High
                 } else {
-                    y = baseY + this.config.rowHeight * 0.5;  // Mid (for Z/X)
+                    y = baseY + rowHeight * 0.5;  // Mid (for Z/X)
                 }
             } else if (poiType === 'slew-center' && hasTransition) {
                 x = slewCenterX;
-                y = baseY + this.config.rowHeight * 0.5;  // Always middle during transition
+                y = baseY + rowHeight * 0.5;  // Always middle during transition
             } else if (poiType === 'slew-end' && hasTransition) {
                 x = slewEndX;
                 // Y position at end of slew (at current value level)
                 if (currentValue === 0) {
-                    y = baseY + this.config.rowHeight * 0.8;  // Low
+                    y = baseY + rowHeight * 0.8;  // Low
                 } else if (currentValue === 1) {
-                    y = baseY + this.config.rowHeight * 0.2;  // High
+                    y = baseY + rowHeight * 0.2;  // High
                 } else {
-                    y = baseY + this.config.rowHeight * 0.5;  // Mid (for Z/X)
+                    y = baseY + rowHeight * 0.5;  // Mid (for Z/X)
                 }
             } else {
                 // Fallback to cycle boundary, middle
                 x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
-                y = baseY + this.config.rowHeight * 0.5;
+                y = baseY + rowHeight * 0.5;
             }
         } else {
             // Unknown signal type, use middle
             x = this.config.nameColumnWidth + cycle * this.config.cycleWidth;
-            y = baseY + this.config.rowHeight * 0.5;
+            y = baseY + rowHeight * 0.5;
         }
         
         return { x, y, signalName, cycle, poiType };

@@ -65,6 +65,8 @@ class TimingGenData {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,
                 clockPeriodUnit: app.config.clockPeriodUnit,
+                signalRowHeight: app.config.signalRowHeight,
+                measureRowHeight: app.config.measureRowHeight,
                 slew: app.config.slew,
                 delayMin: app.config.delayMin,
                 delayMax: app.config.delayMax,
@@ -107,6 +109,20 @@ class TimingGenData {
                     }
                     if (data.config.clockPeriodUnit !== undefined) {
                         app.config.clockPeriodUnit = data.config.clockPeriodUnit;
+                    }
+                    if (data.config.signalRowHeight !== undefined) {
+                        app.config.signalRowHeight = data.config.signalRowHeight;
+                        app.config.rowHeight = data.config.signalRowHeight; // Update deprecated field
+                    } else if (data.config.rowHeight !== undefined) {
+                        // Backward compatibility: if old rowHeight exists but new fields don't
+                        app.config.signalRowHeight = data.config.rowHeight;
+                        app.config.rowHeight = data.config.rowHeight;
+                    }
+                    if (data.config.measureRowHeight !== undefined) {
+                        app.config.measureRowHeight = data.config.measureRowHeight;
+                    } else if (data.config.rowHeight !== undefined) {
+                        // Backward compatibility
+                        app.config.measureRowHeight = data.config.rowHeight;
                     }
                     if (data.config.slew !== undefined) {
                         app.config.slew = data.config.slew;
