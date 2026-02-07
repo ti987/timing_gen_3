@@ -1808,12 +1808,16 @@ class TimingGenRendering {
         // Draw note field at the bottom
         const noteFieldY = currentY;
         
+        // Constants for note field rendering
+        const BASE_NOTE_HEIGHT = 20; // Base height for "Note" label and empty notes
+        const NOTE_LINE_PADDING = 6; // Padding between lines of text
+        
         // Calculate note field height dynamically based on content
-        let calculatedNoteHeight = 20; // Base height for "Note" label
+        let calculatedNoteHeight = BASE_NOTE_HEIGHT; // Base height for "Note" label
         
         // Helper function to calculate text height based on content
         const calculateNoteTextHeight = (text, maxWidth, fontSize) => {
-            if (!text) return 20; // Default height for empty notes
+            if (!text) return BASE_NOTE_HEIGHT; // Default height for empty notes
             
             // Create temporary text to measure actual bounds
             const tempText = new paper.PointText({
@@ -1828,10 +1832,10 @@ class TimingGenRendering {
             // Calculate number of lines needed (rough estimate)
             const linesNeeded = Math.ceil(textWidth / maxWidth);
             
-            // Height per line (fontSize + small padding)
-            const lineHeight = (fontSize || 11) + 6;
+            // Height per line (fontSize + padding between lines)
+            const lineHeight = (fontSize || 11) + NOTE_LINE_PADDING;
             
-            return Math.max(20, linesNeeded * lineHeight);
+            return Math.max(BASE_NOTE_HEIGHT, linesNeeded * lineHeight);
         };
         
         const availableWidth = tableWidth - 90 - cellPadding - 10; // Width for note text
@@ -1943,7 +1947,7 @@ class TimingGenRendering {
                     }
                     
                     // Draw each line
-                    const lineHeight = fontSize + 6;
+                    const lineHeight = fontSize + NOTE_LINE_PADDING;
                     lines.forEach((line, lineIndex) => {
                         const lineY = noteY + (lineIndex * lineHeight);
                         const noteTextObj = new paper.PointText({
