@@ -1807,7 +1807,57 @@ class TimingGenRendering {
         
         // Draw note field at the bottom
         const noteFieldY = currentY;
-        const noteFieldHeight = 20 + (tableData.notes.length * 20);
+        
+        // Calculate note field height dynamically based on content
+        let calculatedNoteHeight = 20; // Base height for "Note" label
+        
+        // Helper function to calculate text height based on content
+        const calculateNoteTextHeight = (text, maxWidth, fontSize) => {
+            if (!text) return 20; // Default height for empty notes
+            
+            // Create temporary text to measure actual bounds
+            const tempText = new paper.PointText({
+                content: text,
+                fontFamily: 'Arial',
+                fontSize: fontSize || 11
+            });
+            
+            const textWidth = tempText.bounds.width;
+            tempText.remove();
+            
+            // Calculate number of lines needed (rough estimate)
+            const linesNeeded = Math.ceil(textWidth / maxWidth);
+            
+            // Height per line (fontSize + small padding)
+            const lineHeight = (fontSize || 11) + 6;
+            
+            return Math.max(20, linesNeeded * lineHeight);
+        };
+        
+        const availableWidth = tableWidth - 90 - cellPadding - 10; // Width for note text
+        
+        // Collect notes and calculate heights
+        const uniqueNotes = new Set();
+        tableData.rows.forEach(row => {
+            if (row.note) {
+                const numbers = row.note.split(',').map(n => n.trim()).filter(n => n);
+                numbers.forEach(num => uniqueNotes.add(num));
+            }
+        });
+        
+        const sortedNotes = Array.from(uniqueNotes).sort((a, b) => parseInt(a) - parseInt(b));
+        const noteHeights = [];
+        
+        sortedNotes.forEach((noteNum) => {
+            const noteData = tableData.notes.find(n => n.number === noteNum);
+            const noteText = noteData ? noteData.text : '';
+            const fontSize = (noteData && noteData.fontSize) || 11;
+            const height = calculateNoteTextHeight(noteText, availableWidth, fontSize);
+            noteHeights.push(height);
+            calculatedNoteHeight += height;
+        });
+        
+        const noteFieldHeight = calculatedNoteHeight;
         
         // Draw "Note" label
         const noteLabel = new paper.PointText({
@@ -1823,18 +1873,11 @@ class TimingGenRendering {
             tableName: tableName 
         };
         
-        // Draw note rows
-        const uniqueNotes = new Set();
-        tableData.rows.forEach(row => {
-            if (row.note) {
-                const numbers = row.note.split(',').map(n => n.trim()).filter(n => n);
-                numbers.forEach(num => uniqueNotes.add(num));
-            }
-        });
-        
-        const sortedNotes = Array.from(uniqueNotes).sort((a, b) => parseInt(a) - parseInt(b));
+        // Draw note rows with calculated heights
+        let currentNoteY = noteFieldY + 15;
         sortedNotes.forEach((noteNum, index) => {
-            const noteY = noteFieldY + 15 + (index * 20);
+            const noteHeight = noteHeights[index];
+            const noteY = currentNoteY;
             
             // Get note data for font properties
             const noteData = tableData.notes.find(n => n.number === noteNum);
@@ -1857,18 +1900,80 @@ class TimingGenRendering {
             const noteTextContent = noteData ? noteData.text : '';
             
             if (noteTextContent) {
-                const noteTextObj = new paper.PointText({
-                    point: [startX + 90, noteY],
+                // Wrap text if needed
+                const fontSize = (noteData && noteData.fontSize) || 11;
+                const maxWidth = availableWidth;
+                
+                // Create temporary text to check if wrapping is needed
+                const tempText = new paper.PointText({
                     content: noteTextContent,
-                    fillColor: (noteData && noteData.color) || '#000000',
                     fontFamily: (noteData && noteData.fontFamily) || 'Arial',
-                    fontSize: (noteData && noteData.fontSize) || 11
+                    fontSize: fontSize
                 });
-                noteTextObj.data = { 
-                    type: 'ac-table-note-text', 
-                    tableName: tableName,
-                    noteNum: noteNum
-                };
+                
+                const textWidth = tempText.bounds.width;
+                tempText.remove();
+                
+                if (textWidth > maxWidth) {
+                    // Text needs wrapping - split into multiple lines
+                    const words = noteTextContent.split(' ');
+                    const lines = [];
+                    let currentLine = '';
+                    
+                    words.forEach(word => {
+                        const testLine = currentLine ? currentLine + ' ' + word : word;
+                        const testText = new paper.PointText({
+                            content: testLine,
+                            fontFamily: (noteData && noteData.fontFamily) || 'Arial',
+                            fontSize: fontSize
+                        });
+                        const testWidth = testText.bounds.width;
+                        testText.remove();
+                        
+                        if (testWidth <= maxWidth || !currentLine) {
+                            currentLine = testLine;
+                        } else {
+                            lines.push(currentLine);
+                            currentLine = word;
+                        }
+                    });
+                    
+                    if (currentLine) {
+                        lines.push(currentLine);
+                    }
+                    
+                    // Draw each line
+                    const lineHeight = fontSize + 6;
+                    lines.forEach((line, lineIndex) => {
+                        const lineY = noteY + (lineIndex * lineHeight);
+                        const noteTextObj = new paper.PointText({
+                            point: [startX + 90, lineY],
+                            content: line,
+                            fillColor: (noteData && noteData.color) || '#000000',
+                            fontFamily: (noteData && noteData.fontFamily) || 'Arial',
+                            fontSize: fontSize
+                        });
+                        noteTextObj.data = { 
+                            type: 'ac-table-note-text', 
+                            tableName: tableName,
+                            noteNum: noteNum
+                        };
+                    });
+                } else {
+                    // Text fits on one line
+                    const noteTextObj = new paper.PointText({
+                        point: [startX + 90, noteY],
+                        content: noteTextContent,
+                        fillColor: (noteData && noteData.color) || '#000000',
+                        fontFamily: (noteData && noteData.fontFamily) || 'Arial',
+                        fontSize: fontSize
+                    });
+                    noteTextObj.data = { 
+                        type: 'ac-table-note-text', 
+                        tableName: tableName,
+                        noteNum: noteNum
+                    };
+                }
             } else {
                 // Create transparent clickable box for empty note description
                 const noteTextBoxWidth = tableWidth - 90 - cellPadding;
@@ -1885,6 +1990,9 @@ class TimingGenRendering {
                     isEmpty: true
                 };
             }
+            
+            // Move to next note position
+            currentNoteY += noteHeight;
         });
     }
 }
