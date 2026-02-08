@@ -206,8 +206,8 @@ class TimingGenRendering {
     }
     
     static drawClockWaveform(app, signal, baseY, rowHeight) {
-        const highY = baseY + 20;
-        const lowY = baseY + rowHeight - 20;
+       const highY = baseY + rowHeight/4;
+       const lowY = baseY + rowHeight - rowHeight/4;
         
         const path = new paper.Path();
         path.strokeColor = app.config.signalColor;
@@ -379,8 +379,8 @@ class TimingGenRendering {
     }
     
     static drawBitWaveform(app, signal, baseY, rowHeight) {
-        const highY = baseY + 20;
-        const lowY = baseY + rowHeight - 20;
+       const highY = baseY + rowHeight/4;
+       const lowY = baseY + rowHeight - rowHeight/4;
         const midY = baseY + rowHeight / 2;
         
         // First, identify all X spans
@@ -573,8 +573,8 @@ class TimingGenRendering {
     }
     
     static drawBusWaveform(app, signal, baseY, rowHeight) {
-        const topY = baseY + 20;
-        const bottomY = baseY + rowHeight - 20;
+        const topY = baseY + rowHeight/4;
+        const bottomY = baseY + rowHeight - rowHeight/4;
         const midY = baseY + rowHeight / 2;
         
         // First pass: identify value spans with their cycles

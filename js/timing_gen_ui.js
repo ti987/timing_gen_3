@@ -83,13 +83,13 @@ class TimingGenUI {
             return;
         }
         
-        if (isNaN(signalRowHeight) || signalRowHeight < 40 || signalRowHeight > 200) {
-            alert('Please enter a valid signal row height (40-200 pixels)');
+        if (isNaN(signalRowHeight) || signalRowHeight < 20 || signalRowHeight > 200) {
+            alert('Please enter a valid signal row height (20-200 pixels)');
             return;
         }
         
-        if (isNaN(measureRowHeight) || measureRowHeight < 40 || measureRowHeight > 200) {
-            alert('Please enter a valid measure/group row height (40-200 pixels)');
+        if (isNaN(measureRowHeight) || measureRowHeight < 20 || measureRowHeight > 200) {
+            alert('Please enter a valid measure/group row height (20-200 pixels)');
             return;
         }
         
