@@ -189,11 +189,16 @@ class TimingGenRendering {
             point: [app.config.nameColumnWidth - 10, yPos + rowHeight / 2 + 5],
             content: signal.name,
             fillColor: nameColor,
-            fontFamily: 'Arial',
-            fontSize: 14,
+            fontFamily: signal.nameFont || 'Arial',
+            fontSize: signal.nameFontSize || 14,
             fontWeight: 'bold',
             justification: 'right'
         });
+        nameText.data = {
+            type: 'signal-name',
+            signalIndex: index,
+            signalName: signal.name
+        };
         
         // Draw waveform
         if (signal.type === 'clock') {
@@ -721,13 +726,19 @@ class TimingGenRendering {
                     // Draw value text in the middle of the span
                     const textX = (x1 + x2) / 2;
                     const text = new paper.PointText({
-                        point: [textX, baseY + app.config.rowHeight / 2 + 4],
+                        point: [textX, baseY + rowHeight / 2 + 4],
                         content: value,
-                        fillColor: 'black',
-                        fontFamily: 'Arial',
-                        fontSize: 12,
+                        fillColor: signal.valueFontColor || 'black',
+                        fontFamily: signal.valueFontFamily || 'Arial',
+                        fontSize: signal.valueFontSize || 12,
                         justification: 'center'
                     });
+                    text.data = {
+                        type: 'bus-value',
+                        signalName: signal.name,
+                        cycle: spanStart,
+                        value: value
+                    };
                 }
             }
             

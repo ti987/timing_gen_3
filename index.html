@@ -113,6 +113,12 @@
         </div>
     </div>
 
+    <!-- Context Menu for Signal Name -->
+    <div id="signal-name-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="font-signal-name-menu">Font</div>
+        <div class="menu-item" id="cancel-signal-name-menu">Cancel</div>
+    </div>
+
     <!-- Context Menu for Signal -->
     <div id="signal-context-menu" class="context-menu" style="display: none;">
         <div class="menu-item" id="edit-signal-menu">Edit</div>
@@ -142,6 +148,12 @@
         <div class="menu-item" id="insert-cycles-bus-menu">Insert Cycles</div>
         <div class="menu-item" id="delete-cycles-bus-menu">Delete Cycles</div>
         <div class="menu-item" id="cancel-bus-cycle-menu">Cancel</div>
+    </div>
+
+    <!-- Context Menu for Bus Value Text -->
+    <div id="bus-value-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="font-bus-value-menu">Font</div>
+        <div class="menu-item" id="cancel-bus-value-menu">Cancel</div>
     </div>
 
     <!-- Context Menu for Cycle Header -->
@@ -396,6 +408,9 @@
             <label>Font Size:</label>
             <input type="number" id="font-size-input" value="14" min="8" max="72">
             <br><br>
+            <label>Color:</label>
+            <input type="color" id="font-color-input" value="#000000" style="width: 200px; height: 40px;">
+            <br><br>
             <button id="font-ok-btn" class="dialog-btn">OK</button>
             <button id="font-cancel-btn" class="dialog-btn">Cancel</button>
         </div>
@@ -452,7 +467,7 @@
     <!-- Context Menu for Arrow Text -->
     <div id="arrow-text-context-menu" class="context-menu" style="display: none;">
         <div class="menu-item" id="edit-arrow-text-menu">Edit</div>
-        <div class="menu-item" id="arrow-text-options-menu">Options</div>
+        <div class="menu-item" id="font-arrow-text-menu">Font</div>
         <div class="menu-item" id="cancel-arrow-text-menu">Cancel</div>
     </div>
 

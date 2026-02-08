@@ -310,8 +310,16 @@ class TimingGenApp {
         
         // Arrow text context menu
         document.getElementById('edit-arrow-text-menu').addEventListener('click', () => this.showEditArrowTextDialog());
-        document.getElementById('arrow-text-options-menu').addEventListener('click', () => this.showArrowTextOptionsDialog());
+        document.getElementById('font-arrow-text-menu').addEventListener('click', () => this.showArrowTextOptionsDialog());
         document.getElementById('cancel-arrow-text-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Signal name context menu
+        document.getElementById('font-signal-name-menu').addEventListener('click', () => this.showSignalNameFontDialog());
+        document.getElementById('cancel-signal-name-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Bus value context menu
+        document.getElementById('font-bus-value-menu').addEventListener('click', () => this.showBusValueFontDialog());
+        document.getElementById('cancel-bus-value-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Edit arrow text dialog
         document.getElementById('edit-arrow-text-ok-btn').addEventListener('click', () => this.applyEditArrowText());
@@ -548,8 +556,10 @@ class TimingGenApp {
     
     hideAllMenus() {
         document.getElementById('signal-context-menu').style.display = 'none';
+        document.getElementById('signal-name-context-menu').style.display = 'none';
         document.getElementById('bit-cycle-context-menu').style.display = 'none';
         document.getElementById('bus-cycle-context-menu').style.display = 'none';
+        document.getElementById('bus-value-context-menu').style.display = 'none';
         document.getElementById('cycle-context-menu').style.display = 'none';
         document.getElementById('measure-context-menu').style.display = 'none';
         document.getElementById('measure-text-context-menu').style.display = 'none';
@@ -706,6 +716,16 @@ class TimingGenApp {
     }
     
     updateTextFont() {
+        const fontFamily = document.getElementById('font-family-select').value;
+        const fontSizeInput = parseInt(document.getElementById('font-size-input').value);
+        const fontColor = document.getElementById('font-color-input').value;
+        
+        // Validate font size
+        let fontSize = fontSizeInput;
+        if (isNaN(fontSize) || fontSize < 8 || fontSize > 72) {
+            fontSize = 14; // Default fallback
+        }
+        
         if (this.currentEditingNote) {
             // Update AC table note text font
             const { tableName, noteNum } = this.currentEditingNote;
@@ -720,15 +740,36 @@ class TimingGenApp {
                     tableData.notes.push(noteData);
                 }
                 
-                noteData.fontFamily = document.getElementById('font-family-select').value;
-                const fontSize = parseInt(document.getElementById('font-size-input').value);
-                if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
-                    noteData.fontSize = fontSize;
-                } else {
-                    noteData.fontSize = 11; // Default fallback
-                }
+                noteData.fontFamily = fontFamily;
+                noteData.fontSize = fontSize;
+                noteData.color = fontColor;
                 this.hideFontDialog();
                 this.currentEditingNote = null;
+                this.render();
+            }
+        } else if (this.currentEditingSignal !== null && this.currentEditingSignal !== undefined) {
+            // Update signal name font
+            const signal = this.getSignalByIndex(this.currentEditingSignal);
+            if (signal) {
+                this.undoRedoManager.captureState();
+                signal.nameFont = fontFamily;
+                signal.nameFontSize = fontSize;
+                signal.nameFontColor = fontColor;
+                this.hideFontDialog();
+                this.currentEditingSignal = null;
+                this.currentEditingSignalName = null;
+                this.render();
+            }
+        } else if (this.currentEditingBusValue) {
+            // Update bus value font
+            const signal = this.getSignalByName(this.currentEditingBusValue.signalName);
+            if (signal) {
+                this.undoRedoManager.captureState();
+                signal.valueFontFamily = fontFamily;
+                signal.valueFontSize = fontSize;
+                signal.valueFontColor = fontColor;
+                this.hideFontDialog();
+                this.currentEditingBusValue = null;
                 this.render();
             }
         } else {
@@ -740,13 +781,9 @@ class TimingGenApp {
                 this.undoRedoManager.captureState();
                 
                 const measure = measures[this.currentEditingMeasure];
-                measure.textFont = document.getElementById('font-family-select').value;
-                const fontSize = parseInt(document.getElementById('font-size-input').value);
-                if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
-                    measure.textSize = fontSize;
-                } else {
-                    measure.textSize = 12; // Default fallback
-                }
+                measure.textFont = fontFamily;
+                measure.textSize = fontSize;
+                measure.textColor = fontColor;
                 this.hideFontDialog();
                 this.currentEditingMeasure = null;
                 this.render();
@@ -756,14 +793,9 @@ class TimingGenApp {
                     // Capture state before action
                     this.undoRedoManager.captureState();
                     
-                    textData.fontFamily = document.getElementById('font-family-select').value;
-                    const fontSize = parseInt(document.getElementById('font-size-input').value);
-                    // Validate fontSize is a valid number within range
-                    if (!isNaN(fontSize) && fontSize >= 8 && fontSize <= 72) {
-                        textData.fontSize = fontSize;
-                    } else {
-                        textData.fontSize = 14; // Default fallback
-                    }
+                    textData.fontFamily = fontFamily;
+                    textData.fontSize = fontSize;
+                    textData.color = fontColor;
                     this.hideFontDialog();
                     this.render();
                 }
@@ -846,6 +878,32 @@ class TimingGenApp {
             const measure = measures[this.currentEditingMeasure];
             document.getElementById('text-color-input').value = measure.textColor || '#FF0000';
             document.getElementById('color-dialog').style.display = 'flex';
+        }
+        this.hideAllMenus();
+    }
+    
+    showSignalNameFontDialog() {
+        if (this.currentEditingSignal !== null && this.currentEditingSignal !== undefined) {
+            const signal = this.getSignalByIndex(this.currentEditingSignal);
+            if (signal) {
+                document.getElementById('font-family-select').value = signal.nameFont || 'Arial';
+                document.getElementById('font-size-input').value = signal.nameFontSize || 14;
+                document.getElementById('font-color-input').value = signal.nameFontColor || '#000000';
+                document.getElementById('font-dialog').style.display = 'flex';
+            }
+        }
+        this.hideAllMenus();
+    }
+    
+    showBusValueFontDialog() {
+        if (this.currentEditingBusValue) {
+            const signal = this.getSignalByName(this.currentEditingBusValue.signalName);
+            if (signal) {
+                document.getElementById('font-family-select').value = signal.valueFontFamily || 'Arial';
+                document.getElementById('font-size-input').value = signal.valueFontSize || 12;
+                document.getElementById('font-color-input').value = signal.valueFontColor || '#000000';
+                document.getElementById('font-dialog').style.display = 'flex';
+            }
         }
         this.hideAllMenus();
     }
@@ -2293,7 +2351,31 @@ class TimingGenApp {
         const hitResults = this.hitTestAllLayers(paperPoint, this.getHitTestOptions());
         
         if (hitResults && hitResults.length > 0) {
-            // Look for arrow elements first
+            // Look for signal names and bus values first
+            for (const result of hitResults) {
+                const item = result.item;
+                
+                if (item.data && item.data.type === 'signal-name') {
+                    // Right-click on signal name
+                    this.currentEditingSignal = item.data.signalIndex;
+                    this.currentEditingSignalName = item.data.signalName;
+                    TimingGenUI.showContextMenu('signal-name-context-menu', ev.clientX, ev.clientY);
+                    return;
+                }
+                
+                if (item.data && item.data.type === 'bus-value') {
+                    // Right-click on bus value text
+                    this.currentEditingBusValue = {
+                        signalName: item.data.signalName,
+                        cycle: item.data.cycle,
+                        value: item.data.value
+                    };
+                    TimingGenUI.showContextMenu('bus-value-context-menu', ev.clientX, ev.clientY);
+                    return;
+                }
+            }
+            
+            // Look for arrow elements
             for (const result of hitResults) {
                 const item = result.item;
                 
