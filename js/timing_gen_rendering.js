@@ -1583,6 +1583,55 @@ class TimingGenRendering {
         const startX = app.config.nameColumnWidth + 10;
         const startY = yPos;
         
+        // Calculate note field height FIRST (before drawing table border)
+        const BASE_NOTE_HEIGHT = 20; // Base height for "Note" label and empty notes
+        const NOTE_LINE_PADDING = 6; // Padding between lines of text
+        
+        // Helper function to calculate text height based on content
+        const calculateNoteTextHeight = (text, maxWidth, fontSize) => {
+            if (!text) return BASE_NOTE_HEIGHT; // Default height for empty notes
+            
+            const tempText = new paper.PointText({
+                content: text,
+                fontFamily: 'Arial',
+                fontSize: fontSize || 11
+            });
+            
+            const textWidth = tempText.bounds.width;
+            tempText.remove();
+            
+            const linesNeeded = Math.ceil(textWidth / maxWidth);
+            const lineHeight = (fontSize || 11) + NOTE_LINE_PADDING;
+            
+            return Math.max(BASE_NOTE_HEIGHT, linesNeeded * lineHeight);
+        };
+        
+        const availableWidth = tableWidth - 90 - cellPadding - 10;
+        
+        // Collect notes and calculate heights
+        const uniqueNotes = new Set();
+        tableData.rows.forEach(row => {
+            if (row.note) {
+                const numbers = row.note.split(',').map(n => n.trim()).filter(n => n);
+                numbers.forEach(num => uniqueNotes.add(num));
+            }
+        });
+        
+        const sortedNotes = Array.from(uniqueNotes).sort((a, b) => parseInt(a) - parseInt(b));
+        const noteHeights = [];
+        
+        let calculatedNoteHeight = BASE_NOTE_HEIGHT; // Start with base height for "Note" label
+        sortedNotes.forEach((noteNum) => {
+            const noteData = tableData.notes.find(n => n.number === noteNum);
+            const noteText = noteData ? noteData.text : '';
+            const fontSize = (noteData && noteData.fontSize) || 11;
+            const height = calculateNoteTextHeight(noteText, availableWidth, fontSize);
+            noteHeights.push(height);
+            calculatedNoteHeight += height;
+        });
+        
+        const noteFieldHeight = calculatedNoteHeight;
+        
         // Draw title
         const titleText = new paper.PointText({
             point: [startX, startY + titleHeight / 2 + 5],
@@ -1597,8 +1646,8 @@ class TimingGenRendering {
             tableName: tableName 
         };
         
-        // Draw table border
-        const tableHeight = titleHeight + headerHeight + (tableData.rows.length * rowHeight) + 100; // Extra for notes
+        // Draw table border with calculated note height
+        const tableHeight = titleHeight + headerHeight + (tableData.rows.length * rowHeight) + noteFieldHeight;
         const tableBorder = new paper.Path.Rectangle({
             point: [startX, startY + titleHeight],
             size: [tableWidth, tableHeight],
@@ -1808,60 +1857,8 @@ class TimingGenRendering {
         // Draw note field at the bottom
         const noteFieldY = currentY;
         
-        // Constants for note field rendering
-        const BASE_NOTE_HEIGHT = 20; // Base height for "Note" label and empty notes
-        const NOTE_LINE_PADDING = 6; // Padding between lines of text
-        
-        // Calculate note field height dynamically based on content
-        let calculatedNoteHeight = BASE_NOTE_HEIGHT; // Base height for "Note" label
-        
-        // Helper function to calculate text height based on content
-        const calculateNoteTextHeight = (text, maxWidth, fontSize) => {
-            if (!text) return BASE_NOTE_HEIGHT; // Default height for empty notes
-            
-            // Create temporary text to measure actual bounds
-            const tempText = new paper.PointText({
-                content: text,
-                fontFamily: 'Arial',
-                fontSize: fontSize || 11
-            });
-            
-            const textWidth = tempText.bounds.width;
-            tempText.remove();
-            
-            // Calculate number of lines needed (rough estimate)
-            const linesNeeded = Math.ceil(textWidth / maxWidth);
-            
-            // Height per line (fontSize + padding between lines)
-            const lineHeight = (fontSize || 11) + NOTE_LINE_PADDING;
-            
-            return Math.max(BASE_NOTE_HEIGHT, linesNeeded * lineHeight);
-        };
-        
-        const availableWidth = tableWidth - 90 - cellPadding - 10; // Width for note text
-        
-        // Collect notes and calculate heights
-        const uniqueNotes = new Set();
-        tableData.rows.forEach(row => {
-            if (row.note) {
-                const numbers = row.note.split(',').map(n => n.trim()).filter(n => n);
-                numbers.forEach(num => uniqueNotes.add(num));
-            }
-        });
-        
-        const sortedNotes = Array.from(uniqueNotes).sort((a, b) => parseInt(a) - parseInt(b));
-        const noteHeights = [];
-        
-        sortedNotes.forEach((noteNum) => {
-            const noteData = tableData.notes.find(n => n.number === noteNum);
-            const noteText = noteData ? noteData.text : '';
-            const fontSize = (noteData && noteData.fontSize) || 11;
-            const height = calculateNoteTextHeight(noteText, availableWidth, fontSize);
-            noteHeights.push(height);
-            calculatedNoteHeight += height;
-        });
-        
-        const noteFieldHeight = calculatedNoteHeight;
+        // Note: Note heights were already calculated at the top of this function
+        // and are available in noteHeights, sortedNotes, and noteFieldHeight variables
         
         // Draw "Note" label
         const noteLabel = new paper.PointText({
