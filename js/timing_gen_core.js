@@ -1121,10 +1121,12 @@ class TimingGenApp {
         const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
         const timeValue = cyclePeriod * cycleDiff;
         
-        // Formula: timeValue - signal1Delay + signal2Delay
-        // Min uses all min delays, Max uses all max delays
-        const minValue = (timeValue - signal1Delays.min + signal2Delays.min).toFixed(2);
-        const maxValue = (timeValue - signal1Delays.max + signal2Delays.max).toFixed(2);
+        // Calculate both min-to-min and max-to-max paths
+        // Then assign the smaller to min and larger to max
+        const minToMin = timeValue - signal1Delays.min + signal2Delays.min;
+        const maxToMax = timeValue - signal1Delays.max + signal2Delays.max;
+        const minValue = Math.min(minToMin, maxToMax).toFixed(2);
+        const maxValue = Math.max(minToMin, maxToMax).toFixed(2);
         
         return {
             measureName: measureName, // Link to measure
@@ -1179,12 +1181,17 @@ class TimingGenApp {
                     const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
                     const timeValue = cyclePeriod * cycleDiff;
                     
-                    // Formula: timeValue - signal1Delay + signal2Delay
+                    // Calculate both min-to-min and max-to-max paths
+                    const minToMin = timeValue - signal1Delays.min + signal2Delays.min;
+                    const maxToMax = timeValue - signal1Delays.max + signal2Delays.max;
+                    const calculatedMin = Math.min(minToMin, maxToMax).toFixed(2);
+                    const calculatedMax = Math.max(minToMin, maxToMax).toFixed(2);
+                    
                     if (!row.manuallyEdited.min) {
-                        row.min = (timeValue - signal1Delays.min + signal2Delays.min).toFixed(2);
+                        row.min = calculatedMin;
                     }
                     if (!row.manuallyEdited.max) {
-                        row.max = (timeValue - signal1Delays.max + signal2Delays.max).toFixed(2);
+                        row.max = calculatedMax;
                     }
                 }
                 
@@ -1492,15 +1499,20 @@ class TimingGenApp {
                     const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
                     const timeValue = cyclePeriod * cycleDiff;
                     
-                    // Formula: timeValue - signal1Delay + signal2Delay
+                    // Calculate both min-to-min and max-to-max paths
+                    const minToMin = timeValue - signal1Delays.min + signal2Delays.min;
+                    const maxToMax = timeValue - signal1Delays.max + signal2Delays.max;
+                    const calculatedMin = Math.min(minToMin, maxToMax).toFixed(2);
+                    const calculatedMax = Math.max(minToMin, maxToMax).toFixed(2);
+                    
                     // Update min if not manually edited
                     if (!row.manuallyEdited.min) {
-                        row.min = (timeValue - signal1Delays.min + signal2Delays.min).toFixed(2);
+                        row.min = calculatedMin;
                     }
                     
                     // Update max if not manually edited
                     if (!row.manuallyEdited.max) {
-                        row.max = (timeValue - signal1Delays.max + signal2Delays.max).toFixed(2);
+                        row.max = calculatedMax;
                     }
                     
                     // Update unit if not manually edited
