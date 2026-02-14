@@ -1106,9 +1106,17 @@ class TimingGenApp {
     createACTableRowFromMeasure(measureName, measure) {
         // Calculate min and max from cycle period and delays
         const cyclePeriod = this.config.clockPeriod;
-        const delayMin = this.config.delayMin;
-        const delayMax = this.config.delayMax;
         const unit = this.config.clockPeriodUnit;
+        
+        // Get the signal for this measure to determine which delays to use
+        // Use signal1 as the primary signal for delay calculation
+        const signal1 = this.getSignalByName(measure.signal1Name);
+        
+        // Get effective delays for the signal at the first cycle
+        // This handles the cascade: cycle > signal > global
+        const effectiveDelays = this.getEffectiveDelayInTime(signal1, measure.cycle1);
+        const delayMin = effectiveDelays.min;
+        const delayMax = effectiveDelays.max;
         
         // Calculate cycle difference
         const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
@@ -1159,8 +1167,14 @@ class TimingGenApp {
                 // Recalculate min/max if not manually edited
                 if (!row.manuallyEdited.min || !row.manuallyEdited.max) {
                     const cyclePeriod = this.config.clockPeriod;
-                    const delayMin = this.config.delayMin;
-                    const delayMax = this.config.delayMax;
+                    
+                    // Get the signal for this measure to determine which delays to use
+                    const signal1 = this.getSignalByName(measure.signal1Name);
+                    
+                    // Get effective delays for the signal at the first cycle
+                    const effectiveDelays = this.getEffectiveDelayInTime(signal1, measure.cycle1);
+                    const delayMin = effectiveDelays.min;
+                    const delayMax = effectiveDelays.max;
                     
                     const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
                     const timeValue = cyclePeriod * cycleDiff;
@@ -1453,8 +1467,6 @@ class TimingGenApp {
         
         // Get current config values
         const cyclePeriod = this.config.clockPeriod;
-        const delayMin = this.config.delayMin;
-        const delayMax = this.config.delayMax;
         const unit = this.config.clockPeriodUnit;
         
         // Update each row that's linked to a measure
@@ -1467,18 +1479,26 @@ class TimingGenApp {
                         row.symbol = measure.text;
                     }
                     
+                    // Get the signal for this measure to determine which delays to use
+                    const signal1 = this.getSignalByName(measure.signal1Name);
+                    
+                    // Get effective delays for the signal at the first cycle
+                    const effectiveDelays = this.getEffectiveDelayInTime(signal1, measure.cycle1);
+                    const delayMin = effectiveDelays.min;
+                    const delayMax = effectiveDelays.max;
+                    
                     // Recalculate min/max based on measure cycles
                     const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
                     const timeValue = cyclePeriod * cycleDiff;
                     
                     // Update min if not manually edited
                     if (!row.manuallyEdited.min) {
-                        row.min = delayMin !== 0 ? (timeValue + delayMin).toFixed(2) : '';
+                        row.min = (timeValue + delayMin).toFixed(2);
                     }
                     
                     // Update max if not manually edited
                     if (!row.manuallyEdited.max) {
-                        row.max = delayMax !== 0 ? (timeValue + delayMax).toFixed(2) : '';
+                        row.max = (timeValue + delayMax).toFixed(2);
                     }
                     
                     // Update unit if not manually edited
@@ -2880,6 +2900,49 @@ class TimingGenApp {
             };
         }
         return { min: 0, max: 0, color: delayColor };
+    }
+    
+    // Get effective delay value in time units (not pixels) with cascading priority: cycle > signal > global
+    // Returns object with {min, max} delay in time units (same as clockPeriod units)
+    getEffectiveDelayInTime(signal, cycle) {
+        // Start with defaults from code (0 for delays)
+        let delayMinInTime = 0;
+        let delayMaxInTime = 0;
+        
+        // Apply global level settings
+        if (this.config.delayMin !== undefined) {
+            delayMinInTime = this.config.delayMin;
+        }
+        if (this.config.delayMax !== undefined) {
+            delayMaxInTime = this.config.delayMax;
+        }
+        
+        // Safety check: if signal is undefined or null, return global defaults
+        if (!signal) {
+            return { min: delayMinInTime, max: delayMaxInTime };
+        }
+        
+        // Apply signal level overrides
+        if (signal.delayMin !== undefined) {
+            delayMinInTime = signal.delayMin;
+        }
+        if (signal.delayMax !== undefined) {
+            delayMaxInTime = signal.delayMax;
+        }
+        
+        // Apply cycle level overrides
+        if (signal.cycleOptions && signal.cycleOptions[cycle]) {
+            const cycleOpts = signal.cycleOptions[cycle];
+            
+            if (cycleOpts.delayMin !== undefined) {
+                delayMinInTime = cycleOpts.delayMin;
+            }
+            if (cycleOpts.delayMax !== undefined) {
+                delayMaxInTime = cycleOpts.delayMax;
+            }
+        }
+        
+        return { min: delayMinInTime, max: delayMaxInTime };
     }
     
     getSignalIndexAtY(yPos) {
