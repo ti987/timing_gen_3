@@ -1108,23 +1108,23 @@ class TimingGenApp {
         const cyclePeriod = this.config.clockPeriod;
         const unit = this.config.clockPeriodUnit;
         
-        // Get the signal for this measure to determine which delays to use
-        // Use signal1 as the primary signal for delay calculation
+        // Get both signals for this measure
         const signal1 = this.getSignalByName(measure.signal1Name);
+        const signal2 = this.getSignalByName(measure.signal2Name);
         
-        // Get effective delays for the signal at the first cycle
+        // Get effective delays for both signals at their respective cycles
         // This handles the cascade: cycle > signal > global
-        const effectiveDelays = this.getEffectiveDelayInTime(signal1, measure.cycle1);
-        const delayMin = effectiveDelays.min;
-        const delayMax = effectiveDelays.max;
+        const signal1Delays = this.getEffectiveDelayInTime(signal1, measure.cycle1);
+        const signal2Delays = this.getEffectiveDelayInTime(signal2, measure.cycle2);
         
         // Calculate cycle difference
         const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
         const timeValue = cyclePeriod * cycleDiff;
         
-        // Min = timeValue + delayMin, Max = timeValue + delayMax
-        const minValue = (timeValue + delayMin).toFixed(2);
-        const maxValue = (timeValue + delayMax).toFixed(2);
+        // Formula: timeValue - signal1Delay + signal2Delay
+        // Min uses all min delays, Max uses all max delays
+        const minValue = (timeValue - signal1Delays.min + signal2Delays.min).toFixed(2);
+        const maxValue = (timeValue - signal1Delays.max + signal2Delays.max).toFixed(2);
         
         return {
             measureName: measureName, // Link to measure
@@ -1168,22 +1168,23 @@ class TimingGenApp {
                 if (!row.manuallyEdited.min || !row.manuallyEdited.max) {
                     const cyclePeriod = this.config.clockPeriod;
                     
-                    // Get the signal for this measure to determine which delays to use
+                    // Get both signals for this measure
                     const signal1 = this.getSignalByName(measure.signal1Name);
+                    const signal2 = this.getSignalByName(measure.signal2Name);
                     
-                    // Get effective delays for the signal at the first cycle
-                    const effectiveDelays = this.getEffectiveDelayInTime(signal1, measure.cycle1);
-                    const delayMin = effectiveDelays.min;
-                    const delayMax = effectiveDelays.max;
+                    // Get effective delays for both signals at their respective cycles
+                    const signal1Delays = this.getEffectiveDelayInTime(signal1, measure.cycle1);
+                    const signal2Delays = this.getEffectiveDelayInTime(signal2, measure.cycle2);
                     
                     const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
                     const timeValue = cyclePeriod * cycleDiff;
                     
+                    // Formula: timeValue - signal1Delay + signal2Delay
                     if (!row.manuallyEdited.min) {
-                        row.min = (timeValue + delayMin).toFixed(2);
+                        row.min = (timeValue - signal1Delays.min + signal2Delays.min).toFixed(2);
                     }
                     if (!row.manuallyEdited.max) {
-                        row.max = (timeValue + delayMax).toFixed(2);
+                        row.max = (timeValue - signal1Delays.max + signal2Delays.max).toFixed(2);
                     }
                 }
                 
@@ -1479,26 +1480,27 @@ class TimingGenApp {
                         row.symbol = measure.text;
                     }
                     
-                    // Get the signal for this measure to determine which delays to use
+                    // Get both signals for this measure
                     const signal1 = this.getSignalByName(measure.signal1Name);
+                    const signal2 = this.getSignalByName(measure.signal2Name);
                     
-                    // Get effective delays for the signal at the first cycle
-                    const effectiveDelays = this.getEffectiveDelayInTime(signal1, measure.cycle1);
-                    const delayMin = effectiveDelays.min;
-                    const delayMax = effectiveDelays.max;
+                    // Get effective delays for both signals at their respective cycles
+                    const signal1Delays = this.getEffectiveDelayInTime(signal1, measure.cycle1);
+                    const signal2Delays = this.getEffectiveDelayInTime(signal2, measure.cycle2);
                     
                     // Recalculate min/max based on measure cycles
                     const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
                     const timeValue = cyclePeriod * cycleDiff;
                     
+                    // Formula: timeValue - signal1Delay + signal2Delay
                     // Update min if not manually edited
                     if (!row.manuallyEdited.min) {
-                        row.min = (timeValue + delayMin).toFixed(2);
+                        row.min = (timeValue - signal1Delays.min + signal2Delays.min).toFixed(2);
                     }
                     
                     // Update max if not manually edited
                     if (!row.manuallyEdited.max) {
-                        row.max = (timeValue + delayMax).toFixed(2);
+                        row.max = (timeValue - signal1Delays.max + signal2Delays.max).toFixed(2);
                     }
                     
                     // Update unit if not manually edited
