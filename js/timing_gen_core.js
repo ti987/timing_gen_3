@@ -1041,7 +1041,7 @@ class TimingGenApp {
     // ========================================
     
     showAddACTableDialog() {
-        document.getElementById('ac-table-title-input').value = 'Read Cycle';
+        document.getElementById('ac-table-title-input').value = 'AC Table';
         document.getElementById('add-ac-table-dialog').style.display = 'flex';
     }
     
@@ -1115,8 +1115,8 @@ class TimingGenApp {
         const timeValue = cyclePeriod * cycleDiff;
         
         // Min = timeValue + delayMin, Max = timeValue + delayMax
-        const minValue = delayMin !== 0 ? (timeValue + delayMin).toFixed(2) : '';
-        const maxValue = delayMax !== 0 ? (timeValue + delayMax).toFixed(2) : '';
+        const minValue = (timeValue + delayMin).toFixed(2);
+        const maxValue = (timeValue + delayMax).toFixed(2);
         
         return {
             measureName: measureName, // Link to measure
@@ -1166,10 +1166,10 @@ class TimingGenApp {
                     const timeValue = cyclePeriod * cycleDiff;
                     
                     if (!row.manuallyEdited.min) {
-                        row.min = delayMin !== 0 ? (timeValue + delayMin).toFixed(2) : '';
+                        row.min = (timeValue + delayMin).toFixed(2);
                     }
                     if (!row.manuallyEdited.max) {
-                        row.max = delayMax !== 0 ? (timeValue + delayMax).toFixed(2) : '';
+                        row.max = (timeValue + delayMax).toFixed(2);
                     }
                 }
                 
