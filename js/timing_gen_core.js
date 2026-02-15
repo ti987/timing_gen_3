@@ -4433,7 +4433,7 @@ class TimingGenApp {
                 const highlightRect = new paper.Path.Rectangle({
                     point: [0, rowYPos],
                     size: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, rowHeight],
-                    fillColor: new paper.Color(highlightColor, 0.3),
+                    fillColor: new paper.Color(highlightColor, 0.1),
                     strokeColor: highlightColor,
                     strokeWidth: 2
                 });
