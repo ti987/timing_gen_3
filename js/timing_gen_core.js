@@ -1773,13 +1773,17 @@ class TimingGenApp {
         // Use hitTestAll to get all items at the point - search all layers
         // IMPORTANT: Skip this check when in measure mode selecting points (first-point or second-point)
         // to allow placing measures on top of existing measures/arrows
+        // ALSO skip when in arrow mode to allow placing arrows without being interrupted by measure clicks
         const isSelectingMeasurePoints = this.measureMode && 
             (this.measureState === 'first-point' || this.measureState === 'second-point' ||
              this.measureState === 'rechoose-point-1' || this.measureState === 'rechoose-point-2');
         
+        const isPlacingArrow = this.arrowMode && 
+            (this.arrowState === 'first-point' || this.arrowState === 'second-point');
+        
         const hitResults = this.hitTestAllLayers(event.point, this.getHitTestOptions());
         
-        if (hitResults && hitResults.length > 0 && !isSelectingMeasurePoints) {
+        if (hitResults && hitResults.length > 0 && !isSelectingMeasurePoints && !isPlacingArrow) {
             // Look for arrow elements first, prioritizing control points over curves
             // First pass: look for control points specifically
             for (const result of hitResults) {
