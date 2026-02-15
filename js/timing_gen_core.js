@@ -4423,17 +4423,17 @@ class TimingGenApp {
                 
                 // Draw a highlighted rectangle to show the target row
                 // Use different colors for different row types
-                let highlightColor = '#ADD8E6'; // Light blue for signal rows
+               let highlightColor = 'rgba(170,224,224, 0.4)'; // Light blue for signal rows
                 if (row.type === 'measure') {
-                    highlightColor = '#FFD700'; // Gold for measure rows (will create group)
+                   highlightColor = 'rgba(255,215,0, 0.4)'; // Gold for measure rows (will create group)
                 } else if (row.type === 'group') {
-                    highlightColor = '#DDA0DD'; // Plum for group rows (will add to group)
+                   highlightColor = 'rgba(218, 160, 218, 0.4)'; // Plum for group rows (will add to group)
                 }
                 
                 const highlightRect = new paper.Path.Rectangle({
                     point: [0, rowYPos],
                     size: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, rowHeight],
-                    fillColor: new paper.Color(highlightColor, 0.1),
+                    fillColor: new paper.Color(highlightColor),
                     strokeColor: highlightColor,
                     strokeWidth: 2
                 });
