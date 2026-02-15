@@ -1771,9 +1771,15 @@ class TimingGenApp {
         
         // Check if clicking on a measure element (Paper.js tool handlers prevent item handlers from firing)
         // Use hitTestAll to get all items at the point - search all layers
+        // IMPORTANT: Skip this check when in measure mode selecting points (first-point or second-point)
+        // to allow placing measures on top of existing measures/arrows
+        const isSelectingMeasurePoints = this.measureMode && 
+            (this.measureState === 'first-point' || this.measureState === 'second-point' ||
+             this.measureState === 'rechoose-point-1' || this.measureState === 'rechoose-point-2');
+        
         const hitResults = this.hitTestAllLayers(event.point, this.getHitTestOptions());
         
-        if (hitResults && hitResults.length > 0) {
+        if (hitResults && hitResults.length > 0 && !isSelectingMeasurePoints) {
             // Look for arrow elements first, prioritizing control points over curves
             // First pass: look for control points specifically
             for (const result of hitResults) {
@@ -4407,20 +4413,31 @@ class TimingGenApp {
         
         // Show row indicator when moving measure to another row
         if (this.isMovingMeasureRow) {
-            console.log('[handleMeasureMouseMove] Drawing blue row indicator for row move mode');
-            const rowIndex = this.rowManager.getRowIndexAtY(yPos);
-            if (rowIndex >= 0 && rowIndex <= this.rows.length) {
-                // Draw dashed row indicator in blue
-                const rowYPos = this.config.headerHeight + (rowIndex + 0.5) * this.config.rowHeight;
-                console.log('[handleMeasureMouseMove] Row indicator at Y:', rowYPos);
-                const indicator = new paper.Path.Line({
-                    from: [0, rowYPos],
-                    to: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, rowYPos],
-                    strokeColor: '#0000FF', // Blue color for row move
-                    strokeWidth: 2,
-                    dashArray: [10, 5]
+            console.log('[handleMeasureMouseMove] Drawing row indicator for row move mode');
+            const row = this.getRowAtY(yPos);
+            if (row) {
+                const rowYPos = this.rowManager.getRowYPosition(row.index);
+                const rowHeight = this.rowManager.getRowHeight(row.index);
+                
+                console.log('[handleMeasureMouseMove] Target row:', row.type, 'at index:', row.index, 'Y:', rowYPos);
+                
+                // Draw a highlighted rectangle to show the target row
+                // Use different colors for different row types
+                let highlightColor = '#ADD8E6'; // Light blue for signal rows
+                if (row.type === 'measure') {
+                    highlightColor = '#FFD700'; // Gold for measure rows (will create group)
+                } else if (row.type === 'group') {
+                    highlightColor = '#DDA0DD'; // Plum for group rows (will add to group)
+                }
+                
+                const highlightRect = new paper.Path.Rectangle({
+                    point: [0, rowYPos],
+                    size: [this.config.nameColumnWidth + this.config.cycles * this.config.cycleWidth, rowHeight],
+                    fillColor: new paper.Color(highlightColor).setAlpha(0.3),
+                    strokeColor: highlightColor,
+                    strokeWidth: 2
                 });
-                this.tempMeasureGraphics.push(indicator);
+                this.tempMeasureGraphics.push(highlightRect);
             }
         }
         

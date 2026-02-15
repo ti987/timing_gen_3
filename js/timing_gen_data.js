@@ -288,6 +288,7 @@ class TimingGenData {
         const savedMeasureSelection = new Set(app.selectedMeasureRows);
         const savedHideHeader = app.hideHeader;
         const savedHeaderHeight = app.config.headerHeight;
+        const savedExportingSVG = app.exportingSVG;
         
         try {
             // Clear selections to turn off signal highlight
@@ -296,6 +297,9 @@ class TimingGenData {
             
             // Set flag to hide header (cycle reference counter)
             app.hideHeader = true;
+            
+            // Set flag to indicate we're exporting SVG (used to hide measure/group labels)
+            app.exportingSVG = true;
             
             // Remove header space by setting headerHeight to 0 for SVG export
             app.config.headerHeight = 0;
@@ -323,6 +327,7 @@ class TimingGenData {
             app.selectedSignals = savedSelection;
             app.selectedMeasureRows = savedMeasureSelection;
             app.hideHeader = savedHideHeader;
+            app.exportingSVG = savedExportingSVG;
             app.config.headerHeight = savedHeaderHeight;
             
             // Recalculate arrow positions with restored header height

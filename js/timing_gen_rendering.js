@@ -760,6 +760,11 @@ class TimingGenRendering {
     
     static drawMeasureRowName(app, rowIndex, measureCount) {
         // Draw name column for measure row
+        // Skip drawing the label when exporting to SVG
+        if (app.exportingSVG) {
+            return;
+        }
+        
         const yPos = app.rowManager.getRowYPosition(rowIndex);
         const rowHeight = app.rowManager.getRowHeight(rowIndex);
         
@@ -788,6 +793,11 @@ class TimingGenRendering {
     
     static drawGroupRowName(app, rowIndex, measureCount) {
         // Draw name column for group row
+        // Skip drawing the label when exporting to SVG
+        if (app.exportingSVG) {
+            return;
+        }
+        
         const yPos = app.rowManager.getRowYPosition(rowIndex);
         const rowHeight = app.rowManager.getRowHeight(rowIndex);
         
