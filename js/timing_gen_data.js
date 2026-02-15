@@ -288,7 +288,7 @@ class TimingGenData {
         const savedMeasureSelection = new Set(app.selectedMeasureRows);
         const savedHideHeader = app.hideHeader;
         const savedHeaderHeight = app.config.headerHeight;
-        const savedExportingSVG = app.exportingSVG;
+        const savedExportingSVG = app.exportingSVG || false;
         
         try {
             // Clear selections to turn off signal highlight
