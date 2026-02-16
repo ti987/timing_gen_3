@@ -356,6 +356,12 @@ class TimingGenApp {
         document.getElementById('delete-text-row-menu').addEventListener('click', () => this.deleteTextRow());
         document.getElementById('cancel-text-row-menu').addEventListener('click', () => this.hideAllMenus());
         
+        // Counter cycle context menu
+        document.getElementById('continue-counter-menu').addEventListener('click', () => this.continueCounter());
+        document.getElementById('restart-counter-menu').addEventListener('click', () => this.showRestartCounterDialog());
+        document.getElementById('blank-counter-menu').addEventListener('click', () => this.blankCounter());
+        document.getElementById('cancel-counter-cycle-menu').addEventListener('click', () => this.hideAllMenus());
+        
         // Measure row name context menu
         document.getElementById('delete-measure-row-menu').addEventListener('click', () => this.deleteMeasureRow());
         document.getElementById('cancel-measure-row-menu').addEventListener('click', () => this.hideAllMenus());
@@ -590,6 +596,7 @@ class TimingGenApp {
         document.getElementById('arrow-text-context-menu').style.display = 'none';
         document.getElementById('text-context-menu').style.display = 'none';
         document.getElementById('text-row-name-context-menu').style.display = 'none';
+        document.getElementById('counter-cycle-context-menu').style.display = 'none';
         document.getElementById('measure-row-name-context-menu').style.display = 'none';
         document.getElementById('ac-cell-context-menu').style.display = 'none';
         document.getElementById('ac-param-context-menu').style.display = 'none';
@@ -984,6 +991,66 @@ class TimingGenApp {
                 }
                 
                 this.hideEditCounterDialog();
+                this.render();
+            }
+        }
+    }
+    
+    // Counter cycle context menu actions
+    continueCounter() {
+        // "Continue" means remove any value entry at this cycle to let auto-increment continue
+        if (this.currentEditingCounter) {
+            const counterData = this.counterData.get(this.currentEditingCounter.name);
+            if (counterData) {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
+                const cycle = this.currentEditingCounter.cycle;
+                
+                // Remove any existing value at this cycle
+                counterData.values = counterData.values.filter(v => v.cycle !== cycle);
+                
+                // If there are no more values, add a default starting point
+                if (counterData.values.length === 0) {
+                    counterData.values.push({ cycle: 0, value: '1' });
+                }
+                
+                this.hideAllMenus();
+                this.render();
+            }
+        }
+    }
+    
+    showRestartCounterDialog() {
+        // Show dialog to restart counter with a new value
+        if (this.currentEditingCounter) {
+            this.hideAllMenus();
+            document.getElementById('edit-counter-value-input').value = '';
+            document.getElementById('edit-counter-dialog').style.display = 'flex';
+        }
+    }
+    
+    blankCounter() {
+        // "Blank" means add a null/blank entry to stop counting from this cycle forward
+        if (this.currentEditingCounter) {
+            const counterData = this.counterData.get(this.currentEditingCounter.name);
+            if (counterData) {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
+                const cycle = this.currentEditingCounter.cycle;
+                
+                // Add or update value at this cycle with null (blank)
+                const existingIndex = counterData.values.findIndex(v => v.cycle === cycle);
+                if (existingIndex >= 0) {
+                    counterData.values[existingIndex].value = null;
+                } else {
+                    counterData.values.push({ cycle: cycle, value: null });
+                    // Sort by cycle
+                    counterData.values.sort((a, b) => a.cycle - b.cycle);
+                }
+                
+                this.hideAllMenus();
                 this.render();
             }
         }
@@ -2647,7 +2714,12 @@ class TimingGenApp {
         }
         
         if (row) {
-            if (row.type === 'text') {
+            if (row.type === 'counter') {
+                // Right-click on counter row - show counter cycle context menu
+                this.currentEditingCounter = { name: row.name, cycle: cycle };
+                TimingGenUI.showContextMenu('counter-cycle-context-menu', ev.clientX, ev.clientY);
+                return;
+            } else if (row.type === 'text') {
                 // Right-click on text row - show text context menu
                 this.currentEditingText = row.name;
                 TimingGenUI.showContextMenu('text-context-menu', ev.clientX, ev.clientY);
