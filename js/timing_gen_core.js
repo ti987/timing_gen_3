@@ -45,7 +45,7 @@ class TimingGenApp {
             backgroundColor: '#ffffff'
         };
         
-        // Data model v3.4.0 - Extended with AC Table widget and Group row type
+        // Data model v3.4.0 - Extended with AC Table tool and Group row type
         // rows: defines order only - Array of {type: 'signal'|'measure'|'text'|'counter'|'ac-table'|'group', name: string}
         // signalsData: Map<name, signalObject> - actual signal data
         // measuresData: Map<name, measureObject> - actual measure data
@@ -2281,7 +2281,7 @@ class TimingGenApp {
                 this.startDragGroupRow(row.index, event);
             } else if (row && (row.type === 'text' || row.type === 'counter')) {
                 // Handle text/counter row selection - reuse measure selection logic
-                // Text and counter rows use selectedMeasureRows for dragging (non-signal widgets)
+                // Text and counter rows use selectedMeasureRows for dragging (non-signal tools)
                 if (!this.selectedMeasureRows.has(row.index)) {
                     this.selectedSignals.clear();
                     this.selectedMeasureRows.clear();

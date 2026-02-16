@@ -26,7 +26,7 @@ This document describes how to manually verify the bug fixes in this PR.
 
 **Steps to test:**
 1. Open the timing diagram editor
-2. Add an AC Table via "Add widget" → "AC Table"
+2. Add an AC Table via "Add tool" → "AC Table"
 3. Note that the AC Table appears at the bottom
 4. Add a new signal via "Add Signal"
 5. Add a new measure
@@ -50,7 +50,7 @@ This document describes how to manually verify the bug fixes in this PR.
 **Steps to test:**
 1. Open the timing diagram editor
 2. Add at least one measure (to populate the AC Table)
-3. Add an AC Table via "Add widget" → "AC Table"
+3. Add an AC Table via "Add tool" → "AC Table"
 4. Double-click on a populated cell (e.g., Symbol column)
 5. Double-click on an empty cell (e.g., Parameter column)
 6. **Right-click on a populated cell** ← EXISTING

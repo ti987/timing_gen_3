@@ -16,7 +16,7 @@ test.describe('Timing Gen 3 Application', () => {
     await expect(page).toHaveTitle('Timing Gen 3 - Interactive Digital Logic Waveform Editor');
     
     // Check main UI elements are present
-    await expect(page.getByRole('button', { name: 'Add widget' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add tool' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add Signal' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Global Option' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();

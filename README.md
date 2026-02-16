@@ -5,7 +5,7 @@ An interactive web-based digital logic waveform editor for creating and editing 
 ## Features
 
 - **Multiple Signal Types**: Clock, Bit, and Bus signals
-- **Widget Rows**: Text labels and Counter displays for documentation
+- **Tool Rows**: Text labels and Counter displays for documentation
 - **Interactive Editing**:
   - Add signals with custom names and types
   - Add text rows for labels and annotations
@@ -26,7 +26,7 @@ An interactive web-based digital logic waveform editor for creating and editing 
   - Flexible placement (above, below, or between rows)
 - **File Operations**:
   - Save/Load diagrams in JSON format
-  - Export to SVG for documentation (with proper handling of text/counter widgets)
+  - Export to SVG for documentation (with proper handling of text/counter tools)
 - **Configurable**: Adjustable number of cycles
 
 ## Setup
@@ -63,16 +63,16 @@ The application uses Paper.js from CDN, so no manual download is required. Howev
 3. Select signal type (Clock, Bit, or Bus)
 4. Click "OK"
 
-### Adding Widgets
+### Adding Tools
 
 **Text Rows:**
-1. Click "Add Widget" → "Text" in the top menu
+1. Click "Add Tool" → "Text" in the top menu
 2. Enter text for the row (or leave empty for a blank row)
 3. Click "OK"
 4. Text appears in the waveform area, not in the name column
 
 **Counter Rows:**
-1. Click "Add Widget" → "Counter" in the top menu
+1. Click "Add Tool" → "Counter" in the top menu
 2. Enter a start value (e.g., "1", "t1", "ts1")
 3. Enter the start cycle number
 4. Click "OK"
@@ -80,7 +80,7 @@ The application uses Paper.js from CDN, so no manual download is required. Howev
 6. Supports formats like "t1", "t2", "t3" or "1", "2", "3"
 
 **Measurements:**
-1. Click "Add Widget" → "Measure" in the top menu
+1. Click "Add Tool" → "Measure" in the top menu
 2. Click on the first signal transition point
 3. Click on the second signal transition point
 4. Click where you want the measurement displayed (above rows, below rows, or between rows)
@@ -121,7 +121,7 @@ The application uses Paper.js from CDN, so no manual download is required. Howev
 
 - **Cycles**: Use the number input in the top menu to change the number of cycles displayed
 
-## Widget Types
+## Tool Types
 
 ### Text Rows
 - Display text annotations in the waveform area

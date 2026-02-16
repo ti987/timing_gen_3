@@ -35,9 +35,9 @@ Signal 2
    - Different mental models for same UI concept
 
 3. **Limited Extensibility**
-   - Hard to add new widget types (annotations, markers, etc.)
+   - Hard to add new tool types (annotations, markers, etc.)
    - Each new type would need gap-based logic
-   - Drag-and-drop between different widget types is complex
+   - Drag-and-drop between different tool types is complex
 
 4. **Data Migration Complexity**
    - Measures stored with `measureRow` (gap index)
@@ -141,7 +141,7 @@ getRowIndexAtY(y) {
 - Measures: change gap index, complex position calculations
 
 **After:**
-- All widgets: move to target row index
+- All tools: move to target row index
 - Simpler reordering logic: array splice operation
 - Automatic index updates for all references
 
@@ -227,12 +227,12 @@ function migrateFrom303(oldData) {
 ### Benefits
 
 1. **Simplicity**
-   - Single mental model for all widgets
+   - Single mental model for all tools
    - Simple arithmetic for position calculations
    - Easier to understand and maintain
 
 2. **Extensibility**
-   - Easy to add new widget types (annotations, spacers, etc.)
+   - Easy to add new tool types (annotations, spacers, etc.)
    - Uniform handling for drag-and-drop
    - Future-proof architecture
 

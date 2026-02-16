@@ -65,21 +65,21 @@ class TimingGenRendering {
                         TimingGenRendering.drawGroup(app, group, rowIndex);
                     }
                 } else if (row.type === 'text') {
-                    // Draw text widget - get data from Map
+                    // Draw text tool - get data from Map
                     app.signalLayer.activate();
                     const textData = app.textData.get(row.name);
                     if (textData) {
                         TimingGenRendering.drawTextRow(app, textData, rowIndex);
                     }
                 } else if (row.type === 'counter') {
-                    // Draw counter widget - get data from Map
+                    // Draw counter tool - get data from Map
                     app.signalLayer.activate();
                     const counterData = app.counterData.get(row.name);
                     if (counterData) {
                         TimingGenRendering.drawCounterRow(app, counterData, rowIndex);
                     }
                 } else if (row.type === 'ac-table') {
-                    // Draw AC Table widget - get data from Map
+                    // Draw AC Table tool - get data from Map
                     app.signalLayer.activate();
                     const acTableData = app.acTablesData.get(row.name);
                     if (acTableData) {

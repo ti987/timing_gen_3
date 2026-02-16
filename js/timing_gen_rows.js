@@ -1,6 +1,6 @@
 // Timing Gen 3 - Row Management Module
 // Version 3.4.0
-// Unified row system for signals, measures, and widgets (text, counter, ac-table)
+// Unified row system for signals, measures, and tools (text, counter, ac-table)
 //
 // This module provides the abstraction layer for the unified row system
 // where every visual element (signal, measure, etc.) occupies exactly one row.
