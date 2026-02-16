@@ -1141,62 +1141,19 @@ class TimingGenApp {
     }
     
     // ========================================
-    // AC Table Methods
+    // AC Table Methods (delegated to TimingGenACTable)
     // ========================================
     
     showAddACTableDialog() {
-        document.getElementById('ac-table-title-input').value = 'AC Table';
-        document.getElementById('add-ac-table-dialog').style.display = 'flex';
+        TimingGenACTable.showAddACTableDialog(this);
     }
     
     hideAddACTableDialog() {
-        document.getElementById('add-ac-table-dialog').style.display = 'none';
+        TimingGenACTable.hideAddACTableDialog(this);
     }
     
     addACTable() {
-        const title = document.getElementById('ac-table-title-input').value.trim();
-        
-        if (!title) {
-            alert('Please enter a table title');
-            return;
-        }
-        
-        // Generate unique name
-        const name = `ACT${this.acTableCounter}`;
-        this.acTableCounter++;
-        
-        // Create AC Table data object
-        const acTableData = {
-            title: title,
-            position: 'bottom', // 'top' or 'bottom'
-            columnWidths: [400, 100, 100, 100, 100, 100], // Parameter, Symbol, Min., Max., Unit, Note
-            rows: [],
-            notes: [], // Array of {number, text}
-            titleFont: 'Arial',
-            titleSize: 14,
-            titleColor: '#000000',
-            headerFont: 'Arial',
-            headerSize: 12,
-            headerColor: '#000000',
-            cellFont: 'Arial',
-            cellSize: 12,
-            cellColor: '#000000'
-        };
-        
-        // Initialize rows from existing measures
-        this.initializeACTableRows(acTableData);
-        
-        // Add to data store
-        this.acTablesData.set(name, acTableData);
-        
-        // Add to rows array at the bottom
-        this.rows.push({
-            type: 'ac-table',
-            name: name
-        });
-        
-        this.hideAddACTableDialog();
-        this.render();
+        TimingGenACTable.addACTable(this);
     }
     
     // ========================================
@@ -1275,471 +1232,91 @@ class TimingGenApp {
     }
     
     initializeACTableRows(acTableData) {
-        // Create a row for each existing measure
-        for (const [measureName, measure] of this.measuresData.entries()) {
-            const row = this.createACTableRowFromMeasure(measureName, measure);
-            acTableData.rows.push(row);
-        }
+        TimingGenACTable.initializeACTableRows(this, acTableData);
     }
     
     createACTableRowFromMeasure(measureName, measure) {
-        // Calculate min and max from cycle period and delays
-        const cyclePeriod = this.config.clockPeriod;
-        const unit = this.config.clockPeriodUnit;
-        
-        // Get both signals for this measure
-        const signal1 = this.getSignalByName(measure.signal1Name);
-        const signal2 = this.getSignalByName(measure.signal2Name);
-        
-        // Get effective delays for both signals at their respective cycles
-        // This handles the cascade: cycle > signal > global
-        const signal1Delays = this.getEffectiveDelayInTime(signal1, measure.cycle1);
-        const signal2Delays = this.getEffectiveDelayInTime(signal2, measure.cycle2);
-        
-        // Calculate cycle difference
-        const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
-        const timeValue = cyclePeriod * cycleDiff;
-        
-        // Calculate both min-to-min and max-to-max paths
-        // Then assign the smaller to min and larger to max
-        const minToMin = timeValue - signal1Delays.min + signal2Delays.min;
-        const maxToMax = timeValue - signal1Delays.max + signal2Delays.max;
-        const minValue = Math.min(minToMin, maxToMax).toFixed(2);
-        const maxValue = Math.max(minToMin, maxToMax).toFixed(2);
-        
-        return {
-            measureName: measureName, // Link to measure
-            parameter: '',
-            symbol: measure.text || '', // Copy from measure text (t1, t2, etc.)
-            min: minValue,
-            max: maxValue,
-            unit: unit,
-            note: '',
-            rowSpan: 1, // 1 or 2
-            manuallyEdited: {
-                parameter: false,
-                symbol: false,
-                min: false,
-                max: false,
-                unit: false,
-                note: false
-            },
-            fontFamily: 'Arial',
-            fontSize: 12,
-            color: '#000000'
-        };
+        return TimingGenACTable.createACTableRowFromMeasure(this, measureName, measure);
     }
     
     updateACTableForMeasureChange(measureName, measure) {
-        // Update all AC tables when a measure changes
-        // NOTE: This method is called automatically when global options (clockPeriod, delays) change
-        // or when measures are modified. Currently, measure text editing after creation is not
-        // implemented in the UI, but this method is ready for future use.
-        for (const [tableName, tableData] of this.acTablesData.entries()) {
-            const rowIndex = tableData.rows.findIndex(r => r.measureName === measureName);
-            if (rowIndex >= 0) {
-                const row = tableData.rows[rowIndex];
-                
-                // Update symbol if not manually edited
-                if (!row.manuallyEdited.symbol && measure.text) {
-                    row.symbol = measure.text;
-                }
-                
-                // Recalculate min/max if not manually edited
-                if (!row.manuallyEdited.min || !row.manuallyEdited.max) {
-                    const cyclePeriod = this.config.clockPeriod;
-                    
-                    // Get both signals for this measure
-                    const signal1 = this.getSignalByName(measure.signal1Name);
-                    const signal2 = this.getSignalByName(measure.signal2Name);
-                    
-                    // Get effective delays for both signals at their respective cycles
-                    const signal1Delays = this.getEffectiveDelayInTime(signal1, measure.cycle1);
-                    const signal2Delays = this.getEffectiveDelayInTime(signal2, measure.cycle2);
-                    
-                    const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
-                    const timeValue = cyclePeriod * cycleDiff;
-                    
-                    // Calculate both min-to-min and max-to-max paths
-                    const minToMin = timeValue - signal1Delays.min + signal2Delays.min;
-                    const maxToMax = timeValue - signal1Delays.max + signal2Delays.max;
-                    const calculatedMin = Math.min(minToMin, maxToMax).toFixed(2);
-                    const calculatedMax = Math.max(minToMin, maxToMax).toFixed(2);
-                    
-                    if (!row.manuallyEdited.min) {
-                        row.min = calculatedMin;
-                    }
-                    if (!row.manuallyEdited.max) {
-                        row.max = calculatedMax;
-                    }
-                }
-                
-                // Update unit if not manually edited
-                if (!row.manuallyEdited.unit) {
-                    row.unit = this.config.clockPeriodUnit;
-                }
-            }
-        }
+        TimingGenACTable.updateACTableForMeasureChange(this, measureName, measure);
     }
     
     addACTableRowForMeasure(measureName, measure) {
-        // Add a row to all AC tables when a new measure is added
-        for (const [tableName, tableData] of this.acTablesData.entries()) {
-            const row = this.createACTableRowFromMeasure(measureName, measure);
-            tableData.rows.push(row);
-        }
+        TimingGenACTable.addACTableRowForMeasure(this, measureName, measure);
     }
     
     removeACTableRowForMeasure(measureName) {
-        // Remove row from all AC tables when a measure is deleted
-        for (const [tableName, tableData] of this.acTablesData.entries()) {
-            const rowIndex = tableData.rows.findIndex(r => r.measureName === measureName);
-            if (rowIndex >= 0) {
-                tableData.rows.splice(rowIndex, 1);
-            }
-        }
+        TimingGenACTable.removeACTableRowForMeasure(this, measureName);
     }
     
     deleteACTable(tableName) {
-        // Remove from data store
-        this.acTablesData.delete(tableName);
-        
-        // Remove from rows
-        const rowIndex = this.rows.findIndex(r => r.type === 'ac-table' && r.name === tableName);
-        if (rowIndex >= 0) {
-            this.rows.splice(rowIndex, 1);
-        }
-        
-        this.render();
+        TimingGenACTable.deleteACTable(this, tableName);
     }
     
     moveACTableToPosition(tableName, position) {
-        const tableData = this.acTablesData.get(tableName);
-        if (tableData) {
-            tableData.position = position;
-            
-            // Move row in rows array
-            const rowIndex = this.rows.findIndex(r => r.type === 'ac-table' && r.name === tableName);
-            if (rowIndex >= 0) {
-                const [row] = this.rows.splice(rowIndex, 1);
-                if (position === 'top') {
-                    this.rows.unshift(row);
-                } else {
-                    this.rows.push(row);
-                }
-            }
-            
-            this.render();
-        }
+        TimingGenACTable.moveACTableToPosition(this, tableName, position);
     }
     
-    // AC Table cell editing methods
-    
     showEditACCellDialog() {
-        if (this.currentEditingACCell) {
-            const { tableName, cellType, rowIndex, colName } = this.currentEditingACCell;
-            const tableData = this.acTablesData.get(tableName);
-            
-            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
-                const row = tableData.rows[rowIndex];
-                let currentValue = '';
-                
-                if (cellType === 'data') {
-                    currentValue = row[colName] || '';
-                } else if (cellType === 'note') {
-                    const noteData = tableData.notes.find(n => n.number === colName);
-                    currentValue = noteData ? noteData.text : '';
-                }
-                
-                document.getElementById('edit-ac-cell-input').value = currentValue;
-                document.getElementById('edit-ac-cell-dialog').style.display = 'flex';
-            }
-        }
-        this.hideAllMenus();
+        TimingGenACTable.showEditACCellDialog(this);
     }
     
     hideEditACCellDialog() {
-        document.getElementById('edit-ac-cell-dialog').style.display = 'none';
-        this.currentEditingACCell = null;
+        TimingGenACTable.hideEditACCellDialog(this);
     }
     
     updateACCell() {
-        if (this.currentEditingACCell) {
-            const { tableName, cellType, rowIndex, colName } = this.currentEditingACCell;
-            const tableData = this.acTablesData.get(tableName);
-            const newValue = document.getElementById('edit-ac-cell-input').value.trim();
-            
-            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
-                const row = tableData.rows[rowIndex];
-                
-                if (cellType === 'data') {
-                    // Update cell value
-                    row[colName] = newValue;
-                    
-                    // Mark as manually edited
-                    if (row.manuallyEdited) {
-                        row.manuallyEdited[colName] = true;
-                    }
-                    
-                    // If symbol changed, update measure text (unless measure text was manually edited)
-                    if (colName === 'symbol' && row.measureName) {
-                        const measure = this.measuresData.get(row.measureName);
-                        if (measure) {
-                            measure.text = newValue;
-                        }
-                    }
-                    
-                    // If note column, validate it's integers with commas
-                    if (colName === 'note' && newValue) {
-                        const numbers = newValue.split(',').map(n => n.trim()).filter(n => n);
-                        const allValid = numbers.every(n => /^\d+$/.test(n));
-                        if (!allValid) {
-                            alert('Note column must contain only integers separated by commas');
-                            return;
-                        }
-                        
-                        // Update note field - add any new note numbers
-                        numbers.forEach(num => {
-                            if (!tableData.notes.find(n => n.number === num)) {
-                                tableData.notes.push({ number: num, text: '' });
-                            }
-                        });
-                        
-                        // Sort notes by number
-                        tableData.notes.sort((a, b) => parseInt(a.number) - parseInt(b.number));
-                    }
-                } else if (cellType === 'note') {
-                    // Update note text
-                    let noteData = tableData.notes.find(n => n.number === colName);
-                    if (noteData) {
-                        noteData.text = newValue;
-                    } else {
-                        tableData.notes.push({ number: colName, text: newValue });
-                    }
-                }
-                
-                this.hideEditACCellDialog();
-                this.render();
-            }
-        }
+        TimingGenACTable.updateACCell(this);
     }
     
     showACCellFontDialog() {
-        if (this.currentEditingACCell) {
-            const { tableName, rowIndex } = this.currentEditingACCell;
-            const tableData = this.acTablesData.get(tableName);
-            
-            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
-                const row = tableData.rows[rowIndex];
-                document.getElementById('ac-cell-font-family-select').value = row.fontFamily || 'Arial';
-                document.getElementById('ac-cell-font-size-input').value = row.fontSize || 12;
-                document.getElementById('ac-cell-font-color-input').value = row.color || '#000000';
-                document.getElementById('ac-cell-font-dialog').style.display = 'flex';
-            }
-        }
-        this.hideAllMenus();
+        TimingGenACTable.showACCellFontDialog(this);
     }
     
     hideACCellFontDialog() {
-        document.getElementById('ac-cell-font-dialog').style.display = 'none';
+        TimingGenACTable.hideACCellFontDialog(this);
     }
     
     updateACCellFont() {
-        if (this.currentEditingACCell) {
-            const { tableName, rowIndex } = this.currentEditingACCell;
-            const tableData = this.acTablesData.get(tableName);
-            
-            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
-                const row = tableData.rows[rowIndex];
-                row.fontFamily = document.getElementById('ac-cell-font-family-select').value;
-                row.fontSize = parseInt(document.getElementById('ac-cell-font-size-input').value);
-                row.color = document.getElementById('ac-cell-font-color-input').value;
-                
-                this.hideACCellFontDialog();
-                this.render();
-            }
-        }
+        TimingGenACTable.updateACCellFont(this);
     }
     
     showACRowSpanDialog() {
-        if (this.currentEditingACCell) {
-            const { tableName, rowIndex } = this.currentEditingACCell;
-            const tableData = this.acTablesData.get(tableName);
-            
-            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
-                const row = tableData.rows[rowIndex];
-                const currentRowSpan = row.rowSpan || 1;
-                
-                // Set radio button based on current rowSpan
-                const radio1 = document.querySelector('input[name="rowspan"][value="1"]');
-                const radio2 = document.querySelector('input[name="rowspan"][value="2"]');
-                if (currentRowSpan === 2) {
-                    radio2.checked = true;
-                } else {
-                    radio1.checked = true;
-                }
-                
-                document.getElementById('ac-rowspan-dialog').style.display = 'flex';
-            }
-        }
-        this.hideAllMenus();
+        TimingGenACTable.showACRowSpanDialog(this);
     }
     
     hideACRowSpanDialog() {
-        document.getElementById('ac-rowspan-dialog').style.display = 'none';
+        TimingGenACTable.hideACRowSpanDialog(this);
     }
     
     updateACRowSpan() {
-        if (this.currentEditingACCell) {
-            const { tableName, rowIndex } = this.currentEditingACCell;
-            const tableData = this.acTablesData.get(tableName);
-            
-            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
-                const row = tableData.rows[rowIndex];
-                const selectedRowSpan = document.querySelector('input[name="rowspan"]:checked').value;
-                row.rowSpan = parseInt(selectedRowSpan);
-                
-                this.hideACRowSpanDialog();
-                this.render();
-            }
-        }
+        TimingGenACTable.updateACRowSpan(this);
     }
     
     deleteACTableRow() {
-        if (this.currentEditingACCell) {
-            const { tableName, rowIndex } = this.currentEditingACCell;
-            const tableData = this.acTablesData.get(tableName);
-            
-            if (tableData && rowIndex !== undefined && rowIndex < tableData.rows.length) {
-                if (confirm('Delete this row from the AC table?')) {
-                    tableData.rows.splice(rowIndex, 1);
-                    this.hideAllMenus();
-                    this.render();
-                }
-            }
-        }
+        TimingGenACTable.deleteACTableRow(this);
     }
     
     moveACTableTo(position) {
-        if (this.currentEditingACTable) {
-            this.moveACTableToPosition(this.currentEditingACTable, position);
-            this.hideAllMenus();
-        }
+        TimingGenACTable.moveACTableTo(this, position);
     }
     
     deleteCurrentACTable() {
-        if (this.currentEditingACTable) {
-            if (confirm('Delete this AC table?')) {
-                this.deleteACTable(this.currentEditingACTable);
-                this.hideAllMenus();
-            }
-        }
+        TimingGenACTable.deleteCurrentACTable(this);
     }
     
     updateCurrentACTable() {
-        if (this.currentEditingACTable) {
-            this.updateACTableValues(this.currentEditingACTable);
-            this.hideAllMenus();
-        }
+        TimingGenACTable.updateCurrentACTable(this);
     }
     
     updateACTableValues(tableName) {
-        // Update AC table by recalculating min/max values for all rows
-        // Respects manually edited cells (won't update those)
-        const tableData = this.acTablesData.get(tableName);
-        if (!tableData) return;
-        
-        // Capture state for undo/redo
-        this.undoRedoManager.captureState();
-        
-        // Get current config values
-        const cyclePeriod = this.config.clockPeriod;
-        const unit = this.config.clockPeriodUnit;
-        
-        // Update each row that's linked to a measure
-        tableData.rows.forEach(row => {
-            if (row.measureName) {
-                const measure = this.measuresData.get(row.measureName);
-                if (measure) {
-                    // Update symbol if not manually edited
-                    if (!row.manuallyEdited.symbol && measure.text) {
-                        row.symbol = measure.text;
-                    }
-                    
-                    // Get both signals for this measure
-                    const signal1 = this.getSignalByName(measure.signal1Name);
-                    const signal2 = this.getSignalByName(measure.signal2Name);
-                    
-                    // Get effective delays for both signals at their respective cycles
-                    const signal1Delays = this.getEffectiveDelayInTime(signal1, measure.cycle1);
-                    const signal2Delays = this.getEffectiveDelayInTime(signal2, measure.cycle2);
-                    
-                    // Recalculate min/max based on measure cycles
-                    const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
-                    const timeValue = cyclePeriod * cycleDiff;
-                    
-                    // Calculate both min-to-min and max-to-max paths
-                    const minToMin = timeValue - signal1Delays.min + signal2Delays.min;
-                    const maxToMax = timeValue - signal1Delays.max + signal2Delays.max;
-                    const calculatedMin = Math.min(minToMin, maxToMax).toFixed(2);
-                    const calculatedMax = Math.max(minToMin, maxToMax).toFixed(2);
-                    
-                    // Update min if not manually edited
-                    if (!row.manuallyEdited.min) {
-                        row.min = calculatedMin;
-                    }
-                    
-                    // Update max if not manually edited
-                    if (!row.manuallyEdited.max) {
-                        row.max = calculatedMax;
-                    }
-                    
-                    // Update unit if not manually edited
-                    if (!row.manuallyEdited.unit) {
-                        row.unit = unit;
-                    }
-                }
-            }
-        });
-        
-        this.render();
+        TimingGenACTable.updateACTableValues(this, tableName);
     }
     
     flashMeasure(measureName) {
-        // Flash the measure corresponding to the measureName
-        const measure = this.measuresData.get(measureName);
-        if (!measure) return;
-        
-        // Find measure row index
-        const rowIndex = this.rows.findIndex(r => r.type === 'measure' && r.name === measureName);
-        if (rowIndex < 0) return;
-        
-        // Create a temporary flashing effect
-        // Store original render state
-        const originalRender = TimingGenRendering.render;
-        let flashCount = 0;
-        const maxFlashes = 3;
-        
-        const flashInterval = setInterval(() => {
-            if (flashCount >= maxFlashes * 2) {
-                clearInterval(flashInterval);
-                this.render(); // Final render to ensure normal state
-                return;
-            }
-            
-            // Toggle visibility by re-rendering with different color
-            const isVisible = flashCount % 2 === 0;
-            
-            // Temporarily change measure color for flashing effect
-            if (measure) {
-                const originalColor = measure.textColor || '#FF0000';
-                measure.textColor = isVisible ? '#FFFF00' : originalColor; // Flash yellow
-                this.render();
-                measure.textColor = originalColor;
-            }
-            
-            flashCount++;
-        }, 200);
+        TimingGenACTable.flashMeasure(this, measureName);
     }
     
     addSignal() {
