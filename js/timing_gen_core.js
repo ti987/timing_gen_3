@@ -615,269 +615,47 @@ class TimingGenApp {
     }
     
     showAddTextDialog() {
-        document.getElementById('text-row-input').value = '';
-        document.getElementById('add-text-dialog').style.display = 'flex';
+        TimingGenTextCounter.showAddTextDialog(this);
     }
     
     hideAddTextDialog() {
-        document.getElementById('add-text-dialog').style.display = 'none';
+        TimingGenTextCounter.hideAddTextDialog(this);
     }
     
     showEditTextDialog() {
-        if (this.currentEditingNote) {
-            // Editing AC table note text
-            const { tableName, noteNum } = this.currentEditingNote;
-            const tableData = this.acTablesData.get(tableName);
-            if (tableData) {
-                const noteData = tableData.notes.find(n => n.number === noteNum);
-                const currentValue = noteData ? noteData.text : '';
-                document.getElementById('edit-text-input').value = currentValue;
-                document.getElementById('edit-text-dialog').style.display = 'flex';
-            }
-        } else if (this.currentEditingText) {
-            const textData = this.textData.get(this.currentEditingText);
-            if (textData) {
-                document.getElementById('edit-text-input').value = textData.text || '';
-                document.getElementById('edit-text-dialog').style.display = 'flex';
-            }
-        }
-        this.hideAllMenus();
+        TimingGenTextCounter.showEditTextDialog(this);
     }
     
     hideEditTextDialog() {
-        document.getElementById('edit-text-dialog').style.display = 'none';
+        TimingGenTextCounter.hideEditTextDialog(this);
     }
     
     showFontDialog() {
-        if (this.currentEditingNote) {
-            // Editing AC table note text font
-            const { tableName, noteNum } = this.currentEditingNote;
-            const tableData = this.acTablesData.get(tableName);
-            if (tableData) {
-                const noteData = tableData.notes.find(n => n.number === noteNum);
-                document.getElementById('font-family-select').value = (noteData && noteData.fontFamily) || 'Arial';
-                document.getElementById('font-size-input').value = (noteData && noteData.fontSize) || 11;
-                document.getElementById('font-dialog').style.display = 'flex';
-            }
-        } else if (this.currentEditingText) {
-            const textData = this.textData.get(this.currentEditingText);
-            if (textData) {
-                document.getElementById('font-family-select').value = textData.fontFamily || 'Arial';
-                document.getElementById('font-size-input').value = textData.fontSize || 14;
-                document.getElementById('font-dialog').style.display = 'flex';
-            }
-        }
-        this.hideAllMenus();
+        TimingGenTextCounter.showFontDialog(this);
     }
     
     hideFontDialog() {
-        document.getElementById('font-dialog').style.display = 'none';
+        TimingGenTextCounter.hideFontDialog(this);
     }
     
     showColorDialog() {
-        if (this.currentEditingNote) {
-            // Editing AC table note text color
-            const { tableName, noteNum } = this.currentEditingNote;
-            const tableData = this.acTablesData.get(tableName);
-            if (tableData) {
-                const noteData = tableData.notes.find(n => n.number === noteNum);
-                document.getElementById('text-color-input').value = (noteData && noteData.color) || '#000000';
-                document.getElementById('color-dialog').style.display = 'flex';
-            }
-        } else if (this.currentEditingText) {
-            const textData = this.textData.get(this.currentEditingText);
-            if (textData) {
-                document.getElementById('text-color-input').value = textData.color || '#000000';
-                document.getElementById('color-dialog').style.display = 'flex';
-            }
-        }
-        this.hideAllMenus();
+        TimingGenTextCounter.showColorDialog(this);
     }
     
     hideColorDialog() {
-        document.getElementById('color-dialog').style.display = 'none';
+        TimingGenTextCounter.hideColorDialog(this);
     }
     
     updateTextRow() {
-        if (this.currentEditingNote) {
-            // Update AC table note text
-            const { tableName, noteNum } = this.currentEditingNote;
-            const tableData = this.acTablesData.get(tableName);
-            if (tableData) {
-                // Capture state before action
-                this.undoRedoManager.captureState();
-                
-                const newValue = document.getElementById('edit-text-input').value;
-                let noteData = tableData.notes.find(n => n.number === noteNum);
-                if (noteData) {
-                    noteData.text = newValue;
-                } else {
-                    tableData.notes.push({ number: noteNum, text: newValue });
-                }
-                this.hideEditTextDialog();
-                this.currentEditingNote = null;
-                this.render();
-            }
-        } else {
-            // Check if we're editing a measure's text (currentEditingMeasure is set)
-            const measures = this.getMeasures();
-            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
-                // Update measure text
-                // Capture state before action
-                this.undoRedoManager.captureState();
-                
-                const measure = measures[this.currentEditingMeasure];
-                measure.text = document.getElementById('edit-text-input').value;
-                this.hideEditTextDialog();
-                this.currentEditingMeasure = null;
-                this.render();
-            } else if (this.currentEditingText) {
-                const textData = this.textData.get(this.currentEditingText);
-                if (textData) {
-                    // Capture state before action
-                    this.undoRedoManager.captureState();
-                    
-                    textData.text = document.getElementById('edit-text-input').value;
-                    this.hideEditTextDialog();
-                    this.render();
-                }
-            }
-        }
+        TimingGenTextCounter.updateTextRow(this);
     }
     
     updateTextFont() {
-        const fontFamily = document.getElementById('font-family-select').value;
-        const fontSizeInput = parseInt(document.getElementById('font-size-input').value);
-        const fontColor = document.getElementById('font-color-input').value;
-        
-        // Validate font size
-        let fontSize = fontSizeInput;
-        if (isNaN(fontSize) || fontSize < 8 || fontSize > 72) {
-            fontSize = 14; // Default fallback
-        }
-        
-        if (this.currentEditingNote) {
-            // Update AC table note text font
-            const { tableName, noteNum } = this.currentEditingNote;
-            const tableData = this.acTablesData.get(tableName);
-            if (tableData) {
-                // Capture state before action
-                this.undoRedoManager.captureState();
-                
-                let noteData = tableData.notes.find(n => n.number === noteNum);
-                if (!noteData) {
-                    noteData = { number: noteNum, text: '' };
-                    tableData.notes.push(noteData);
-                }
-                
-                noteData.fontFamily = fontFamily;
-                noteData.fontSize = fontSize;
-                noteData.color = fontColor;
-                this.hideFontDialog();
-                this.currentEditingNote = null;
-                this.render();
-            }
-        } else if (this.currentEditingSignal !== null && this.currentEditingSignal !== undefined) {
-            // Update signal name font
-            const signal = this.getSignalByIndex(this.currentEditingSignal);
-            if (signal) {
-                this.undoRedoManager.captureState();
-                signal.nameFont = fontFamily;
-                signal.nameFontSize = fontSize;
-                signal.nameFontColor = fontColor;
-                this.hideFontDialog();
-                this.currentEditingSignal = null;
-                this.currentEditingSignalName = null;
-                this.render();
-            }
-        } else if (this.currentEditingBusValue) {
-            // Update bus value font
-            const signal = this.getSignalByName(this.currentEditingBusValue.signalName);
-            if (signal) {
-                this.undoRedoManager.captureState();
-                signal.valueFontFamily = fontFamily;
-                signal.valueFontSize = fontSize;
-                signal.valueFontColor = fontColor;
-                this.hideFontDialog();
-                this.currentEditingBusValue = null;
-                this.render();
-            }
-        } else {
-            // Check if we're editing a measure's text (currentEditingMeasure is set)
-            const measures = this.getMeasures();
-            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
-                // Update measure text font
-                // Capture state before action
-                this.undoRedoManager.captureState();
-                
-                const measure = measures[this.currentEditingMeasure];
-                measure.textFont = fontFamily;
-                measure.textSize = fontSize;
-                measure.textColor = fontColor;
-                this.hideFontDialog();
-                this.currentEditingMeasure = null;
-                this.render();
-            } else if (this.currentEditingText) {
-                const textData = this.textData.get(this.currentEditingText);
-                if (textData) {
-                    // Capture state before action
-                    this.undoRedoManager.captureState();
-                    
-                    textData.fontFamily = fontFamily;
-                    textData.fontSize = fontSize;
-                    textData.color = fontColor;
-                    this.hideFontDialog();
-                    this.render();
-                }
-            }
-        }
+        TimingGenTextCounter.updateTextFont(this);
     }
     
     updateTextColor() {
-        if (this.currentEditingNote) {
-            // Update AC table note text color
-            const { tableName, noteNum } = this.currentEditingNote;
-            const tableData = this.acTablesData.get(tableName);
-            if (tableData) {
-                // Capture state before action
-                this.undoRedoManager.captureState();
-                
-                let noteData = tableData.notes.find(n => n.number === noteNum);
-                if (!noteData) {
-                    noteData = { number: noteNum, text: '' };
-                    tableData.notes.push(noteData);
-                }
-                
-                noteData.color = document.getElementById('text-color-input').value;
-                this.hideColorDialog();
-                this.currentEditingNote = null;
-                this.render();
-            }
-        } else {
-            // Check if we're editing a measure's text (currentEditingMeasure is set)
-            const measures = this.getMeasures();
-            if (this.currentEditingMeasure !== null && this.currentEditingMeasure >= 0 && this.currentEditingMeasure < measures.length) {
-                // Update measure text color
-                // Capture state before action
-                this.undoRedoManager.captureState();
-                
-                const measure = measures[this.currentEditingMeasure];
-                measure.textColor = document.getElementById('text-color-input').value;
-                this.hideColorDialog();
-                this.currentEditingMeasure = null;
-                this.render();
-            } else if (this.currentEditingText) {
-                const textData = this.textData.get(this.currentEditingText);
-                if (textData) {
-                    // Capture state before action
-                    this.undoRedoManager.captureState();
-                    
-                    textData.color = document.getElementById('text-color-input').value;
-                    this.hideColorDialog();
-                    this.render();
-                }
-            }
-        }
+        TimingGenTextCounter.updateTextColor(this);
     }
     
     // Measure text editing functions (dedicated for measure text context menu)
@@ -939,205 +717,44 @@ class TimingGenApp {
     }
     
     showAddCounterDialog() {
-        document.getElementById('counter-start-value-input').value = '1';
-        document.getElementById('counter-start-cycle-input').value = '0';
-        document.getElementById('add-counter-dialog').style.display = 'flex';
+        TimingGenTextCounter.showAddCounterDialog(this);
     }
     
     hideAddCounterDialog() {
-        document.getElementById('add-counter-dialog').style.display = 'none';
+        TimingGenTextCounter.hideAddCounterDialog(this);
     }
     
     showEditCounterDialog(counterName, cycle) {
-        this.currentEditingCounter = { name: counterName, cycle: cycle };
-        document.getElementById('edit-counter-value-input').value = '';
-        document.getElementById('edit-counter-dialog').style.display = 'flex';
+        TimingGenTextCounter.showEditCounterDialog(this, counterName, cycle);
     }
     
     hideEditCounterDialog() {
-        document.getElementById('edit-counter-dialog').style.display = 'none';
-        this.currentEditingCounter = null;
+        TimingGenTextCounter.hideEditCounterDialog(this);
     }
     
     updateCounterValue() {
-        if (this.currentEditingCounter) {
-            const counterData = this.counterData.get(this.currentEditingCounter.name);
-            if (counterData) {
-                // Capture state before action
-                this.undoRedoManager.captureState();
-                
-                const newValue = document.getElementById('edit-counter-value-input').value.trim();
-                const cycle = this.currentEditingCounter.cycle;
-                
-                if (newValue === '') {
-                    // Empty value means go back to default counting
-                    // Remove any existing value at this cycle and let it auto-increment
-                    counterData.values = counterData.values.filter(v => v.cycle !== cycle);
-                    
-                    // If there are no more values, add a default starting point
-                    if (counterData.values.length === 0) {
-                        counterData.values.push({ cycle: 0, value: '1' });
-                    }
-                } else {
-                    // Add or update value at this cycle
-                    const existingIndex = counterData.values.findIndex(v => v.cycle === cycle);
-                    if (existingIndex >= 0) {
-                        counterData.values[existingIndex].value = newValue;
-                    } else {
-                        counterData.values.push({ cycle: cycle, value: newValue });
-                        // Sort by cycle
-                        counterData.values.sort((a, b) => a.cycle - b.cycle);
-                    }
-                }
-                
-                this.hideEditCounterDialog();
-                this.render();
-            }
-        }
+        TimingGenTextCounter.updateCounterValue(this);
     }
     
     // Counter cycle context menu actions
     continueCounter() {
-        // "Continue" means remove any value entry at this cycle to let auto-increment continue
-        if (this.currentEditingCounter) {
-            const counterData = this.counterData.get(this.currentEditingCounter.name);
-            if (counterData) {
-                // Capture state before action
-                this.undoRedoManager.captureState();
-                
-                const cycle = this.currentEditingCounter.cycle;
-                
-                // Remove any existing value at this cycle
-                counterData.values = counterData.values.filter(v => v.cycle !== cycle);
-                
-                // If there are no more values, add a default starting point
-                if (counterData.values.length === 0) {
-                    counterData.values.push({ cycle: 0, value: '1' });
-                }
-                
-                this.hideAllMenus();
-                this.render();
-            }
-        }
+        TimingGenTextCounter.continueCounter(this);
     }
     
     showRestartCounterDialog() {
-        // Show dialog to restart counter with a new value
-        if (this.currentEditingCounter) {
-            this.hideAllMenus();
-            
-            // Pre-populate with current counter value at this cycle (if any)
-            const counterData = this.counterData.get(this.currentEditingCounter.name);
-            const cycle = this.currentEditingCounter.cycle;
-            let currentValue = '';
-            
-            if (counterData) {
-                // Generate labels to see what's currently displayed
-                const labels = TimingGenRendering.generateCounterLabels(counterData, this.config.cycles, this.tears);
-                if (labels[cycle]) {
-                    currentValue = labels[cycle];
-                }
-            }
-            
-            document.getElementById('edit-counter-value-input').value = currentValue;
-            document.getElementById('edit-counter-dialog').style.display = 'flex';
-        }
+        TimingGenTextCounter.showRestartCounterDialog(this);
     }
     
     blankCounter() {
-        // "Blank" means add a null/blank entry to stop counting from this cycle forward
-        if (this.currentEditingCounter) {
-            const counterData = this.counterData.get(this.currentEditingCounter.name);
-            if (counterData) {
-                // Capture state before action
-                this.undoRedoManager.captureState();
-                
-                const cycle = this.currentEditingCounter.cycle;
-                
-                // Add or update value at this cycle with null (blank)
-                const existingIndex = counterData.values.findIndex(v => v.cycle === cycle);
-                if (existingIndex >= 0) {
-                    counterData.values[existingIndex].value = null;
-                } else {
-                    counterData.values.push({ cycle: cycle, value: null });
-                    // Sort by cycle
-                    counterData.values.sort((a, b) => a.cycle - b.cycle);
-                }
-                
-                this.hideAllMenus();
-                this.render();
-            }
-        }
+        TimingGenTextCounter.blankCounter(this);
     }
     
     addTextRow() {
-        const text = document.getElementById('text-row-input').value;
-        
-        // Capture state before action
-        this.undoRedoManager.captureState();
-        
-        // Generate unique name
-        const name = `T${this.textCounter}`;
-        this.textCounter++;
-        
-        // Create text data object with default properties
-        const textData = {
-            text: text,
-            fontFamily: 'Arial',
-            fontSize: 14,
-            color: '#000000',
-            xOffset: 10  // Default x offset from left edge of waveform area
-        };
-        
-        // Add to data store
-        this.textData.set(name, textData);
-        
-        // Add to rows array at the top (row 0) for better visibility
-        this.rows.unshift({
-            type: 'text',
-            name: name
-        });
-        
-        this.hideAddTextDialog();
-        this.render();
+        TimingGenTextCounter.addTextRow(this);
     }
     
     addCounterRow() {
-        const startValue = document.getElementById('counter-start-value-input').value.trim();
-        const startCycle = parseInt(document.getElementById('counter-start-cycle-input').value);
-        
-        if (startValue === '') {
-            alert('Please enter a start value');
-            return;
-        }
-        
-        // Capture state before action
-        this.undoRedoManager.captureState();
-        
-        // Generate unique name
-        const name = `C${this.counterCounter}`;
-        this.counterCounter++;
-        
-        // Create counter data object
-        // Format: [{cycle: N, value: "label"}]
-        const counterData = {
-            values: [{
-                cycle: startCycle,
-                value: startValue
-            }]
-        };
-        
-        // Add to data store
-        this.counterData.set(name, counterData);
-        
-        // Add to rows array at the top (row 0) for better visibility
-        this.rows.unshift({
-            type: 'counter',
-            name: name
-        });
-        
-        this.hideAddCounterDialog();
-        this.render();
+        TimingGenTextCounter.addCounterRow(this);
     }
     
     // ========================================
@@ -1161,74 +778,23 @@ class TimingGenApp {
     // ========================================
     
     showAddTearDialog() {
-        document.getElementById('tear-cycle-input').value = '0';
-        document.getElementById('add-tear-dialog').style.display = 'flex';
+        TimingGenTear.showAddTearDialog(this);
     }
     
     hideAddTearDialog() {
-        document.getElementById('add-tear-dialog').style.display = 'none';
+        TimingGenTear.hideAddTearDialog(this);
     }
     
     addTear() {
-        const cycleInput = document.getElementById('tear-cycle-input').value.trim();
-        const cycle = parseInt(cycleInput);
-        
-        if (cycleInput === '' || isNaN(cycle)) {
-            alert('Please enter a valid cycle number');
-            return;
-        }
-        
-        if (cycle < 0 || cycle >= this.config.cycles) {
-            alert(`Cycle number must be between 0 and ${this.config.cycles - 1}`);
-            return;
-        }
-        
-        if (this.tears.has(cycle)) {
-            alert(`Cycle ${cycle} already has a tear mark`);
-            return;
-        }
-        
-        // Capture state before action
-        this.undoRedoManager.captureState();
-        
-        // Add tear to the set
-        this.tears.add(cycle);
-        
-        this.hideAddTearDialog();
-        this.render();
+        TimingGenTear.addTear(this);
     }
     
     deleteTear(cycle) {
-        if (!this.tears.has(cycle)) {
-            return;
-        }
-        
-        // Capture state before action
-        this.undoRedoManager.captureState();
-        
-        // Remove tear from the set
-        this.tears.delete(cycle);
-        
-        this.render();
+        TimingGenTear.deleteTear(this, cycle);
     }
     
     addTearAtCycle(cycle) {
-        // Validate cycle number
-        if (cycle < 0 || cycle >= this.config.cycles) {
-            return;
-        }
-        
-        if (this.tears.has(cycle)) {
-            return; // Already has a tear
-        }
-        
-        // Capture state before action
-        this.undoRedoManager.captureState();
-        
-        // Add tear to the set
-        this.tears.add(cycle);
-        
-        this.render();
+        TimingGenTear.addTearAtCycle(this, cycle);
     }
     
     initializeACTableRows(acTableData) {
@@ -3427,293 +2993,55 @@ class TimingGenApp {
     }
     
     insertCyclesGlobal(startCycle, numCycles) {
-        // Insert cycles for all signals after startCycle
-        const signals = this.getSignals();
-        signals.forEach(signal => {
-            this.insertCyclesForSignal(signal, startCycle, numCycles);
-        });
-        
-        // Update measure cycle references
-        this.updateMeasureCyclesAfterInsertion(startCycle, numCycles);
-        
-        // Update arrow cycle references
-        this.updateArrowCyclesAfterInsertion(startCycle, numCycles);
-        
-        // Update cycle count
-        this.config.cycles += numCycles;
-        document.getElementById('cycles-input').value = this.config.cycles;
-        this.initializeCanvas();
-        this.render();
+        TimingGenCycle.insertCyclesGlobal(this, startCycle, numCycles);
     }
     
     deleteCyclesGlobal(startCycle, numCycles) {
-        // Delete cycles for all signals starting from startCycle
-        const signals = this.getSignals();
-        signals.forEach(signal => {
-            this.deleteCyclesForSignal(signal, startCycle, numCycles);
-        });
-        
-        // Update measure cycle references
-        this.updateMeasureCyclesAfterDeletion(startCycle, numCycles);
-        
-        // Update arrow cycle references
-        this.updateArrowCyclesAfterDeletion(startCycle, numCycles);
-        
-        // Keep cycle count unchanged - the deleted cycles are replaced with steady cycles at the end
-        // (steady cycles extend the last state automatically without explicit values)
-        this.render();
+        TimingGenCycle.deleteCyclesGlobal(this, startCycle, numCycles);
     }
     
     insertCyclesSignal(signalIndex, startCycle, numCycles) {
-        // Insert cycles for a specific signal only
-        const signal = this.getSignalByIndex(signalIndex);
-        this.insertCyclesForSignal(signal, startCycle, numCycles);
-        this.render();
+        TimingGenCycle.insertCyclesSignal(this, signalIndex, startCycle, numCycles);
     }
     
     deleteCyclesSignal(signalIndex, startCycle, numCycles) {
-        // Delete cycles for a specific signal only
-        const signal = this.getSignalByIndex(signalIndex);
-        this.deleteCyclesForSignal(signal, startCycle, numCycles);
-        this.render();
+        TimingGenCycle.deleteCyclesSignal(this, signalIndex, startCycle, numCycles);
     }
     
     insertCyclesForSignal(signal, startCycle, numCycles) {
-        // Shift all values and cycleOptions that are at or after startCycle+1
-        const newValues = {};
-        const newCycleOptions = {};
-        
-        // Copy values, shifting those after startCycle
-        for (const [cycleStr, value] of Object.entries(signal.values)) {
-            const cycle = parseInt(cycleStr, 10);
-            if (cycle <= startCycle) {
-                newValues[cycle] = value;
-            } else {
-                // Shift right by numCycles
-                newValues[cycle + numCycles] = value;
-            }
-        }
-        
-        // Copy cycleOptions, shifting those after startCycle
-        if (signal.cycleOptions) {
-            for (const [cycleStr, options] of Object.entries(signal.cycleOptions)) {
-                const cycle = parseInt(cycleStr, 10);
-                if (cycle <= startCycle) {
-                    newCycleOptions[cycle] = options;
-                } else {
-                    // Shift right by numCycles
-                    newCycleOptions[cycle + numCycles] = options;
-                }
-            }
-            signal.cycleOptions = newCycleOptions;
-        }
-        
-        signal.values = newValues;
-        // The inserted cycles will "extend" the current state (no explicit value needed)
+        TimingGenCycle.insertCyclesForSignal(signal, startCycle, numCycles);
     }
     
     deleteCyclesForSignal(signal, startCycle, numCycles) {
-        // Delete cycles and shift remaining ones left
-        const newValues = {};
-        const newCycleOptions = {};
-        
-        // Copy values, skipping deleted cycles and shifting remaining ones
-        for (const [cycleStr, value] of Object.entries(signal.values)) {
-            const cycle = parseInt(cycleStr, 10);
-            if (cycle < startCycle) {
-                // Keep as-is
-                newValues[cycle] = value;
-            } else if (cycle >= startCycle + numCycles) {
-                // Shift left by numCycles
-                newValues[cycle - numCycles] = value;
-            }
-            // Skip cycles in [startCycle, startCycle + numCycles)
-        }
-        
-        // Copy cycleOptions, skipping deleted cycles and shifting remaining ones
-        if (signal.cycleOptions) {
-            for (const [cycleStr, options] of Object.entries(signal.cycleOptions)) {
-                const cycle = parseInt(cycleStr, 10);
-                if (cycle < startCycle) {
-                    // Keep as-is
-                    newCycleOptions[cycle] = options;
-                } else if (cycle >= startCycle + numCycles) {
-                    // Shift left by numCycles
-                    newCycleOptions[cycle - numCycles] = options;
-                }
-                // Skip cycles in [startCycle, startCycle + numCycles)
-            }
-            signal.cycleOptions = newCycleOptions;
-        }
-        
-        signal.values = newValues;
-        // Add steady cycles at the end if needed (they extend the last state automatically)
+        TimingGenCycle.deleteCyclesForSignal(signal, startCycle, numCycles);
     }
     
     updateMeasureCyclesAfterInsertion(startCycle, numCycles) {
-        // Update cycle references in all measures after cycles are inserted
-        const measures = this.getMeasures();
-        measures.forEach(measure => {
-            // Update cycle1 if it's after the insertion point
-            if (measure.cycle1 !== undefined && measure.cycle1 > startCycle) {
-                measure.cycle1 += numCycles;
-            }
-            
-            // Update cycle2 if it's after the insertion point
-            if (measure.cycle2 !== undefined && measure.cycle2 > startCycle) {
-                measure.cycle2 += numCycles;
-            }
-        });
+        TimingGenCycle.updateMeasureCyclesAfterInsertion(this, startCycle, numCycles);
     }
     
     updateMeasureCyclesAfterDeletion(startCycle, numCycles) {
-        // Update cycle references in all measures after cycles are deleted
-        const measures = this.getMeasures();
-        const measuresToDelete = [];
-        
-        measures.forEach(measure => {
-            // Update cycle1 if it's after the deletion point
-            if (measure.cycle1 !== undefined) {
-                if (measure.cycle1 >= startCycle && measure.cycle1 < startCycle + numCycles) {
-                    // Cycle was deleted - mark for deletion
-                    measuresToDelete.push(measure.name);
-                } else if (measure.cycle1 >= startCycle + numCycles) {
-                    // Shift left by numCycles
-                    measure.cycle1 -= numCycles;
-                }
-            }
-            
-            // Update cycle2 if it's after the deletion point
-            if (measure.cycle2 !== undefined) {
-                if (measure.cycle2 >= startCycle && measure.cycle2 < startCycle + numCycles) {
-                    // Cycle was deleted - mark for deletion
-                    if (!measuresToDelete.includes(measure.name)) {
-                        measuresToDelete.push(measure.name);
-                    }
-                } else if (measure.cycle2 >= startCycle + numCycles) {
-                    // Shift left by numCycles
-                    measure.cycle2 -= numCycles;
-                }
-            }
-        });
-        
-        // Remove invalid measures from Map and rows
-        measuresToDelete.forEach(measureName => {
-            this.measuresData.delete(measureName);
-            const rowIndex = this.rows.findIndex(row => row.type === 'measure' && row.name === measureName);
-            if (rowIndex >= 0) {
-                this.rows.splice(rowIndex, 1);
-            }
-        });
+        TimingGenCycle.updateMeasureCyclesAfterDeletion(this, startCycle, numCycles);
     }
     
     updateArrowCyclesAfterInsertion(startCycle, numCycles) {
-        // Update cycle references in all arrows after cycles are inserted
-        for (const [name, arrow] of this.arrowsData.entries()) {
-            // Update cycle1 if it's after the insertion point
-            if (arrow.cycle1 !== undefined && arrow.cycle1 > startCycle) {
-                arrow.cycle1 += numCycles;
-            }
-            
-            // Update cycle2 if it's after the insertion point
-            if (arrow.cycle2 !== undefined && arrow.cycle2 > startCycle) {
-                arrow.cycle2 += numCycles;
-            }
-        }
-        
-        // Recalculate arrow positions after cycle shift
-        this.recalculateArrowPositions();
+        TimingGenCycle.updateArrowCyclesAfterInsertion(this, startCycle, numCycles);
     }
     
     updateArrowCyclesAfterDeletion(startCycle, numCycles) {
-        // Update cycle references in all arrows after cycles are deleted
-        const arrowsToDelete = [];
-        
-        for (const [name, arrow] of this.arrowsData.entries()) {
-            let shouldDelete = false;
-            
-            // Check if cycle1 is in the deleted range
-            if (arrow.cycle1 !== undefined) {
-                if (arrow.cycle1 >= startCycle && arrow.cycle1 < startCycle + numCycles) {
-                    // POI was deleted - mark arrow for deletion
-                    shouldDelete = true;
-                } else if (arrow.cycle1 >= startCycle + numCycles) {
-                    // Shift left by numCycles
-                    arrow.cycle1 -= numCycles;
-                }
-            }
-            
-            // Check if cycle2 is in the deleted range
-            if (arrow.cycle2 !== undefined) {
-                if (arrow.cycle2 >= startCycle && arrow.cycle2 < startCycle + numCycles) {
-                    // POI was deleted - mark arrow for deletion
-                    shouldDelete = true;
-                } else if (arrow.cycle2 >= startCycle + numCycles) {
-                    // Shift left by numCycles
-                    arrow.cycle2 -= numCycles;
-                }
-            }
-            
-            if (shouldDelete) {
-                arrowsToDelete.push(name);
-            }
-        }
-        
-        // Remove invalid arrows from Map
-        arrowsToDelete.forEach(arrowName => {
-            this.arrowsData.delete(arrowName);
-        });
-        
-        // Recalculate arrow positions after cycle shift
-        this.recalculateArrowPositions();
+        TimingGenCycle.updateArrowCyclesAfterDeletion(this, startCycle, numCycles);
     }
     
     handleInsertCycles() {
-        const numCycles = parseInt(document.getElementById('insert-cycles-input').value);
-        
-        if (!this.validateCycleCount(numCycles)) {
-            return;
-        }
-        
-        TimingGenUI.hideInsertCyclesDialog();
-        
-        if (this.insertCycleMode === 'global') {
-            // Insert cycles for all signals after the current cycle
-            this.insertCyclesGlobal(this.currentEditingCycle, numCycles);
-        } else if (this.insertCycleMode === 'signal') {
-            // Insert cycles for the current signal only
-            if (this.currentEditingSignal !== null) {
-                this.insertCyclesSignal(this.currentEditingSignal, this.currentEditingCycle, numCycles);
-            }
-        }
+        TimingGenCycle.handleInsertCycles(this);
     }
     
     handleDeleteCycles() {
-        const numCycles = parseInt(document.getElementById('delete-cycles-input').value);
-        
-        if (!this.validateCycleCount(numCycles)) {
-            return;
-        }
-        
-        TimingGenUI.hideDeleteCyclesDialog();
-        
-        if (this.deleteCycleMode === 'global') {
-            // Delete cycles for all signals starting from the current cycle
-            this.deleteCyclesGlobal(this.currentEditingCycle, numCycles);
-        } else if (this.deleteCycleMode === 'signal') {
-            // Delete cycles for the current signal only
-            if (this.currentEditingSignal !== null) {
-                this.deleteCyclesSignal(this.currentEditingSignal, this.currentEditingCycle, numCycles);
-            }
-        }
+        TimingGenCycle.handleDeleteCycles(this);
     }
     
     validateCycleCount(numCycles) {
-        if (isNaN(numCycles) || numCycles < 1 || numCycles > 50) {
-            alert('Please enter a valid number of cycles (1-50)');
-            return false;
-        }
-        return true;
+        return TimingGenCycle.validateCycleCount(numCycles);
     }
     
     // Measure-related methods
@@ -5630,29 +4958,7 @@ class TimingGenApp {
     }
     
     deleteTextRow() {
-        if (this.currentEditingText) {
-            // Confirm deletion
-            if (!confirm('Delete this text row?')) {
-                this.hideAllMenus();
-                return;
-            }
-            
-            // Capture state before action
-            this.undoRedoManager.captureState();
-            
-            // Find row index
-            const rowIndex = this.rows.findIndex(row => row.type === 'text' && row.name === this.currentEditingText);
-            if (rowIndex >= 0) {
-                // Remove from rows array
-                this.rows.splice(rowIndex, 1);
-                // Remove from text data
-                this.textData.delete(this.currentEditingText);
-                
-                this.currentEditingText = null;
-                this.hideAllMenus();
-                this.render();
-            }
-        }
+        TimingGenTextCounter.deleteTextRow(this);
     }
     
     deleteMeasureRow() {
