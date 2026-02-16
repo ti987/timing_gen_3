@@ -1565,10 +1565,12 @@ class TimingGenRendering {
             
             // If tears exist, find the first tear cycle after startCycle and before endCycle
             if (tears && tears.size > 0) {
-                for (const tearCycle of tears) {
+                // Convert to sorted array for efficient search
+                const sortedTears = Array.from(tears).sort((a, b) => a - b);
+                for (const tearCycle of sortedTears) {
                     if (tearCycle > startCycle && tearCycle < endCycle) {
                         endCycle = tearCycle;
-                        break;
+                        break; // Early termination since tears are sorted
                     }
                 }
             }
@@ -2080,58 +2082,55 @@ class TimingGenRendering {
                 // Pattern: Two parallel wavy lines (left and right)
                 // Each wave consists of two S-curves that create the tear effect
                 
-                // Left wave path (white fill for background clearing)
-                const leftWaveFill = new paper.Path();
-                leftWaveFill.strokeColor = 'white';
-                leftWaveFill.strokeWidth = 1;
-                leftWaveFill.fillColor = 'white';
+                // White fill path for background clearing
+                const tearFillPath = new paper.Path();
+                tearFillPath.fillColor = 'white';
                 
                 // Start at top-left, curve down with waves
-                leftWaveFill.moveTo([xLeft, yTop]);
-                leftWaveFill.quadraticCurveTo(
+                tearFillPath.moveTo([xLeft, yTop]);
+                tearFillPath.quadraticCurveTo(
                     [xLeft - waveWidth, yTop + waveHeight * 0.25],
                     [xLeft, yTop + waveHeight * 0.5]
                 );
-                leftWaveFill.quadraticCurveTo(
+                tearFillPath.quadraticCurveTo(
                     [xLeft + waveWidth, yTop + waveHeight * 0.75],
                     [xLeft, yBottom]
                 );
                 // Connect to right side
-                leftWaveFill.lineTo([xRight, yBottom]);
-                leftWaveFill.quadraticCurveTo(
+                tearFillPath.lineTo([xRight, yBottom]);
+                tearFillPath.quadraticCurveTo(
                     [xRight + waveWidth, yTop + waveHeight * 0.75],
                     [xRight, yTop + waveHeight * 0.5]
                 );
-                leftWaveFill.quadraticCurveTo(
+                tearFillPath.quadraticCurveTo(
                     [xRight - waveWidth, yTop + waveHeight * 0.25],
                     [xRight, yTop]
                 );
-                leftWaveFill.closePath();
+                tearFillPath.closePath();
                 
                 // Gray outline for the wavy lines
-                const leftWaveOutline = new paper.Path();
-                leftWaveOutline.strokeColor = 'gray';
-                leftWaveOutline.strokeWidth = 1;
-                leftWaveOutline.fillColor = null;
+                const tearOutlinePath = new paper.Path();
+                tearOutlinePath.strokeColor = 'gray';
+                tearOutlinePath.strokeWidth = 1;
                 
                 // Left wavy line
-                leftWaveOutline.moveTo([xLeft, yTop]);
-                leftWaveOutline.quadraticCurveTo(
+                tearOutlinePath.moveTo([xLeft, yTop]);
+                tearOutlinePath.quadraticCurveTo(
                     [xLeft - waveWidth, yTop + waveHeight * 0.25],
                     [xLeft, yTop + waveHeight * 0.5]
                 );
-                leftWaveOutline.quadraticCurveTo(
+                tearOutlinePath.quadraticCurveTo(
                     [xLeft + waveWidth, yTop + waveHeight * 0.75],
                     [xLeft, yBottom]
                 );
                 
                 // Right wavy line (separate path segment)
-                leftWaveOutline.moveTo([xRight, yBottom]);
-                leftWaveOutline.quadraticCurveTo(
+                tearOutlinePath.moveTo([xRight, yBottom]);
+                tearOutlinePath.quadraticCurveTo(
                     [xRight + waveWidth, yTop + waveHeight * 0.75],
                     [xRight, yTop + waveHeight * 0.5]
                 );
-                leftWaveOutline.quadraticCurveTo(
+                tearOutlinePath.quadraticCurveTo(
                     [xRight - waveWidth, yTop + waveHeight * 0.25],
                     [xRight, yTop]
                 );

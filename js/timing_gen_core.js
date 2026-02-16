@@ -73,7 +73,6 @@ class TimingGenApp {
         this.arrowCounter = 0;
         this.acTableCounter = 0;
         this.groupCounter = 0; // Counter for group names (G0, G1, G2...)
-        this.tearCounter = 0; // Counter for tear names (TR0, TR1, TR2...)
         
         // Row manager for unified row system
         this.rowManager = new RowManager(this);
