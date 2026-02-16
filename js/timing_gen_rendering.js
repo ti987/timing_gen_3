@@ -89,6 +89,14 @@ class TimingGenRendering {
             });
         }
         
+        // Draw tears (visual markers for omitted cycles)
+        if (app.tears && app.tears.size > 0) {
+            app.signalLayer.activate();
+            for (const cycle of app.tears) {
+                TimingGenRendering.drawTear(app, cycle);
+            }
+        }
+        
         // Draw arrows (not in rows, drawn on top of signals)
         app.measureLayer.activate();
         for (const [name, arrow] of app.arrowsData.entries()) {
@@ -1495,10 +1503,15 @@ class TimingGenRendering {
         const rowHeight = app.rowManager.getRowHeight(rowIndex);
         
         // Parse counter values and generate labels for each cycle
-        const labels = TimingGenRendering.generateCounterLabels(counterData, app.config.cycles);
+        const labels = TimingGenRendering.generateCounterLabels(counterData, app.config.cycles, app.tears);
         
         // Draw each label in its corresponding cycle
         for (let cycle = 0; cycle < app.config.cycles; cycle++) {
+            // Skip tear cycles - counter should be blank on tear cycles
+            if (app.tears && app.tears.has(cycle)) {
+                continue;
+            }
+            
             const label = labels[cycle];
             if (label !== null && label !== undefined && label !== '') {
                 const xPos = app.config.nameColumnWidth + cycle * app.config.cycleWidth + app.config.cycleWidth / 2;
@@ -1514,7 +1527,7 @@ class TimingGenRendering {
         }
     }
     
-    static generateCounterLabels(counterData, totalCycles) {
+    static generateCounterLabels(counterData, totalCycles, tears) {
         // Initialize all cycles with empty string
         const labels = new Array(totalCycles).fill('');
         
@@ -1547,8 +1560,18 @@ class TimingGenRendering {
                 continue;
             }
             
-            // Determine end cycle (either next entry or end of cycles)
-            const endCycle = (i < sorted.length - 1) ? sorted[i + 1].cycle : totalCycles;
+            // Determine end cycle (either next entry, next tear, or end of cycles)
+            let endCycle = (i < sorted.length - 1) ? sorted[i + 1].cycle : totalCycles;
+            
+            // If tears exist, find the first tear cycle after startCycle and before endCycle
+            if (tears && tears.size > 0) {
+                for (const tearCycle of tears) {
+                    if (tearCycle > startCycle && tearCycle < endCycle) {
+                        endCycle = tearCycle;
+                        break;
+                    }
+                }
+            }
             
             // Check if value is numeric or alphanumeric
             const match = String(startValue).match(/^([a-zA-Z]*)(\d+)$/);
@@ -1558,9 +1581,13 @@ class TimingGenRendering {
                 const prefix = match[1];
                 let num = parseInt(match[2]);
                 
-                // Generate incremental labels
+                // Generate incremental labels, but skip tear cycles
                 for (let cycle = startCycle; cycle < endCycle && cycle < totalCycles; cycle++) {
                     if (cycle >= 0) {
+                        // Skip tear cycles
+                        if (tears && tears.has(cycle)) {
+                            continue;
+                        }
                         labels[cycle] = prefix + num;
                         num++;
                     }
@@ -1569,6 +1596,10 @@ class TimingGenRendering {
                 // Not numeric - just repeat the value
                 for (let cycle = startCycle; cycle < endCycle && cycle < totalCycles; cycle++) {
                     if (cycle >= 0) {
+                        // Skip tear cycles
+                        if (tears && tears.has(cycle)) {
+                            continue;
+                        }
                         if (startValue === "-") {
                             labels[cycle] = "";
                         } else {
@@ -2015,6 +2046,96 @@ class TimingGenRendering {
             
             // Move to next note position
             currentNoteY += noteHeight;
+        });
+    }
+    
+    // ========================================
+    // Tear Drawing
+    // ========================================
+    
+    static drawTear(app, cycle) {
+        // Draw tear marks (wavy vertical lines) at the specified cycle
+        // Tear marks appear on signal rows only (not on counter, text, measure, or ac-table rows)
+        // Based on the reference tear.svg pattern
+        
+        const cycleWidth = app.config.cycleWidth;
+        const xCenter = app.config.nameColumnWidth + cycle * cycleWidth + cycleWidth / 2;
+        const waveWidth = 10; // Half-width of the tear wave pattern
+        
+        // Iterate through all rows to draw tear marks on signal rows only
+        app.rows.forEach((row, rowIndex) => {
+            if (row.type === 'signal') {
+                const yPos = app.rowManager.getRowYPosition(rowIndex);
+                const rowHeight = app.rowManager.getRowHeight(rowIndex);
+                const yCenter = yPos + rowHeight / 2;
+                const waveHeight = rowHeight * 0.55; // Height of the wave pattern (slightly more than half row height)
+                
+                // Calculate wave parameters
+                const yTop = yCenter - waveHeight / 2;
+                const yBottom = yCenter + waveHeight / 2;
+                const xLeft = xCenter - waveWidth;
+                const xRight = xCenter + waveWidth;
+                
+                // Create the wavy pattern using quadratic Bézier curves
+                // Pattern: Two parallel wavy lines (left and right)
+                // Each wave consists of two S-curves that create the tear effect
+                
+                // Left wave path (white fill for background clearing)
+                const leftWaveFill = new paper.Path();
+                leftWaveFill.strokeColor = 'white';
+                leftWaveFill.strokeWidth = 1;
+                leftWaveFill.fillColor = 'white';
+                
+                // Start at top-left, curve down with waves
+                leftWaveFill.moveTo([xLeft, yTop]);
+                leftWaveFill.quadraticCurveTo(
+                    [xLeft - waveWidth, yTop + waveHeight * 0.25],
+                    [xLeft, yTop + waveHeight * 0.5]
+                );
+                leftWaveFill.quadraticCurveTo(
+                    [xLeft + waveWidth, yTop + waveHeight * 0.75],
+                    [xLeft, yBottom]
+                );
+                // Connect to right side
+                leftWaveFill.lineTo([xRight, yBottom]);
+                leftWaveFill.quadraticCurveTo(
+                    [xRight + waveWidth, yTop + waveHeight * 0.75],
+                    [xRight, yTop + waveHeight * 0.5]
+                );
+                leftWaveFill.quadraticCurveTo(
+                    [xRight - waveWidth, yTop + waveHeight * 0.25],
+                    [xRight, yTop]
+                );
+                leftWaveFill.closePath();
+                
+                // Gray outline for the wavy lines
+                const leftWaveOutline = new paper.Path();
+                leftWaveOutline.strokeColor = 'gray';
+                leftWaveOutline.strokeWidth = 1;
+                leftWaveOutline.fillColor = null;
+                
+                // Left wavy line
+                leftWaveOutline.moveTo([xLeft, yTop]);
+                leftWaveOutline.quadraticCurveTo(
+                    [xLeft - waveWidth, yTop + waveHeight * 0.25],
+                    [xLeft, yTop + waveHeight * 0.5]
+                );
+                leftWaveOutline.quadraticCurveTo(
+                    [xLeft + waveWidth, yTop + waveHeight * 0.75],
+                    [xLeft, yBottom]
+                );
+                
+                // Right wavy line (separate path segment)
+                leftWaveOutline.moveTo([xRight, yBottom]);
+                leftWaveOutline.quadraticCurveTo(
+                    [xRight + waveWidth, yTop + waveHeight * 0.75],
+                    [xRight, yTop + waveHeight * 0.5]
+                );
+                leftWaveOutline.quadraticCurveTo(
+                    [xRight - waveWidth, yTop + waveHeight * 0.25],
+                    [xRight, yTop]
+                );
+            }
         });
     }
 }

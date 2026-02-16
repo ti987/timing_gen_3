@@ -54,6 +54,7 @@ class TimingGenApp {
         // arrowsData: Map<name, arrowObject> - actual arrow data
         // acTablesData: Map<name, acTableObject> - actual AC table data
         // groupsData: Map<name, groupObject> - actual group data (contains array of measure names)
+        // tears: Set<number> - cycles that have tear marks
         this.rows = [];
         this.signalsData = new Map();  // Key: signal name, Value: signal object
         this.measuresData = new Map(); // Key: measure name (auto-generated), Value: measure object
@@ -62,6 +63,7 @@ class TimingGenApp {
         this.arrowsData = new Map();   // Key: arrow name (auto-generated), Value: arrow object
         this.acTablesData = new Map(); // Key: table name (auto-generated), Value: AC table object
         this.groupsData = new Map();   // Key: group name (auto-generated), Value: {name, measures: [measureNames]}
+        this.tears = new Set();        // Set of cycle numbers that have tear marks
         
         // Counter for auto-generating unique measure names
         this.measureCounter = 0;
@@ -71,6 +73,7 @@ class TimingGenApp {
         this.arrowCounter = 0;
         this.acTableCounter = 0;
         this.groupCounter = 0; // Counter for group names (G0, G1, G2...)
+        this.tearCounter = 0; // Counter for tear names (TR0, TR1, TR2...)
         
         // Row manager for unified row system
         this.rowManager = new RowManager(this);
@@ -80,6 +83,7 @@ class TimingGenApp {
         
         this.currentEditingSignal = null;
         this.currentEditingCycle = null;
+        this.currentRightClickCycle = null; // Track cycle for context menu actions (e.g., delete tear)
         this.currentEditingText = null; // Current text row being edited
         this.currentEditingCounter = null; // Current counter row being edited {name, cycle}
         this.currentEditingMeasureRow = null; // Current measure row being edited (row index)
@@ -202,6 +206,10 @@ class TimingGenApp {
             document.getElementById('add-submenu').style.display = 'none';
             this.showAddACTableDialog();
         });
+        document.getElementById('add-tear-menu').addEventListener('click', () => {
+            document.getElementById('add-submenu').style.display = 'none';
+            this.showAddTearDialog();
+        });
         
         // Help menu and submenu
         document.getElementById('help-menu-btn').addEventListener('click', (e) => {
@@ -265,6 +273,10 @@ class TimingGenApp {
         // AC Table dialog
         document.getElementById('ac-table-dialog-ok-btn').addEventListener('click', () => this.addACTable());
         document.getElementById('ac-table-dialog-cancel-btn').addEventListener('click', () => this.hideAddACTableDialog());
+        
+        // Tear dialog
+        document.getElementById('tear-dialog-ok-btn').addEventListener('click', () => this.addTear());
+        document.getElementById('tear-dialog-cancel-btn').addEventListener('click', () => this.hideAddTearDialog());
         
         // AC Table cell edit dialog
         document.getElementById('edit-ac-cell-ok-btn').addEventListener('click', () => this.updateACCell());
@@ -437,6 +449,12 @@ class TimingGenApp {
             this.hideAllMenus();
             this.deleteCycleMode = 'global';
             TimingGenUI.showDeleteCyclesDialog(this);
+        });
+        document.getElementById('delete-tear-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            if (this.currentRightClickCycle !== null) {
+                this.deleteTear(this.currentRightClickCycle);
+            }
         });
         document.getElementById('cancel-cycle-menu').addEventListener('click', () => this.hideAllMenus());
         
@@ -1092,6 +1110,62 @@ class TimingGenApp {
         });
         
         this.hideAddACTableDialog();
+        this.render();
+    }
+    
+    // ========================================
+    // Tear Methods
+    // ========================================
+    
+    showAddTearDialog() {
+        document.getElementById('tear-cycle-input').value = '0';
+        document.getElementById('add-tear-dialog').style.display = 'flex';
+    }
+    
+    hideAddTearDialog() {
+        document.getElementById('add-tear-dialog').style.display = 'none';
+    }
+    
+    addTear() {
+        const cycleInput = document.getElementById('tear-cycle-input').value.trim();
+        const cycle = parseInt(cycleInput);
+        
+        if (cycleInput === '' || isNaN(cycle)) {
+            alert('Please enter a valid cycle number');
+            return;
+        }
+        
+        if (cycle < 0 || cycle >= this.config.cycles) {
+            alert(`Cycle number must be between 0 and ${this.config.cycles - 1}`);
+            return;
+        }
+        
+        if (this.tears.has(cycle)) {
+            alert(`Cycle ${cycle} already has a tear mark`);
+            return;
+        }
+        
+        // Capture state before action
+        this.undoRedoManager.captureState();
+        
+        // Add tear to the set
+        this.tears.add(cycle);
+        
+        this.hideAddTearDialog();
+        this.render();
+    }
+    
+    deleteTear(cycle) {
+        if (!this.tears.has(cycle)) {
+            return;
+        }
+        
+        // Capture state before action
+        this.undoRedoManager.captureState();
+        
+        // Remove tear from the set
+        this.tears.delete(cycle);
+        
         this.render();
     }
     
@@ -2358,6 +2432,16 @@ class TimingGenApp {
             const cycle = Math.floor((paperX - this.config.nameColumnWidth) / this.config.cycleWidth);
             if (cycle >= 0 && cycle < this.config.cycles) {
                 this.currentEditingCycle = cycle;
+                this.currentRightClickCycle = cycle;
+                
+                // Show or hide "Delete Tear" menu item based on whether this cycle has a tear
+                const deleteTearMenuItem = document.getElementById('delete-tear-menu');
+                if (this.tears.has(cycle)) {
+                    deleteTearMenuItem.style.display = 'block';
+                } else {
+                    deleteTearMenuItem.style.display = 'none';
+                }
+                
                 TimingGenUI.showContextMenu('cycle-context-menu', ev.clientX, ev.clientY);
             }
             return;

@@ -28,6 +28,7 @@
                     <div class="menu-item" id="add-text-menu">Text</div>
                     <div class="menu-item" id="add-counter-menu">Counter</div>
                     <div class="menu-item" id="add-ac-table-menu">AC Table</div>
+                    <div class="menu-item" id="add-tear-menu">Tear</div>
                 </div>
             </div>
             <button id="global-option-btn" class="menu-btn">Global Option</button>
@@ -160,6 +161,7 @@
     <div id="cycle-context-menu" class="context-menu" style="display: none;">
         <div class="menu-item" id="insert-cycles-global-menu">Insert Cycles</div>
         <div class="menu-item" id="delete-cycles-global-menu">Delete Cycles</div>
+        <div class="menu-item" id="delete-tear-menu" style="display: none;">Delete Tear</div>
         <div class="menu-item" id="cancel-cycle-menu">Cancel</div>
     </div>
 
@@ -376,6 +378,18 @@
             <br><br>
             <button id="edit-counter-ok-btn" class="dialog-btn">OK</button>
             <button id="edit-counter-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Add Tear Dialog -->
+    <div id="add-tear-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Add Tear</h3>
+            <label>Cycle Number:</label>
+            <input type="number" id="tear-cycle-input" value="0" min="0">
+            <br><br>
+            <button id="tear-dialog-ok-btn" class="dialog-btn">OK</button>
+            <button id="tear-dialog-cancel-btn" class="dialog-btn">Cancel</button>
         </div>
     </div>
 

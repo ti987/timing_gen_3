@@ -59,6 +59,9 @@ class TimingGenData {
             arrows.push(arrow);
         }
         
+        // Convert tears Set to array
+        const tears = Array.from(app.tears || new Set());
+        
         const data = {
             version: '3.4.0',
             config: {
@@ -73,7 +76,8 @@ class TimingGenData {
                 delayColor: app.config.delayColor
             },
             rows: rowsWithData,
-            arrows: arrows
+            arrows: arrows,
+            tears: tears
         };
         
         const jsonStr = JSON.stringify(data, null, 2);
@@ -265,6 +269,13 @@ class TimingGenData {
                 } else {
                     alert('Old file format not supported. This version requires v3.2.x format.');
                     return;
+                }
+                
+                // Load tears (v3.4.0+)
+                if (data.tears) {
+                    app.tears = new Set(data.tears);
+                } else {
+                    app.tears = new Set();
                 }
                 
                 // Clear undo/redo history when loading new document

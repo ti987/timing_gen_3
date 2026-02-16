@@ -42,6 +42,7 @@ class UndoRedoManager {
             textData: this.serializeMap(this.app.textData),
             counterData: this.serializeMap(this.app.counterData),
             arrowsData: this.serializeMap(this.app.arrowsData),
+            tears: Array.from(this.app.tears || new Set()),
             measureCounter: this.app.measureCounter,
             measureTextCounter: this.app.measureTextCounter,
             textCounter: this.app.textCounter,
@@ -98,6 +99,9 @@ class UndoRedoManager {
             key,
             JSON.parse(JSON.stringify(value))
         ]));
+        
+        // Restore tears
+        this.app.tears = new Set(state.tears || []);
         
         // Restore counters
         this.app.measureCounter = state.measureCounter;
