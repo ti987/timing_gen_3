@@ -1025,7 +1025,21 @@ class TimingGenApp {
         // Show dialog to restart counter with a new value
         if (this.currentEditingCounter) {
             this.hideAllMenus();
-            document.getElementById('edit-counter-value-input').value = '';
+            
+            // Pre-populate with current counter value at this cycle (if any)
+            const counterData = this.counterData.get(this.currentEditingCounter.name);
+            const cycle = this.currentEditingCounter.cycle;
+            let currentValue = '';
+            
+            if (counterData) {
+                // Generate labels to see what's currently displayed
+                const labels = TimingGenRendering.generateCounterLabels(counterData, this.config.cycles, this.tears);
+                if (labels[cycle]) {
+                    currentValue = labels[cycle];
+                }
+            }
+            
+            document.getElementById('edit-counter-value-input').value = currentValue;
             document.getElementById('edit-counter-dialog').style.display = 'flex';
         }
     }
