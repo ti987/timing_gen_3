@@ -449,7 +449,13 @@ class TimingGenApp {
             this.deleteCycleMode = 'global';
             TimingGenUI.showDeleteCyclesDialog(this);
         });
-        document.getElementById('delete-tear-menu').addEventListener('click', () => {
+        document.getElementById('add-tear-cycle-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            if (this.currentRightClickCycle !== null) {
+                this.addTearAtCycle(this.currentRightClickCycle);
+            }
+        });
+        document.getElementById('remove-tear-cycle-menu').addEventListener('click', () => {
             this.hideAllMenus();
             if (this.currentRightClickCycle !== null) {
                 this.deleteTear(this.currentRightClickCycle);
@@ -1164,6 +1170,25 @@ class TimingGenApp {
         
         // Remove tear from the set
         this.tears.delete(cycle);
+        
+        this.render();
+    }
+    
+    addTearAtCycle(cycle) {
+        // Validate cycle number
+        if (cycle < 0 || cycle >= this.config.cycles) {
+            return;
+        }
+        
+        if (this.tears.has(cycle)) {
+            return; // Already has a tear
+        }
+        
+        // Capture state before action
+        this.undoRedoManager.captureState();
+        
+        // Add tear to the set
+        this.tears.add(cycle);
         
         this.render();
     }
@@ -2433,12 +2458,17 @@ class TimingGenApp {
                 this.currentEditingCycle = cycle;
                 this.currentRightClickCycle = cycle;
                 
-                // Show or hide "Delete Tear" menu item based on whether this cycle has a tear
-                const deleteTearMenuItem = document.getElementById('delete-tear-menu');
+                // Show or hide "Add Tear" and "Remove Tear" menu items based on whether this cycle has a tear
+                const addTearMenuItem = document.getElementById('add-tear-cycle-menu');
+                const removeTearMenuItem = document.getElementById('remove-tear-cycle-menu');
                 if (this.tears.has(cycle)) {
-                    deleteTearMenuItem.style.display = 'block';
+                    // Cycle has a tear - show "Remove Tear", hide "Add Tear"
+                    addTearMenuItem.style.display = 'none';
+                    removeTearMenuItem.style.display = 'block';
                 } else {
-                    deleteTearMenuItem.style.display = 'none';
+                    // Cycle doesn't have a tear - show "Add Tear", hide "Remove Tear"
+                    addTearMenuItem.style.display = 'block';
+                    removeTearMenuItem.style.display = 'none';
                 }
                 
                 TimingGenUI.showContextMenu('cycle-context-menu', ev.clientX, ev.clientY);
