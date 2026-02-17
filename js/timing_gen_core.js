@@ -3476,6 +3476,121 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('waveform-canvas').__timingGenApp = app;
 });
 
+// ================================================================================
+// Clock Domain Management Methods
+// ================================================================================
+
+/**
+ * Get all clock signals in the diagram
+ * @returns {Array} Array of clock signal objects
+ */
+TimingGenApp.prototype.getClockSignals = function() {
+    const signals = this.getSignals();
+    return signals.filter(signal => signal.type === 'clock');
+};
+
+/**
+ * Get the clock signal for a given signal (based on base_clock property)
+ * @param {Object} signal - The signal to get the clock for
+ * @returns {Object|null} Clock signal object or null if not found
+ */
+TimingGenApp.prototype.getClockForSignal = function(signal) {
+    if (signal.type === 'clock') {
+        return signal; // Clock is its own domain
+    }
+    
+    if (!signal.base_clock) {
+        return null;
+    }
+    
+    return this.signalsData.get(signal.base_clock) || null;
+};
+
+/**
+ * Get all signals in a specific clock domain
+ * @param {string} clockName - Name of the clock signal
+ * @returns {Array} Array of signals in the domain (including the clock itself)
+ */
+TimingGenApp.prototype.getSignalsInDomain = function(clockName) {
+    const signals = this.getSignals();
+    const domainSignals = [];
+    
+    for (const signal of signals) {
+        if (signal.name === clockName) {
+            // The clock itself
+            domainSignals.push(signal);
+        } else if (signal.base_clock === clockName) {
+            // Signals referencing this clock
+            domainSignals.push(signal);
+        }
+    }
+    
+    return domainSignals;
+};
+
+/**
+ * Get all clock domains in the diagram
+ * @returns {Object} Map of clock name to array of signals in that domain
+ */
+TimingGenApp.prototype.getAllClockDomains = function() {
+    const clocks = this.getClockSignals();
+    const domains = {};
+    
+    for (const clock of clocks) {
+        domains[clock.name] = this.getSignalsInDomain(clock.name);
+    }
+    
+    return domains;
+};
+
+/**
+ * Calculate cycle width for a specific clock based on its period
+ * Uses a base scale factor to maintain reasonable pixel sizes
+ * @param {Object} clock - Clock signal object
+ * @returns {number} Cycle width in pixels
+ */
+TimingGenApp.prototype.getCycleWidthForClock = function(clock) {
+    if (!clock || !clock.period) {
+        // Fallback to global cycleWidth
+        return this.config.cycleWidth;
+    }
+    
+    // Base scale: 1ns = 6 pixels (default 10ns = 60px)
+    const baseScale = 6;
+    
+    // Convert period to nanoseconds for consistent scaling
+    let periodInNs = clock.period;
+    switch (clock.periodUnit) {
+        case 'fs':
+            periodInNs = clock.period / 1000000;
+            break;
+        case 'ps':
+            periodInNs = clock.period / 1000;
+            break;
+        case 'ns':
+            periodInNs = clock.period;
+            break;
+        case 'us':
+            periodInNs = clock.period * 1000;
+            break;
+        case 'ms':
+            periodInNs = clock.period * 1000000;
+            break;
+    }
+    
+    return periodInNs * baseScale;
+};
+
+/**
+ * Get cycle width for a specific signal based on its clock domain
+ * @param {Object} signal - Signal object
+ * @returns {number} Cycle width in pixels
+ */
+TimingGenApp.prototype.getCycleWidthForSignal = function(signal) {
+    const clock = this.getClockForSignal(signal);
+    return this.getCycleWidthForClock(clock);
+};
+
     printData = function() {
         const app = window.timingGenApp;
         const data = {
