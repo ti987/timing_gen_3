@@ -132,15 +132,49 @@ class TimingGenRendering {
             }
         }
         
-        // Vertical lines (cycle dividers) - draw to maxHeightForGrid (before AC tables)
-        for (let idx = 0; idx <= app.config.cycles; idx++) {
-            const xPos = app.config.nameColumnWidth + idx * app.config.cycleWidth;
-            const line = new paper.Path.Line({
-                from: [xPos, 0],
-                to: [xPos, maxHeightForGrid],
-                strokeColor: app.config.gridColor,
-                strokeWidth: 1
-            });
+        // Draw vertical grid lines per clock domain
+        // Group signals by their clock domain
+        const domains = app.getAllClockDomains();
+        const clocks = app.getClockSignals();
+        
+        // If no clocks, use default grid
+        if (clocks.length === 0) {
+            for (let idx = 0; idx <= app.config.cycles; idx++) {
+                const xPos = app.config.nameColumnWidth + idx * app.config.cycleWidth;
+                const line = new paper.Path.Line({
+                    from: [xPos, 0],
+                    to: [xPos, maxHeightForGrid],
+                    strokeColor: app.config.gridColor,
+                    strokeWidth: 1
+                });
+            }
+        } else {
+            // Draw grid for each signal based on its clock domain
+            for (let rowIdx = 0; rowIdx < totalRows; rowIdx++) {
+                if (!app.rows[rowIdx] || app.rows[rowIdx].type !== 'signal') {
+                    continue;
+                }
+                
+                const signal = app.signalsData.get(app.rows[rowIdx].name);
+                if (!signal) continue;
+                
+                const cycleWidth = app.getCycleWidthForSignal(signal);
+                const yStart = app.rowManager.getRowYPosition(rowIdx);
+                const yEnd = yStart + app.rowManager.getRowHeight(rowIdx);
+                
+                // Only draw if not past AC table
+                if (firstACTableIndex === -1 || rowIdx < firstACTableIndex) {
+                    for (let idx = 0; idx <= app.config.cycles; idx++) {
+                        const xPos = app.config.nameColumnWidth + idx * cycleWidth;
+                        const line = new paper.Path.Line({
+                            from: [xPos, yStart],
+                            to: [xPos, yEnd],
+                            strokeColor: app.config.gridColor,
+                            strokeWidth: 1
+                        });
+                    }
+                }
+            }
         }
         
         // Horizontal lines (row dividers) - skip during SVG export
@@ -148,9 +182,23 @@ class TimingGenRendering {
             for (let idx = 0; idx <= totalRows; idx++) {
                 const yPos = app.rowManager.getRowYPosition(idx);
                 
+                // Calculate max x position based on longest domain
+                let maxX = app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth;
+                if (clocks.length > 0) {
+                    // Find the widest clock domain
+                    let maxCycleWidth = app.config.cycleWidth;
+                    for (const clock of clocks) {
+                        const cw = app.getCycleWidthForClock(clock);
+                        if (cw > maxCycleWidth) {
+                            maxCycleWidth = cw;
+                        }
+                    }
+                    maxX = app.config.nameColumnWidth + app.config.cycles * maxCycleWidth;
+                }
+                
                 const line = new paper.Path.Line({
                     from: [0, yPos],
-                    to: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, yPos],
+                    to: [maxX, yPos],
                     strokeColor: app.config.gridColor,
                     strokeWidth: 1
                 });
@@ -245,16 +293,19 @@ class TimingGenRendering {
         path.strokeColor = app.config.signalColor;
         path.strokeWidth = 2;
         
+        // Get cycle width for this clock's domain
+        const cycleWidth = app.getCycleWidthForSignal(signal);
+        
         // Get phase value (default 0)
         const phase = signal.phase !== undefined ? signal.phase : 0;
-        const phaseDelay = phase * app.config.cycleWidth;
+        const phaseDelay = phase * cycleWidth;
         
         let lastY = lowY; // Track the last Y position
         
         for (let idx = 0; idx < app.config.cycles; idx++) {
-            const x1 = app.config.nameColumnWidth + idx * app.config.cycleWidth + phaseDelay;
-            const x2 = x1 + app.config.cycleWidth / 2;
-            const x3 = x1 + app.config.cycleWidth;
+            const x1 = app.config.nameColumnWidth + idx * cycleWidth + phaseDelay;
+            const x2 = x1 + cycleWidth / 2;
+            const x3 = x1 + cycleWidth;
             
             // Check if this cycle is disabled
             const isDisabled = signal.cycleOptions && 
@@ -464,6 +515,9 @@ class TimingGenRendering {
        const lowY = baseY + rowHeight - rowHeight/4;
         const midY = baseY + rowHeight / 2;
         
+        // Get cycle width for this signal's clock domain
+        const cycleWidth = app.getCycleWidthForSignal(signal);
+        
         // First, identify all X spans
         const xSpans = [];
         let idx = 0;
@@ -507,8 +561,8 @@ class TimingGenRendering {
             // Get slew for this cycle
             const slew = idx < app.config.cycles ? app.getEffectiveSlew(signal, idx) : app.config.slew;
             
-            // Base x position at grid line
-            const baseX = app.config.nameColumnWidth + idx * app.config.cycleWidth;
+            // Base x position at grid line (using domain-specific cycle width)
+            const baseX = app.config.nameColumnWidth + idx * cycleWidth;
             // Actual transition point after minimum delay
             const xPos = baseX + delayInfo.min;
             
@@ -579,8 +633,8 @@ class TimingGenRendering {
             path.strokeWidth = 2;
             path.fillColor = '#999999';
 
-            var  x1 = app.config.nameColumnWidth + span.start * app.config.cycleWidth;
-            var  x2 = app.config.nameColumnWidth + (span.end + 1) * app.config.cycleWidth;
+            var  x1 = app.config.nameColumnWidth + span.start * cycleWidth;
+            var  x2 = app.config.nameColumnWidth + (span.end + 1) * cycleWidth;
 
             const delay1 = span.start < app.config.cycles && span.start > 0 ?
                 app.getEffectiveDelay(signal, span.start) : { min: 0, max: 0, color: app.config.delayColor };
@@ -658,6 +712,9 @@ class TimingGenRendering {
         const bottomY = baseY + rowHeight - rowHeight/4;
         const midY = baseY + rowHeight / 2;
         
+        // Get cycle width for this signal's clock domain
+        const cycleWidth = app.getCycleWidthForSignal(signal);
+        
         // First pass: identify value spans with their cycles
         let idx = 0;
         while (idx < app.config.cycles) {
@@ -694,14 +751,14 @@ class TimingGenRendering {
             // Get slew for transitions
             const slew = app.getEffectiveSlew(signal, spanStart);
             
-            // Calculate start position (at grid line + delay)
+            // Calculate start position (at grid line + delay) - using domain-specific cycle width
             // The grid line is where the transition should end, so slew should start before it
-            const baseX1 = app.config.nameColumnWidth + spanStart * app.config.cycleWidth;
+            const baseX1 = app.config.nameColumnWidth + spanStart * cycleWidth;
             const x1 = baseX1; // + delayInfo.min; // Actual transition point (minimum delay)
 
             // obtain how far in next cycle has been drawn here
             const nextDelay = spanEnd + 1 < app.config.cycles ? app.getEffectiveDelay(signal, spanEnd + 1) : {min:0,max:0, color:"black"};
-            const x2 = app.config.nameColumnWidth + (spanEnd + 1) * app.config.cycleWidth + nextDelay.min;
+            const x2 = app.config.nameColumnWidth + (spanEnd + 1) * cycleWidth + nextDelay.min;
 
             
             if (value === 'Z') {
