@@ -110,39 +110,57 @@ class TimingGenRendering {
         // Calculate total rows from unified row system
         const totalRows = app.rowManager.getTotalRows();
         
+        // Find the first AC table row to stop grid lines before it
+        let maxHeightForGrid = app.config.headerHeight;
+        let firstACTableIndex = -1;
+        if (app.rows) {
+            for (let i = 0; i < app.rows.length; i++) {
+                if (app.rows[i].type === 'ac-table') {
+                    firstACTableIndex = i;
+                    break;
+                }
+            }
+        }
+        
         // Calculate total height by summing all row heights
         let maxHeight = app.config.headerHeight;
         for (let i = 0; i < totalRows; i++) {
             maxHeight += app.rowManager.getRowHeight(i);
+            // Stop accumulating height before AC tables for grid purposes
+            if (firstACTableIndex === -1 || i < firstACTableIndex) {
+                maxHeightForGrid = maxHeight;
+            }
         }
         
-        // Vertical lines (cycle dividers) - draw to max height based on signals
+        // Vertical lines (cycle dividers) - draw to maxHeightForGrid (before AC tables)
         for (let idx = 0; idx <= app.config.cycles; idx++) {
             const xPos = app.config.nameColumnWidth + idx * app.config.cycleWidth;
             const line = new paper.Path.Line({
                 from: [xPos, 0],
-                to: [xPos, maxHeight],
+                to: [xPos, maxHeightForGrid],
                 strokeColor: app.config.gridColor,
                 strokeWidth: 1
             });
         }
         
-        // Horizontal lines (row dividers)
-        for (let idx = 0; idx <= totalRows; idx++) {
-            const yPos = app.rowManager.getRowYPosition(idx);
-            
-            const line = new paper.Path.Line({
-                from: [0, yPos],
-                to: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, yPos],
-                strokeColor: app.config.gridColor,
-                strokeWidth: 1
-            });
+        // Horizontal lines (row dividers) - skip during SVG export
+        if (!app.exportingSVG) {
+            for (let idx = 0; idx <= totalRows; idx++) {
+                const yPos = app.rowManager.getRowYPosition(idx);
+                
+                const line = new paper.Path.Line({
+                    from: [0, yPos],
+                    to: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, yPos],
+                    strokeColor: app.config.gridColor,
+                    strokeWidth: 1
+                });
+            }
         }
         
-        // Name column divider
+        // Name column divider - draw to maxHeightForGrid (before AC tables)
         const divider = new paper.Path.Line({
             from: [app.config.nameColumnWidth, 0],
-            to: [app.config.nameColumnWidth, maxHeight],
+            to: [app.config.nameColumnWidth, maxHeightForGrid],
             strokeColor: '#999',
             strokeWidth: 2
         });
