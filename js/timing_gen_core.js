@@ -262,12 +262,16 @@ class TimingGenApp {
         document.getElementById('color-cancel-btn').addEventListener('click', () => this.hideColorDialog());
         
         // Counter row dialog
-        document.getElementById('counter-dialog-ok-btn').addEventListener('click', () => this.addCounterRow());
+        document.getElementById('counter-dialog-ok-btn').addEventListener('click', () => TimingGenTextCounter.addCounterRow(this));
         document.getElementById('counter-dialog-cancel-btn').addEventListener('click', () => this.hideAddCounterDialog());
         
         // Edit counter dialog
         document.getElementById('edit-counter-ok-btn').addEventListener('click', () => this.updateCounterValue());
         document.getElementById('edit-counter-cancel-btn').addEventListener('click', () => this.hideEditCounterDialog());
+        
+        // Counter options dialog
+        document.getElementById('counter-options-ok-btn').addEventListener('click', () => TimingGenTextCounter.saveCounterOptions(this));
+        document.getElementById('counter-options-cancel-btn').addEventListener('click', () => TimingGenTextCounter.hideCounterOptionsDialog(this));
         
         // AC Table dialog
         document.getElementById('ac-table-dialog-ok-btn').addEventListener('click', () => this.addACTable());
@@ -361,6 +365,16 @@ class TimingGenApp {
         document.getElementById('restart-counter-menu').addEventListener('click', () => this.showRestartCounterDialog());
         document.getElementById('blank-counter-menu').addEventListener('click', () => this.blankCounter());
         document.getElementById('cancel-counter-cycle-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Counter name context menu handlers
+        document.getElementById('counter-options-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            if (this.currentEditingCounterName) {
+                TimingGenTextCounter.showCounterOptionsDialog(this, this.currentEditingCounterName);
+            }
+        });
+        document.getElementById('delete-counter-menu').addEventListener('click', () => this.deleteCounter());
+        document.getElementById('cancel-counter-name-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Measure row name context menu
         document.getElementById('delete-measure-row-menu').addEventListener('click', () => this.deleteMeasureRow());
@@ -631,10 +645,12 @@ class TimingGenApp {
         document.getElementById('text-context-menu').style.display = 'none';
         document.getElementById('text-row-name-context-menu').style.display = 'none';
         document.getElementById('counter-cycle-context-menu').style.display = 'none';
+        document.getElementById('counter-name-context-menu').style.display = 'none';
         document.getElementById('measure-row-name-context-menu').style.display = 'none';
         document.getElementById('ac-cell-context-menu').style.display = 'none';
         document.getElementById('ac-param-context-menu').style.display = 'none';
         document.getElementById('ac-table-context-menu').style.display = 'none';
+        document.getElementById('clock-cycle-context-menu').style.display = 'none';
         
         // Clear editing state to prevent stale references
         // Note: Don't clear everything as some dialogs might still need the state
@@ -1650,7 +1666,16 @@ class TimingGenApp {
                 }
             } else if (clickedRow && clickedRow.type === 'counter') {
                 // Left-click on counter to edit value at this cycle
-                const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
+                const counterData = this.counterData.get(clickedRow.name);
+                // Use domain-specific cycle width if counter has base_clock
+                let cycleWidth = this.config.cycleWidth;
+                if (counterData && counterData.base_clock) {
+                    const clock = this.signalsData.get(counterData.base_clock);
+                    if (clock) {
+                        cycleWidth = this.getCycleWidthForClock(clock);
+                    }
+                }
+                const cycle = Math.floor((xPos - this.config.nameColumnWidth) / cycleWidth);
                 if (cycle >= 0 && cycle < this.config.cycles) {
                     this.showEditCounterDialog(clickedRow.name, cycle);
                     return;
@@ -1725,8 +1750,14 @@ class TimingGenApp {
                     const signalIndex = this.getSignalIndexAtY(paperY);
                     if (signalIndex !== -1) {
                         this.currentEditingSignal = signalIndex;
-                        TimingGenUI.showContextMenu('signal-context-menu', ev.clientX, ev.clientY);
+                        const signal = this.getSignalByIndex(signalIndex);
+                        this.currentEditingSignalName = signal.name;
+                        TimingGenUI.showContextMenu('signal-name-context-menu', ev.clientX, ev.clientY);
                     }
+                } else if (row.type === 'counter') {
+                    // Right-click on counter row name column - show counter name context menu
+                    this.currentEditingCounterName = row.name;
+                    TimingGenUI.showContextMenu('counter-name-context-menu', ev.clientX, ev.clientY);
                 } else if (row.type === 'text') {
                     // Right-click on text row name column - show delete/cancel menu
                     this.currentEditingText = row.name;
@@ -1889,8 +1920,16 @@ class TimingGenApp {
         if (row) {
             if (row.type === 'counter') {
                 // Right-click on counter row - show counter cycle context menu
-                // TODO: Use counter's domain-specific cycle width once base_clock is added
-                const cycle = Math.floor((paperX - this.config.nameColumnWidth) / this.config.cycleWidth);
+                const counterData = this.counterData.get(row.name);
+                // Use domain-specific cycle width if counter has base_clock
+                let cycleWidth = this.config.cycleWidth;
+                if (counterData && counterData.base_clock) {
+                    const clock = this.signalsData.get(counterData.base_clock);
+                    if (clock) {
+                        cycleWidth = this.getCycleWidthForClock(clock);
+                    }
+                }
+                const cycle = Math.floor((paperX - this.config.nameColumnWidth) / cycleWidth);
                 this.currentEditingCounter = { name: row.name, cycle: cycle };
                 TimingGenUI.showContextMenu('counter-cycle-context-menu', ev.clientX, ev.clientY);
                 return;
@@ -3454,6 +3493,26 @@ class TimingGenApp {
     
     deleteTextRow() {
         TimingGenTextCounter.deleteTextRow(this);
+    }
+    
+    deleteCounter() {
+        this.hideAllMenus();
+        if (this.currentEditingCounterName) {
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
+            // Remove from data store
+            this.counterData.delete(this.currentEditingCounterName);
+            
+            // Remove from rows array
+            const rowIndex = this.rows.findIndex(r => r.type === 'counter' && r.name === this.currentEditingCounterName);
+            if (rowIndex !== -1) {
+                this.rows.splice(rowIndex, 1);
+            }
+            
+            this.currentEditingCounterName = null;
+            this.render();
+        }
     }
     
     deleteMeasureRow() {

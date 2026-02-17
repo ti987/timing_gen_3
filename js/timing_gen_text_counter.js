@@ -387,6 +387,10 @@ class TimingGenTextCounter {
     static showAddCounterDialog(app) {
         document.getElementById('counter-start-value-input').value = '1';
         document.getElementById('counter-start-cycle-input').value = '0';
+        
+        // Populate clock domain dropdown
+        TimingGenUI.populateClockDomainDropdown(app, 'counter-clock-domain-input');
+        
         document.getElementById('add-counter-dialog').style.display = 'flex';
     }
     
@@ -552,9 +556,15 @@ class TimingGenTextCounter {
     static addCounterRow(app) {
         const startValue = document.getElementById('counter-start-value-input').value.trim();
         const startCycle = parseInt(document.getElementById('counter-start-cycle-input').value);
+        const selectedClock = document.getElementById('counter-clock-domain-input').value;
         
         if (startValue === '') {
             alert('Please enter a start value');
+            return;
+        }
+        
+        if (!selectedClock) {
+            alert('Please select a clock domain for the counter');
             return;
         }
         
@@ -568,6 +578,7 @@ class TimingGenTextCounter {
         // Create counter data object
         // Format: [{cycle: N, value: "label"}]
         const counterData = {
+            base_clock: selectedClock,  // Add domain clock
             values: [{
                 cycle: startCycle,
                 value: startValue
@@ -585,5 +596,55 @@ class TimingGenTextCounter {
         
         TimingGenTextCounter.hideAddCounterDialog(app);
         app.render();
+    }
+    
+    /**
+     * Show counter options dialog
+     * @param {TimingGenApp} app - Main application instance
+     * @param {string} counterName - Name of the counter
+     */
+    static showCounterOptionsDialog(app, counterName) {
+        app.currentEditingCounterName = counterName;
+        const counterData = app.counterData.get(counterName);
+        
+        if (counterData) {
+            // Populate and select clock domain
+            TimingGenUI.populateClockDomainDropdown(app, 'counter-domain-option-input');
+            document.getElementById('counter-domain-option-input').value = counterData.base_clock || '';
+            document.getElementById('counter-options-dialog').style.display = 'flex';
+        }
+    }
+    
+    /**
+     * Hide counter options dialog
+     * @param {TimingGenApp} app - Main application instance
+     */
+    static hideCounterOptionsDialog(app) {
+        document.getElementById('counter-options-dialog').style.display = 'none';
+        app.currentEditingCounterName = null;
+    }
+    
+    /**
+     * Save counter options
+     * @param {TimingGenApp} app - Main application instance
+     */
+    static saveCounterOptions(app) {
+        if (app.currentEditingCounterName) {
+            const counterData = app.counterData.get(app.currentEditingCounterName);
+            if (counterData) {
+                const selectedClock = document.getElementById('counter-domain-option-input').value;
+                if (!selectedClock) {
+                    alert('Please select a clock domain');
+                    return;
+                }
+                
+                // Capture state before action
+                app.undoRedoManager.captureState();
+                
+                counterData.base_clock = selectedClock;
+                TimingGenTextCounter.hideCounterOptionsDialog(app);
+                app.render();
+            }
+        }
     }
 }
