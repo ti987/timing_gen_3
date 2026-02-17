@@ -221,6 +221,7 @@ class TimingGenRendering {
     static drawClockWaveform(app, signal, baseY, rowHeight) {
        const highY = baseY + rowHeight/4;
        const lowY = baseY + rowHeight - rowHeight/4;
+       const midY = baseY + rowHeight/2;
         
         const path = new paper.Path();
         path.strokeColor = app.config.signalColor;
@@ -230,27 +231,66 @@ class TimingGenRendering {
         const phase = signal.phase !== undefined ? signal.phase : 0;
         const phaseDelay = phase * app.config.cycleWidth;
         
+        let lastY = lowY; // Track the last Y position
+        
         for (let idx = 0; idx < app.config.cycles; idx++) {
             const x1 = app.config.nameColumnWidth + idx * app.config.cycleWidth + phaseDelay;
             const x2 = x1 + app.config.cycleWidth / 2;
             const x3 = x1 + app.config.cycleWidth;
             
-            // Rising edge at start of cycle (with phase delay)
-            if (idx === 0) {
-                // Start from the beginning of the waveform area
-                const startX = app.config.nameColumnWidth;
-                path.moveTo(new paper.Point(startX, lowY));
-                // If phase > 0, draw low line until phase point
-                if (phaseDelay > 0) {
-                    path.lineTo(new paper.Point(x1, lowY));
-                }
-            }
-            path.lineTo(new paper.Point(x1, highY));
-            path.lineTo(new paper.Point(x2, highY));
+            // Check if this cycle is disabled
+            const isDisabled = signal.cycleOptions && 
+                             signal.cycleOptions[idx] && 
+                             signal.cycleOptions[idx].disabled;
             
-            // Falling edge at middle of cycle
-            path.lineTo(new paper.Point(x2, lowY));
-            path.lineTo(new paper.Point(x3, lowY));
+            if (isDisabled) {
+                // Get disable state (default to '0')
+                const disableState = signal.cycleOptions[idx].disableState || '0';
+                let disableY;
+                if (disableState === '1') {
+                    disableY = highY;
+                } else if (disableState === 'Z') {
+                    disableY = midY;
+                } else {
+                    disableY = lowY;
+                }
+                
+                // Transition to disable state at start of cycle
+                if (idx === 0) {
+                    path.moveTo(new paper.Point(app.config.nameColumnWidth, disableY));
+                } else {
+                    path.lineTo(new paper.Point(x1, lastY));
+                    path.lineTo(new paper.Point(x1, disableY));
+                }
+                
+                // Stay at disable state for the whole cycle
+                path.lineTo(new paper.Point(x3, disableY));
+                lastY = disableY;
+            } else {
+                // Normal clock waveform
+                if (idx === 0) {
+                    // Start from the beginning of the waveform area
+                    const startX = app.config.nameColumnWidth;
+                    path.moveTo(new paper.Point(startX, lowY));
+                    // If phase > 0, draw low line until phase point
+                    if (phaseDelay > 0) {
+                        path.lineTo(new paper.Point(x1, lowY));
+                    }
+                    lastY = lowY;
+                } else {
+                    // Connect from previous state
+                    path.lineTo(new paper.Point(x1, lastY));
+                }
+                
+                // Rising edge
+                path.lineTo(new paper.Point(x1, highY));
+                path.lineTo(new paper.Point(x2, highY));
+                
+                // Falling edge at middle of cycle
+                path.lineTo(new paper.Point(x2, lowY));
+                path.lineTo(new paper.Point(x3, lowY));
+                lastY = lowY;
+            }
         }
     }
     

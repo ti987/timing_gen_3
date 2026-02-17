@@ -146,6 +146,24 @@
         <div class="menu-item" id="cancel-bit-cycle-menu">Cancel</div>
     </div>
 
+    <!-- Context Menu for Clock Signal Cycle -->
+    <div id="clock-cycle-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="disable-clock-cycle-menu">Disable</div>
+        <div class="menu-item" id="enable-clock-cycle-menu">Enable</div>
+        <div class="menu-item submenu">
+            <span>Disable State</span>
+            <div class="submenu-content">
+                <div class="menu-item" data-disable-state="0">0 (Low)</div>
+                <div class="menu-item" data-disable-state="1">1 (High)</div>
+                <div class="menu-item" data-disable-state="Z">Z (High-Z)</div>
+            </div>
+        </div>
+        <div class="menu-item" id="clock-cycle-options-menu">Cycle Options</div>
+        <div class="menu-item" id="insert-cycles-clock-menu">Insert Cycles</div>
+        <div class="menu-item" id="delete-cycles-clock-menu">Delete Cycles</div>
+        <div class="menu-item" id="cancel-clock-cycle-menu">Cancel</div>
+    </div>
+
     <!-- Context Menu for Bus Signal Cycle -->
     <div id="bus-cycle-context-menu" class="context-menu" style="display: none;">
         <div class="menu-item" id="set-bus-value-menu">Set Value</div>

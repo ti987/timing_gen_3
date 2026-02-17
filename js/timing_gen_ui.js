@@ -368,6 +368,23 @@ class TimingGenUI {
         });
     }
     
+    static showClockCycleContextMenu(app, xPos, yPos) {
+        const menu = document.getElementById('clock-cycle-context-menu');
+        menu.style.display = 'block';
+        menu.style.left = xPos + 'px';
+        menu.style.top = yPos + 'px';
+        
+        // Add click handlers for disable state menu items
+        const disableStateItems = menu.querySelectorAll('.menu-item[data-disable-state]');
+        disableStateItems.forEach(item => {
+            item.onclick = () => {
+                const state = item.getAttribute('data-disable-state');
+                app.setClockDisableState(app.currentEditingSignal, app.currentEditingCycle, state);
+                app.hideAllMenus();
+            };
+        });
+    }
+    
     static showBusCycleContextMenu(app, xPos, yPos) {
         const menu = document.getElementById('bus-cycle-context-menu');
         menu.style.display = 'block';

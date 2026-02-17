@@ -454,6 +454,25 @@ class TimingGenApp {
         });
         document.getElementById('cancel-bit-cycle-menu').addEventListener('click', () => this.hideAllMenus());
         
+        // Clock cycle context menu handlers
+        document.getElementById('disable-clock-cycle-menu').addEventListener('click', () => this.disableClockCycle());
+        document.getElementById('enable-clock-cycle-menu').addEventListener('click', () => this.enableClockCycle());
+        document.getElementById('clock-cycle-options-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            TimingGenUI.showCycleOptionsDialog(this);
+        });
+        document.getElementById('insert-cycles-clock-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            this.insertCycleMode = 'signal';
+            TimingGenUI.showInsertCyclesDialog(this);
+        });
+        document.getElementById('delete-cycles-clock-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            this.deleteCycleMode = 'signal';
+            TimingGenUI.showDeleteCyclesDialog(this);
+        });
+        document.getElementById('cancel-clock-cycle-menu').addEventListener('click', () => this.hideAllMenus());
+        
         // Cycle context menu handlers (for cycle header)
         document.getElementById('insert-cycles-global-menu').addEventListener('click', () => {
             this.hideAllMenus();
@@ -1913,6 +1932,10 @@ class TimingGenApp {
                         this.currentEditingSignal = signalIndex;
                         this.currentEditingCycle = cycle;
                         TimingGenUI.showBusCycleContextMenu(this, ev.clientX, ev.clientY);
+                    } else if (signal.type === 'clock') {
+                        this.currentEditingSignal = signalIndex;
+                        this.currentEditingCycle = cycle;
+                        TimingGenUI.showClockCycleContextMenu(this, ev.clientX, ev.clientY);
                     }
                 }
             }
@@ -2117,6 +2140,83 @@ class TimingGenApp {
                 }
             }
             this.hideAllMenus();
+            this.render();
+        }
+    }
+    
+    disableClockCycle() {
+        this.hideAllMenus();
+        if (this.currentEditingSignal !== null && this.currentEditingCycle !== null) {
+            const signal = this.getSignalByIndex(this.currentEditingSignal);
+            if (signal && signal.type === 'clock') {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
+                // Initialize cycleOptions if needed
+                if (!signal.cycleOptions) {
+                    signal.cycleOptions = {};
+                }
+                if (!signal.cycleOptions[this.currentEditingCycle]) {
+                    signal.cycleOptions[this.currentEditingCycle] = {};
+                }
+                
+                // Set disabled flag and default disable state
+                signal.cycleOptions[this.currentEditingCycle].disabled = true;
+                if (!signal.cycleOptions[this.currentEditingCycle].disableState) {
+                    signal.cycleOptions[this.currentEditingCycle].disableState = '0';
+                }
+                
+                this.render();
+            }
+        }
+    }
+    
+    enableClockCycle() {
+        this.hideAllMenus();
+        if (this.currentEditingSignal !== null && this.currentEditingCycle !== null) {
+            const signal = this.getSignalByIndex(this.currentEditingSignal);
+            if (signal && signal.type === 'clock') {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
+                // Remove disabled flag
+                if (signal.cycleOptions && signal.cycleOptions[this.currentEditingCycle]) {
+                    delete signal.cycleOptions[this.currentEditingCycle].disabled;
+                    delete signal.cycleOptions[this.currentEditingCycle].disableState;
+                    
+                    // Clean up empty objects
+                    if (Object.keys(signal.cycleOptions[this.currentEditingCycle]).length === 0) {
+                        delete signal.cycleOptions[this.currentEditingCycle];
+                    }
+                    if (Object.keys(signal.cycleOptions).length === 0) {
+                        delete signal.cycleOptions;
+                    }
+                }
+                
+                this.render();
+            }
+        }
+    }
+    
+    setClockDisableState(signalIndex, cycle, state) {
+        const signal = this.getSignalByIndex(signalIndex);
+        if (signal && signal.type === 'clock') {
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
+            // Initialize cycleOptions if needed
+            if (!signal.cycleOptions) {
+                signal.cycleOptions = {};
+            }
+            if (!signal.cycleOptions[cycle]) {
+                signal.cycleOptions[cycle] = {};
+            }
+            
+            // Set the disable state
+            signal.cycleOptions[cycle].disableState = state;
+            // Also enable disabled flag
+            signal.cycleOptions[cycle].disabled = true;
+            
             this.render();
         }
     }
