@@ -369,11 +369,11 @@ class TimingGenApp {
         // Add signal dialog
         // Add signal dialog
         document.getElementById('signal-type-select').addEventListener('change', function() {
-            const phaseContainer = document.getElementById('clock-phase-container');
+            const clockOptionsContainer = document.getElementById('clock-options-container');
             if (this.value === 'clock') {
-                phaseContainer.style.display = 'block';
+                clockOptionsContainer.style.display = 'block';
             } else {
-                phaseContainer.style.display = 'none';
+                clockOptionsContainer.style.display = 'none';
             }
         });
         
@@ -938,8 +938,19 @@ class TimingGenApp {
             values: {}
         };
         
-        // Add phase for clock signals
+        // Add period and phase for clock signals
         if (type === 'clock') {
+            // Capture period
+            const periodValue = parseFloat(document.getElementById('signal-period-input').value);
+            const periodUnit = document.getElementById('signal-period-unit-input').value;
+            if (isNaN(periodValue) || periodValue <= 0) {
+                alert('Please enter a valid period value greater than 0');
+                return;
+            }
+            signal.period = periodValue;
+            signal.periodUnit = periodUnit;
+            
+            // Capture phase
             const phaseValue = parseFloat(document.getElementById('signal-phase-input').value);
             if (isNaN(phaseValue) || phaseValue < 0 || phaseValue > 1) {
                 alert('Please enter a valid phase value between 0.0 and 1.0');

@@ -7,9 +7,11 @@ class TimingGenUI {
         document.getElementById('add-signal-dialog').style.display = 'flex';
         document.getElementById('signal-name-input').value = '';
         document.getElementById('signal-type-select').value = 'clock';
+        document.getElementById('signal-period-input').value = '10';
+        document.getElementById('signal-period-unit-input').value = 'ns';
         document.getElementById('signal-phase-input').value = '0';
-        // Show phase field since default is clock
-        document.getElementById('clock-phase-container').style.display = 'block';
+        // Show clock options since default is clock
+        document.getElementById('clock-options-container').style.display = 'block';
         document.getElementById('signal-name-input').focus();
     }
     
@@ -152,13 +154,17 @@ class TimingGenUI {
         if (app.currentEditingSignal !== null) {
             const signal = app.getSignalByIndex(app.currentEditingSignal);
             
-            // Show/hide phase field based on signal type
-            const phaseContainer = document.getElementById('signal-options-phase-container');
+            // Show/hide clock options (period and phase) based on signal type
+            const clockOptionsContainer = document.getElementById('signal-options-clock-container');
             if (signal.type === 'clock') {
-                phaseContainer.style.display = 'block';
+                clockOptionsContainer.style.display = 'block';
+                // Load period values (use defaults if not set)
+                document.getElementById('signal-period-option-input').value = signal.period !== undefined ? signal.period : 10;
+                document.getElementById('signal-period-unit-option-input').value = signal.periodUnit !== undefined ? signal.periodUnit : 'ns';
+                // Load phase value
                 document.getElementById('signal-phase-option-input').value = signal.phase !== undefined ? signal.phase : 0;
             } else {
-                phaseContainer.style.display = 'none';
+                clockOptionsContainer.style.display = 'none';
             }
             
             // Populate with signal-specific values if they exist
@@ -184,8 +190,19 @@ class TimingGenUI {
         if (app.currentEditingSignal !== null) {
             const signal = app.getSignalByIndex(app.currentEditingSignal);
             
-            // Handle phase for clock signals
+            // Handle period and phase for clock signals
             if (signal.type === 'clock') {
+                // Capture period
+                const periodValue = parseFloat(document.getElementById('signal-period-option-input').value);
+                const periodUnit = document.getElementById('signal-period-unit-option-input').value;
+                if (isNaN(periodValue) || periodValue <= 0) {
+                    alert('Please enter a valid period value greater than 0');
+                    return;
+                }
+                signal.period = periodValue;
+                signal.periodUnit = periodUnit;
+                
+                // Capture phase
                 const phaseValue = parseFloat(document.getElementById('signal-phase-option-input').value);
                 if (isNaN(phaseValue) || phaseValue < 0 || phaseValue > 1) {
                     alert('Please enter a valid phase value between 0.0 and 1.0');
