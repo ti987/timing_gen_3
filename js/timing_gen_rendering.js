@@ -248,6 +248,32 @@ class TimingGenRendering {
         const rowIndex = app.rowManager.signalIndexToRowIndex(index);
         const rowHeight = app.rowManager.getRowHeight(rowIndex);
         
+        // Draw cycle numbers above 2nd+ clocks (not exported to SVG)
+        if (signal.type === 'clock' && !app.exportingSVG) {
+            // Check if this is the 2nd or later clock
+            const clocks = app.getClockSignals();
+            const clockIndex = clocks.findIndex(clk => clk.name === signal.name);
+            
+            if (clockIndex > 0) {
+                // Draw cycle numbers above this clock using its domain-specific cycle width
+                const cycleWidth = app.getCycleWidthForClock(signal);
+                const numberYPos = yPos - 15; // Position above the clock row
+                
+                for (let idx = 0; idx < app.config.cycles; idx++) {
+                    const xPos = app.config.nameColumnWidth + idx * cycleWidth + cycleWidth / 2;
+                    
+                    const text = new paper.PointText({
+                        point: [xPos, numberYPos],
+                        content: idx.toString(),
+                        fillColor: '#666666',  // Slightly gray to distinguish from main header
+                        fontFamily: 'Arial',
+                        fontSize: 10,
+                        justification: 'center'
+                    });
+                }
+            }
+        }
+        
         // Draw selection highlight background if signal is selected
         if (app.selectedSignals.has(index)) {
             const highlightRect = new paper.Path.Rectangle({
