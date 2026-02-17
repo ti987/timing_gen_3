@@ -370,10 +370,15 @@ class TimingGenApp {
         // Add signal dialog
         document.getElementById('signal-type-select').addEventListener('change', function() {
             const clockOptionsContainer = document.getElementById('clock-options-container');
+            const clockDomainContainer = document.getElementById('signal-clock-domain-container');
+            
             if (this.value === 'clock') {
                 clockOptionsContainer.style.display = 'block';
+                clockDomainContainer.style.display = 'none';
             } else {
+                // Bit or Bus signals need clock domain selection
                 clockOptionsContainer.style.display = 'none';
+                clockDomainContainer.style.display = 'block';
             }
         });
         
@@ -961,10 +966,17 @@ class TimingGenApp {
         
         // Add base_clock for bit and bus signals
         if (type === 'bit' || type === 'bus') {
-            // Find the first clock signal, or use 'clk' as default
-            const signals = this.getSignals();
-            const clockSignal = signals.find(sg => sg.type === 'clock');
-            signal.base_clock = clockSignal ? clockSignal.name : 'clk';
+            // Get selected clock from dropdown
+            const selectedClock = document.getElementById('signal-clock-domain-input').value;
+            
+            if (selectedClock) {
+                signal.base_clock = selectedClock;
+            } else {
+                // Find the first clock signal, or use 'clk' as default
+                const signals = this.getSignals();
+                const clockSignal = signals.find(sg => sg.type === 'clock');
+                signal.base_clock = clockSignal ? clockSignal.name : 'clk';
+            }
         }
         
         // Initialize default values

@@ -10,8 +10,13 @@ class TimingGenUI {
         document.getElementById('signal-period-input').value = '10';
         document.getElementById('signal-period-unit-input').value = 'ns';
         document.getElementById('signal-phase-input').value = '0';
+        
+        // Populate clock domain dropdown
+        TimingGenUI.populateClockDomainDropdown(app, 'signal-clock-domain-input');
+        
         // Show clock options since default is clock
         document.getElementById('clock-options-container').style.display = 'block';
+        document.getElementById('signal-clock-domain-container').style.display = 'none';
         document.getElementById('signal-name-input').focus();
     }
     
@@ -156,15 +161,25 @@ class TimingGenUI {
             
             // Show/hide clock options (period and phase) based on signal type
             const clockOptionsContainer = document.getElementById('signal-options-clock-container');
+            const domainContainer = document.getElementById('signal-options-domain-container');
+            
             if (signal.type === 'clock') {
                 clockOptionsContainer.style.display = 'block';
+                domainContainer.style.display = 'none';
                 // Load period values (use defaults if not set)
                 document.getElementById('signal-period-option-input').value = signal.period !== undefined ? signal.period : 10;
                 document.getElementById('signal-period-unit-option-input').value = signal.periodUnit !== undefined ? signal.periodUnit : 'ns';
                 // Load phase value
                 document.getElementById('signal-phase-option-input').value = signal.phase !== undefined ? signal.phase : 0;
+            } else if (signal.type === 'bit' || signal.type === 'bus') {
+                clockOptionsContainer.style.display = 'none';
+                domainContainer.style.display = 'block';
+                // Populate and select clock domain
+                TimingGenUI.populateClockDomainDropdown(app, 'signal-clock-domain-option-input');
+                document.getElementById('signal-clock-domain-option-input').value = signal.base_clock || '';
             } else {
                 clockOptionsContainer.style.display = 'none';
+                domainContainer.style.display = 'none';
             }
             
             // Populate with signal-specific values if they exist
@@ -209,6 +224,15 @@ class TimingGenUI {
                     return;
                 }
                 signal.phase = phaseValue;
+            } else if (signal.type === 'bit' || signal.type === 'bus') {
+                // Handle clock domain for bit/bus signals
+                const selectedClock = document.getElementById('signal-clock-domain-option-input').value;
+                if (selectedClock) {
+                    signal.base_clock = selectedClock;
+                } else {
+                    alert('Please select a clock domain for this signal');
+                    return;
+                }
             }
             
             const slewValue = document.getElementById('signal-slew-input').value;
@@ -427,5 +451,38 @@ class TimingGenUI {
     
     static hideDeleteCyclesDialog() {
         document.getElementById('delete-cycles-dialog').style.display = 'none';
+    }
+    
+    /**
+     * Populate a clock domain dropdown with available clocks
+     * @param {TimingGenApp} app - Main application instance
+     * @param {string} selectId - ID of the select element to populate
+     */
+    static populateClockDomainDropdown(app, selectId) {
+        const select = document.getElementById(selectId);
+        // Clear existing options except the first one
+        while (select.options.length > 1) {
+            select.remove(1);
+        }
+        
+        // Get all clock signals
+        const clocks = app.getClockSignals();
+        
+        // Add each clock as an option
+        for (const clock of clocks) {
+            const option = document.createElement('option');
+            option.value = clock.name;
+            option.textContent = `${clock.name} (${clock.period}${clock.periodUnit})`;
+            select.appendChild(option);
+        }
+        
+        // If no clocks available, disable the dropdown
+        if (clocks.length === 0) {
+            select.disabled = true;
+            select.options[0].textContent = '-- No clocks available --';
+        } else {
+            select.disabled = false;
+            select.options[0].textContent = '-- Select Clock --';
+        }
     }
 }
