@@ -1659,16 +1659,20 @@ class TimingGenApp {
         }
         
         // Check signal interaction - clear selection if clicking waveform
-        const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
         const signalIndex = this.getSignalIndexAtY(yPos);
         
-        if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
+        if (signalIndex !== -1) {
             const signal = this.getSignalByIndex(signalIndex);
+            // Use domain-specific cycle width for accurate click detection
+            const cycleWidth = this.getCycleWidthForSignal(signal);
+            const cycle = Math.floor((xPos - this.config.nameColumnWidth) / cycleWidth);
             
-            if (signal.type === 'bit') {
-                this.toggleBitSignal(signalIndex, cycle);
-            } else if (signal.type === 'bus') {
-                TimingGenUI.showBusValueDialog(this, signalIndex, cycle);
+            if (cycle >= 0 && cycle < this.config.cycles) {
+                if (signal.type === 'bit') {
+                    this.toggleBitSignal(signalIndex, cycle);
+                } else if (signal.type === 'bus') {
+                    TimingGenUI.showBusValueDialog(this, signalIndex, cycle);
+                }
             }
         }
     }
@@ -1737,7 +1741,6 @@ class TimingGenApp {
         }
         
         // Check if right-click is in waveform area
-        const cycle = Math.floor((paperX - this.config.nameColumnWidth) / this.config.cycleWidth);
         const row = this.getRowAtY(paperY);
         
         // First check for arrow elements (they overlay signals)
@@ -1886,6 +1889,8 @@ class TimingGenApp {
         if (row) {
             if (row.type === 'counter') {
                 // Right-click on counter row - show counter cycle context menu
+                // TODO: Use counter's domain-specific cycle width once base_clock is added
+                const cycle = Math.floor((paperX - this.config.nameColumnWidth) / this.config.cycleWidth);
                 this.currentEditingCounter = { name: row.name, cycle: cycle };
                 TimingGenUI.showContextMenu('counter-cycle-context-menu', ev.clientX, ev.clientY);
                 return;
@@ -1943,22 +1948,27 @@ class TimingGenApp {
             } else if (row.type === 'signal') {
                 const signalIndex = this.getSignalIndexAtY(paperY);
                 
-                if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
+                if (signalIndex !== -1) {
                     const signal = this.getSignalByIndex(signalIndex);
+                    // Use domain-specific cycle width for accurate click detection
+                    const cycleWidth = this.getCycleWidthForSignal(signal);
+                    const cycle = Math.floor((paperX - this.config.nameColumnWidth) / cycleWidth);
                     
-                    // Show appropriate cycle context menu based on signal type
-                    if (signal.type === 'bit') {
-                        this.currentEditingSignal = signalIndex;
-                        this.currentEditingCycle = cycle;
-                        TimingGenUI.showBitCycleContextMenu(this, ev.clientX, ev.clientY);
-                    } else if (signal.type === 'bus') {
-                        this.currentEditingSignal = signalIndex;
-                        this.currentEditingCycle = cycle;
-                        TimingGenUI.showBusCycleContextMenu(this, ev.clientX, ev.clientY);
-                    } else if (signal.type === 'clock') {
-                        this.currentEditingSignal = signalIndex;
-                        this.currentEditingCycle = cycle;
-                        TimingGenUI.showClockCycleContextMenu(this, ev.clientX, ev.clientY);
+                    if (cycle >= 0 && cycle < this.config.cycles) {
+                        // Show appropriate cycle context menu based on signal type
+                        if (signal.type === 'bit') {
+                            this.currentEditingSignal = signalIndex;
+                            this.currentEditingCycle = cycle;
+                            TimingGenUI.showBitCycleContextMenu(this, ev.clientX, ev.clientY);
+                        } else if (signal.type === 'bus') {
+                            this.currentEditingSignal = signalIndex;
+                            this.currentEditingCycle = cycle;
+                            TimingGenUI.showBusCycleContextMenu(this, ev.clientX, ev.clientY);
+                        } else if (signal.type === 'clock') {
+                            this.currentEditingSignal = signalIndex;
+                            this.currentEditingCycle = cycle;
+                            TimingGenUI.showClockCycleContextMenu(this, ev.clientX, ev.clientY);
+                        }
                     }
                 }
             }
