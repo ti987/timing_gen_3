@@ -367,6 +367,16 @@ class TimingGenApp {
         document.getElementById('cancel-measure-row-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Add signal dialog
+        // Add signal dialog
+        document.getElementById('signal-type-select').addEventListener('change', function() {
+            const phaseContainer = document.getElementById('clock-phase-container');
+            if (this.value === 'clock') {
+                phaseContainer.style.display = 'block';
+            } else {
+                phaseContainer.style.display = 'none';
+            }
+        });
+        
         document.getElementById('dialog-ok-btn').addEventListener('click', () => this.addSignal());
         document.getElementById('dialog-cancel-btn').addEventListener('click', () => TimingGenUI.hideAddSignalDialog());
         
@@ -908,6 +918,16 @@ class TimingGenApp {
             type: type,
             values: {}
         };
+        
+        // Add phase for clock signals
+        if (type === 'clock') {
+            const phaseValue = parseFloat(document.getElementById('signal-phase-input').value);
+            if (isNaN(phaseValue) || phaseValue < 0 || phaseValue > 1) {
+                alert('Please enter a valid phase value between 0.0 and 1.0');
+                return;
+            }
+            signal.phase = phaseValue;
+        }
         
         // Add base_clock for bit and bus signals
         if (type === 'bit' || type === 'bus') {

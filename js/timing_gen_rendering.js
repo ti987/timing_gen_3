@@ -226,14 +226,24 @@ class TimingGenRendering {
         path.strokeColor = app.config.signalColor;
         path.strokeWidth = 2;
         
+        // Get phase value (default 0)
+        const phase = signal.phase !== undefined ? signal.phase : 0;
+        const phaseDelay = phase * app.config.cycleWidth;
+        
         for (let idx = 0; idx < app.config.cycles; idx++) {
-            const x1 = app.config.nameColumnWidth + idx * app.config.cycleWidth;
+            const x1 = app.config.nameColumnWidth + idx * app.config.cycleWidth + phaseDelay;
             const x2 = x1 + app.config.cycleWidth / 2;
             const x3 = x1 + app.config.cycleWidth;
             
-            // Rising edge at start of cycle
+            // Rising edge at start of cycle (with phase delay)
             if (idx === 0) {
-                path.moveTo(new paper.Point(x1, lowY));
+                // Start from the beginning of the waveform area
+                const startX = app.config.nameColumnWidth;
+                path.moveTo(new paper.Point(startX, lowY));
+                // If phase > 0, draw low line until phase point
+                if (phaseDelay > 0) {
+                    path.lineTo(new paper.Point(x1, lowY));
+                }
             }
             path.lineTo(new paper.Point(x1, highY));
             path.lineTo(new paper.Point(x2, highY));

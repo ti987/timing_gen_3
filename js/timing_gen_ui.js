@@ -6,6 +6,10 @@ class TimingGenUI {
     static showAddSignalDialog(app) {
         document.getElementById('add-signal-dialog').style.display = 'flex';
         document.getElementById('signal-name-input').value = '';
+        document.getElementById('signal-type-select').value = 'clock';
+        document.getElementById('signal-phase-input').value = '0';
+        // Show phase field since default is clock
+        document.getElementById('clock-phase-container').style.display = 'block';
         document.getElementById('signal-name-input').focus();
     }
     
@@ -147,6 +151,16 @@ class TimingGenUI {
     static showSignalOptionsDialog(app) {
         if (app.currentEditingSignal !== null) {
             const signal = app.getSignalByIndex(app.currentEditingSignal);
+            
+            // Show/hide phase field based on signal type
+            const phaseContainer = document.getElementById('signal-options-phase-container');
+            if (signal.type === 'clock') {
+                phaseContainer.style.display = 'block';
+                document.getElementById('signal-phase-option-input').value = signal.phase !== undefined ? signal.phase : 0;
+            } else {
+                phaseContainer.style.display = 'none';
+            }
+            
             // Populate with signal-specific values if they exist
             document.getElementById('signal-slew-input').value = signal.slew !== undefined ? signal.slew : '';
             document.getElementById('signal-delay-min-input').value = signal.delayMin !== undefined ? signal.delayMin : '';
@@ -169,6 +183,17 @@ class TimingGenUI {
     static saveSignalOptions(app) {
         if (app.currentEditingSignal !== null) {
             const signal = app.getSignalByIndex(app.currentEditingSignal);
+            
+            // Handle phase for clock signals
+            if (signal.type === 'clock') {
+                const phaseValue = parseFloat(document.getElementById('signal-phase-option-input').value);
+                if (isNaN(phaseValue) || phaseValue < 0 || phaseValue > 1) {
+                    alert('Please enter a valid phase value between 0.0 and 1.0');
+                    return;
+                }
+                signal.phase = phaseValue;
+            }
+            
             const slewValue = document.getElementById('signal-slew-input').value;
             const delayMinValue = document.getElementById('signal-delay-min-input').value;
             const delayMaxValue = document.getElementById('signal-delay-max-input').value;
