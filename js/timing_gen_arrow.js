@@ -637,6 +637,18 @@ class TimingGenArrow {
                 } else {
                     y = baseY + rowHeight * 0.5;  // Mid (for Z/X)
                 }
+            } else if (poiType === 'delayed' && hasTransition) {
+                // Delayed point at delayMax position
+                const delayMaxX = app.config.nameColumnWidth + cycle * app.config.cycleWidth + delayInfo.max;
+                x = delayMaxX;
+                // Y position at current value level (after transition)
+                if (currentValue === 0) {
+                    y = baseY + rowHeight * 0.8;  // Low
+                } else if (currentValue === 1) {
+                    y = baseY + rowHeight * 0.2;  // High
+                } else {
+                    y = baseY + rowHeight * 0.5;  // Mid (for Z/X)
+                }
             } else {
                 // Fallback to cycle boundary, middle
                 x = app.config.nameColumnWidth + cycle * app.config.cycleWidth;
@@ -693,6 +705,7 @@ class TimingGenArrow {
                 pois.push(TimingGenArrow.getPointOfInterest(app, signalName, cycle, 'slew-start'));
                 pois.push(TimingGenArrow.getPointOfInterest(app, signalName, cycle, 'slew-center'));
                 pois.push(TimingGenArrow.getPointOfInterest(app, signalName, cycle, 'slew-end'));
+                pois.push(TimingGenArrow.getPointOfInterest(app, signalName, cycle, 'delayed'));
             }
         }
         
