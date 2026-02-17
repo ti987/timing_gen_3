@@ -1,5 +1,5 @@
 // Timing Gen 3 - Text and Counter Module
-// Version 3.4.1
+// Version 3.5.0
 // Handles text rows and counter rows functionality
 
 class TimingGenTextCounter {

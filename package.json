@@ -1,6 +1,6 @@
 {
   "name": "timing-gen-3",
-  "version": "3.4.1",
+  "version": "3.5.0",
   "description": "Interactive Digital Logic Waveform Editor",
   "scripts": {
     "test": "playwright test",
