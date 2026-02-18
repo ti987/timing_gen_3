@@ -1009,21 +1009,34 @@ class TimingGenApp {
         // Add to data store
         this.signalsData.set(name, signal);
         
-        // Add to rows array - insert before AC tables to keep them at the bottom
+        // If this is a clock, check if we need to add a cycle-numbers row before it
+        let insertIndex = this.rows.length; // Default to end
+        
+        // Find where to insert (before AC tables)
         const acTableIndex = this.rows.findIndex(r => r.type === 'ac-table');
         if (acTableIndex >= 0) {
-            // Insert before the first AC table
-            this.rows.splice(acTableIndex, 0, {
-                type: 'signal',
-                name: name
-            });
-        } else {
-            // No AC table, add at end
-            this.rows.push({
-                type: 'signal',
-                name: name
-            });
+            insertIndex = acTableIndex;
         }
+        
+        // If this is a clock (2nd or later), add a cycle-numbers row first
+        if (type === 'clock') {
+            const existingClocks = this.getClockSignals();
+            if (existingClocks.length > 0) {
+                // This is the 2nd+ clock, insert a cycle-numbers row first
+                this.rows.splice(insertIndex, 0, {
+                    type: 'cycle-numbers',
+                    name: `cycle-numbers-${name}`,
+                    clockName: name
+                });
+                insertIndex++; // Adjust insert position for the signal itself
+            }
+        }
+        
+        // Add the signal row
+        this.rows.splice(insertIndex, 0, {
+            type: 'signal',
+            name: name
+        });
         
         TimingGenUI.hideAddSignalDialog();
         this.render();

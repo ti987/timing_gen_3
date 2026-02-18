@@ -46,6 +46,8 @@ class RowManager {
             return this.app.config.signalRowHeight;
         } else if (row.type === 'measure' || row.type === 'group') {
             return this.app.config.measureRowHeight;
+        } else if (row.type === 'cycle-numbers') {
+            return 40; // Fixed height for cycle number rows
         } else {
             // For text, counter, ac-table, use signal row height
             return this.app.config.signalRowHeight;

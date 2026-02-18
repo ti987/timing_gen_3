@@ -40,6 +40,10 @@ class TimingGenRendering {
                             TimingGenRendering.drawSignal(app, signal, signalIndex);
                         }
                     }
+                } else if (row.type === 'cycle-numbers') {
+                    // Draw cycle number row for non-primary clocks
+                    app.signalLayer.activate();
+                    TimingGenRendering.drawCycleNumberRow(app, row, rowIndex);
                 } else if (row.type === 'measure') {
                     // Draw measure - get data from Map
                     const measure = app.measuresData.get(row.name);
@@ -242,37 +246,67 @@ class TimingGenRendering {
         }
     }
     
+    static drawCycleNumberRow(app, row, rowIndex) {
+        // Draw a dedicated 40px row with cycle numbers for non-primary clocks
+        const yPos = app.rowManager.getRowYPosition(rowIndex);
+        const rowHeight = app.rowManager.getRowHeight(rowIndex);
+        
+        // Get the clock this row is for
+        const clockName = row.clockName;
+        const clock = app.signalsData.get(clockName);
+        if (!clock || clock.type !== 'clock') {
+            return; // Invalid clock reference
+        }
+        
+        // Get primary clock (first clock) to determine max cycles
+        const clocks = app.getClockSignals();
+        const primaryClock = clocks.length > 0 ? clocks[0] : null;
+        
+        // Calculate max cycles to render for this non-primary clock
+        let maxCycles = app.config.cycles;
+        if (primaryClock && primaryClock.name !== clockName) {
+            // Calculate primary clock's total time
+            const primaryPeriodNs = app.getCycleWidthForClock(primaryClock) / 6; // 1ns = 6px
+            const primaryTotalTime = primaryPeriodNs * app.config.cycles;
+            
+            // Calculate how many cycles of this clock fit in primary's time
+            const thisPeriodNs = app.getCycleWidthForClock(clock) / 6;
+            maxCycles = Math.floor(primaryTotalTime / thisPeriodNs);
+        }
+        
+        // Get cycle width for this clock's domain
+        const cycleWidth = app.getCycleWidthForClock(clock);
+        
+        // Draw cycle numbers centered in the 40px row
+        const numberYPos = yPos + rowHeight / 2 + 5; // Center vertically with slight offset for text
+        
+        for (let idx = 0; idx < maxCycles; idx++) {
+            const xPos = app.config.nameColumnWidth + idx * cycleWidth + cycleWidth / 2;
+            
+            const text = new paper.PointText({
+                point: [xPos, numberYPos],
+                content: idx.toString(),
+                fillColor: '#666666',  // Gray to distinguish from main header
+                fontFamily: 'Arial',
+                fontSize: 11,
+                justification: 'center'
+            });
+        }
+        
+        // Draw a subtle background to make the row visible
+        const bgRect = new paper.Path.Rectangle({
+            point: [0, yPos],
+            size: [app.config.nameColumnWidth + app.config.cycles * cycleWidth, rowHeight],
+            fillColor: '#f8f8f8'  // Very light gray background
+        });
+        bgRect.sendToBack();
+    }
+    
     static drawSignal(app, signal, index) {
         // Calculate Y position accounting for blank rows
         const yPos = TimingGenRendering.getSignalYPosition(app, index);
         const rowIndex = app.rowManager.signalIndexToRowIndex(index);
         const rowHeight = app.rowManager.getRowHeight(rowIndex);
-        
-        // Draw cycle numbers above 2nd+ clocks (not exported to SVG)
-        if (signal.type === 'clock' && !app.exportingSVG) {
-            // Check if this is the 2nd or later clock
-            const clocks = app.getClockSignals();
-            const clockIndex = clocks.findIndex(clk => clk.name === signal.name);
-            
-            if (clockIndex > 0) {
-                // Draw cycle numbers above this clock using its domain-specific cycle width
-                const cycleWidth = app.getCycleWidthForClock(signal);
-                const numberYPos = yPos - 15; // Position above the clock row
-                
-                for (let idx = 0; idx < app.config.cycles; idx++) {
-                    const xPos = app.config.nameColumnWidth + idx * cycleWidth + cycleWidth / 2;
-                    
-                    const text = new paper.PointText({
-                        point: [xPos, numberYPos],
-                        content: idx.toString(),
-                        fillColor: '#666666',  // Slightly gray to distinguish from main header
-                        fontFamily: 'Arial',
-                        fontSize: 10,
-                        justification: 'center'
-                    });
-                }
-            }
-        }
         
         // Draw selection highlight background if signal is selected
         if (app.selectedSignals.has(index)) {
@@ -310,6 +344,51 @@ class TimingGenRendering {
         }
     }
     
+    static getMaxCyclesForSignal(app, signal) {
+        // Calculate the maximum cycles to render for a signal
+        // Non-primary clocks and their domain signals are limited by primary clock's duration
+        
+        // Get all clocks
+        const clocks = app.getClockSignals();
+        if (clocks.length === 0) {
+            return app.config.cycles; // No clocks, use default
+        }
+        
+        const primaryClock = clocks[0];
+        
+        // If this is the primary clock or a signal in the primary domain, use full cycles
+        if (signal.type === 'clock' && signal.name === primaryClock.name) {
+            return app.config.cycles;
+        }
+        
+        // Check if this signal belongs to primary clock domain
+        if ((signal.type === 'bit' || signal.type === 'bus') && signal.base_clock === primaryClock.name) {
+            return app.config.cycles;
+        }
+        
+        // For non-primary clocks and their signals, calculate limited cycles
+        let targetClock;
+        if (signal.type === 'clock') {
+            targetClock = signal;
+        } else if (signal.base_clock) {
+            targetClock = app.signalsData.get(signal.base_clock);
+        }
+        
+        if (!targetClock || targetClock.name === primaryClock.name) {
+            return app.config.cycles; // Default to full cycles if can't determine
+        }
+        
+        // Calculate primary clock's total time
+        const primaryPeriodNs = app.getCycleWidthForClock(primaryClock) / 6; // 1ns = 6px
+        const primaryTotalTime = primaryPeriodNs * app.config.cycles;
+        
+        // Calculate how many cycles of target clock fit in primary's time
+        const targetPeriodNs = app.getCycleWidthForClock(targetClock) / 6;
+        const maxCycles = Math.floor(primaryTotalTime / targetPeriodNs);
+        
+        return maxCycles;
+    }
+    
     static drawClockWaveform(app, signal, baseY, rowHeight) {
        const highY = baseY + rowHeight/4;
        const lowY = baseY + rowHeight - rowHeight/4;
@@ -326,9 +405,12 @@ class TimingGenRendering {
         const phase = signal.phase !== undefined ? signal.phase : 0;
         const phaseDelay = phase * cycleWidth;
         
+        // Get max cycles for this signal (limited for non-primary clocks)
+        const maxCycles = TimingGenRendering.getMaxCyclesForSignal(app, signal);
+        
         let lastY = lowY; // Track the last Y position
         
-        for (let idx = 0; idx < app.config.cycles; idx++) {
+        for (let idx = 0; idx < maxCycles; idx++) {
             const x1 = app.config.nameColumnWidth + idx * cycleWidth + phaseDelay;
             const x2 = x1 + cycleWidth / 2;
             const x3 = x1 + cycleWidth;
@@ -544,22 +626,25 @@ class TimingGenRendering {
         // Get cycle width for this signal's clock domain
         const cycleWidth = app.getCycleWidthForSignal(signal);
         
+        // Get max cycles for this signal (limited for non-primary domains)
+        const maxCycles = TimingGenRendering.getMaxCyclesForSignal(app, signal);
+        
         // First, identify all X spans
         const xSpans = [];
         let idx = 0;
-        while (idx < app.config.cycles) {
+        while (idx < maxCycles) {
             const value = app.getBitValueAtCycle(signal, idx);
             if (value === 'X') {
                 const spanStart = idx;
                 let spanEnd = idx;
                 // Find the end of this X span
-                for (let jdx = idx + 1; jdx < app.config.cycles; jdx++) {
+                for (let jdx = idx + 1; jdx < maxCycles; jdx++) {
                     const nextValue = app.getBitValueAtCycle(signal, jdx);
                     if (nextValue !== 'X') {
                         spanEnd = jdx - 1;
                         break;
                     }
-                    if (jdx === app.config.cycles - 1) {
+                    if (jdx === maxCycles - 1) {
                         spanEnd = jdx;
                     }
                 }
@@ -579,7 +664,7 @@ class TimingGenRendering {
         let prevX = null;
         let prevY = null;
         
-        for (let idx = 0; idx <= app.config.cycles; idx++) {
+        for (let idx = 0; idx <= maxCycles; idx++) {
             // Get delay info object for this cycle (contains min, max, color)
             const delayInfo = idx < app.config.cycles && idx > 0 ?
                 app.getEffectiveDelay(signal, idx) : { min: 0, max: 0, color: app.config.delayColor };
