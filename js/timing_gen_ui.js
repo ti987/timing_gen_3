@@ -66,6 +66,7 @@ class TimingGenUI {
         document.getElementById('delay-min-input').value = app.config.delayMin;
         document.getElementById('delay-max-input').value = app.config.delayMax;
         document.getElementById('delay-color-input').value = app.config.delayColor;
+        document.getElementById('show-cycle-numbers-checkbox').checked = app.config.showCycleNumbers;
         
         // Update delay unit labels to match clock period unit
         document.getElementById('delay-min-unit-label').textContent = app.config.clockPeriodUnit;
@@ -88,6 +89,7 @@ class TimingGenUI {
         const delayMin = parseFloat(document.getElementById('delay-min-input').value);
         const delayMax = parseFloat(document.getElementById('delay-max-input').value);
         const delayColor = document.getElementById('delay-color-input').value;
+        const showCycleNumbers = document.getElementById('show-cycle-numbers-checkbox').checked;
         
         if (isNaN(clockPeriod) || clockPeriod <= 0) {
             alert('Please enter a valid clock period');
@@ -133,6 +135,7 @@ class TimingGenUI {
         app.config.delayMin = delayMin;
         app.config.delayMax = delayMax;
         app.config.delayColor = delayColor;
+        app.config.showCycleNumbers = showCycleNumbers;
         
         // Update delay unit labels in other dialogs
         document.getElementById('signal-delay-min-unit-label').textContent = clockPeriodUnit;

@@ -42,7 +42,8 @@ class TimingGenApp {
             delayColor: '#0000FF', // color for delay uncertainty region (default: blue)
             gridColor: '#e0e0e0',
             signalColor: '#000000',
-            backgroundColor: '#ffffff'
+            backgroundColor: '#ffffff',
+            showCycleNumbers: true // show cycle number rows for non-primary clocks
         };
         
         // Data model v3.4.0 - Extended with AC Table tool and Group row type

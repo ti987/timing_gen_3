@@ -251,6 +251,18 @@ class TimingGenRendering {
         const yPos = app.rowManager.getRowYPosition(rowIndex);
         const rowHeight = app.rowManager.getRowHeight(rowIndex);
         
+        // Check if cycle numbers should be shown
+        if (!app.config.showCycleNumbers) {
+            // Draw a subtle background only to maintain row spacing
+            const bgRect = new paper.Path.Rectangle({
+                point: [0, yPos],
+                size: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, rowHeight],
+                fillColor: '#f8f8f8'  // Very light gray background
+            });
+            bgRect.sendToBack();
+            return; // Don't draw the numbers
+        }
+        
         // Get the clock this row is for
         const clockName = row.clockName;
         const clock = app.signalsData.get(clockName);
@@ -826,9 +838,12 @@ class TimingGenRendering {
         // Get cycle width for this signal's clock domain
         const cycleWidth = app.getCycleWidthForSignal(signal);
         
+        // Get max cycles for this signal (limited for non-primary domains)
+        const maxCycles = TimingGenRendering.getMaxCyclesForSignal(app, signal);
+        
         // First pass: identify value spans with their cycles
         let idx = 0;
-        while (idx < app.config.cycles) {
+        while (idx < maxCycles) {
             const value = app.getBusValueAtCycle(signal, idx);
             
             // Find where this value span starts and ends
@@ -836,18 +851,18 @@ class TimingGenRendering {
             let spanEnd = idx;
             
             // Find the end of this value span
-            for (let jdx = idx + 1; jdx < app.config.cycles; jdx++) {
+            for (let jdx = idx + 1; jdx < maxCycles; jdx++) {
                 if (signal.values[jdx] !== undefined) {
                     spanEnd = jdx - 1;
                     break;
                 }
-                if (jdx === app.config.cycles - 1) {
+                if (jdx === maxCycles - 1) {
                     spanEnd = jdx;
                 }
             }
             
-            if (spanEnd === idx && idx < app.config.cycles - 1 && signal.values[idx + 1] === undefined) {
-                spanEnd = app.config.cycles - 1;
+            if (spanEnd === idx && idx < maxCycles - 1 && signal.values[idx + 1] === undefined) {
+                spanEnd = maxCycles - 1;
             }
             
             // Get delay info object for this cycle (contains min, max, color)
@@ -868,7 +883,7 @@ class TimingGenRendering {
             const x1 = baseX1; // + delayInfo.min; // Actual transition point (minimum delay)
 
             // obtain how far in next cycle has been drawn here
-            const nextDelay = spanEnd + 1 < app.config.cycles ? app.getEffectiveDelay(signal, spanEnd + 1) : {min:0,max:0, color:"black"};
+            const nextDelay = spanEnd + 1 < maxCycles ? app.getEffectiveDelay(signal, spanEnd + 1) : {min:0,max:0, color:"black"};
             const x2 = app.config.nameColumnWidth + (spanEnd + 1) * cycleWidth + nextDelay.min;
 
             
