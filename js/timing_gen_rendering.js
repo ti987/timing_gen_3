@@ -420,6 +420,18 @@ class TimingGenRendering {
         return maxCycles;
     }
     
+    static getPrimaryClockMaxX(app) {
+        // Get the max X position based on primary clock's width
+        const clocks = app.getClockSignals();
+        if (clocks.length === 0) {
+            return app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth;
+        }
+        
+        const primaryClock = clocks[0];
+        const primaryCycleWidth = app.getCycleWidthForClock(primaryClock);
+        return app.config.nameColumnWidth + app.config.cycles * primaryCycleWidth;
+    }
+    
     static drawClockWaveform(app, signal, baseY, rowHeight) {
        const highY = baseY + rowHeight/4;
        const lowY = baseY + rowHeight - rowHeight/4;
@@ -439,12 +451,20 @@ class TimingGenRendering {
         // Get max cycles for this signal (limited for non-primary clocks)
         const maxCycles = TimingGenRendering.getMaxCyclesForSignal(app, signal);
         
+        // Get primary clock's max X for clipping
+        const primaryMaxX = TimingGenRendering.getPrimaryClockMaxX(app);
+        
         let lastY = lowY; // Track the last Y position
         
         for (let idx = 0; idx < maxCycles; idx++) {
             const x1 = app.config.nameColumnWidth + idx * cycleWidth + phaseDelay;
             const x2 = x1 + cycleWidth / 2;
-            const x3 = x1 + cycleWidth;
+            let x3 = x1 + cycleWidth;
+            
+            // Clip x3 to primary clock's boundary
+            if (x3 > primaryMaxX) {
+                x3 = primaryMaxX;
+            }
             
             // Check if this cycle is disabled
             const isDisabled = signal.cycleOptions && 
@@ -492,12 +512,20 @@ class TimingGenRendering {
                 
                 // Rising edge
                 path.lineTo(new paper.Point(x1, highY));
-                path.lineTo(new paper.Point(x2, highY));
                 
-                // Falling edge at middle of cycle
-                path.lineTo(new paper.Point(x2, lowY));
-                path.lineTo(new paper.Point(x3, lowY));
-                lastY = lowY;
+                // Only draw to x2 if it's within bounds
+                if (x2 <= primaryMaxX) {
+                    path.lineTo(new paper.Point(x2, highY));
+                    
+                    // Falling edge at middle of cycle
+                    path.lineTo(new paper.Point(x2, lowY));
+                    path.lineTo(new paper.Point(x3, lowY));
+                    lastY = lowY;
+                } else {
+                    // Clip at primary boundary
+                    path.lineTo(new paper.Point(primaryMaxX, highY));
+                    break; // Stop drawing
+                }
             }
         }
     }
