@@ -231,9 +231,14 @@ class TimingGenRendering {
     }
     
     static drawHeader(app) {
+        // Skip header during SVG export
+        if (app.exportingSVG) {
+            return;
+        }
+        
         for (let idx = 0; idx < app.config.cycles; idx++) {
             const xPos = app.config.nameColumnWidth + idx * app.config.cycleWidth + app.config.cycleWidth / 2;
-            const yPos = 30;
+            const yPos = 15; // Adjusted for 20px header height
             
             const text = new paper.PointText({
                 point: [xPos, yPos],
@@ -247,21 +252,14 @@ class TimingGenRendering {
     }
     
     static drawCycleNumberRow(app, row, rowIndex) {
-        // Draw a dedicated 40px row with cycle numbers for non-primary clocks
+        // Skip cycle number rows during SVG export
+        if (app.exportingSVG) {
+            return;
+        }
+        
+        // Draw a dedicated 20px row with cycle numbers for non-primary clocks
         const yPos = app.rowManager.getRowYPosition(rowIndex);
         const rowHeight = app.rowManager.getRowHeight(rowIndex);
-        
-        // Check if cycle numbers should be shown
-        if (!app.config.showCycleNumbers) {
-            // Draw a subtle background only to maintain row spacing
-            const bgRect = new paper.Path.Rectangle({
-                point: [0, yPos],
-                size: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, rowHeight],
-                fillColor: '#f8f8f8'  // Very light gray background
-            });
-            bgRect.sendToBack();
-            return; // Don't draw the numbers
-        }
         
         // Get the clock this row is for
         const clockName = row.clockName;
@@ -289,29 +287,50 @@ class TimingGenRendering {
         // Get cycle width for this clock's domain
         const cycleWidth = app.getCycleWidthForClock(clock);
         
-        // Draw cycle numbers centered in the 40px row
-        const numberYPos = yPos + rowHeight / 2 + 5; // Center vertically with slight offset for text
+        // Calculate the max X position for this domain (to primary clock's end)
+        const primaryMaxX = app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth;
+        
+        // Draw white background for the row
+        const bgRect = new paper.Path.Rectangle({
+            point: [0, yPos],
+            size: [primaryMaxX, rowHeight],
+            fillColor: '#ffffff'  // White background
+        });
+        bgRect.sendToBack();
+        
+        // Draw cycle numbers centered in the 20px row
+        const numberYPos = yPos + rowHeight / 2 + 4; // Center vertically with slight offset for text
         
         for (let idx = 0; idx < maxCycles; idx++) {
             const xPos = app.config.nameColumnWidth + idx * cycleWidth + cycleWidth / 2;
             
-            const text = new paper.PointText({
-                point: [xPos, numberYPos],
-                content: idx.toString(),
-                fillColor: '#666666',  // Gray to distinguish from main header
-                fontFamily: 'Arial',
-                fontSize: 11,
-                justification: 'center'
-            });
+            // Only draw if within primary clock's bounds
+            if (xPos <= primaryMaxX) {
+                const text = new paper.PointText({
+                    point: [xPos, numberYPos],
+                    content: idx.toString(),
+                    fillColor: '#666666',  // Gray to distinguish from main header
+                    fontFamily: 'Arial',
+                    fontSize: 11,
+                    justification: 'center'
+                });
+            }
         }
         
-        // Draw a subtle background to make the row visible
-        const bgRect = new paper.Path.Rectangle({
-            point: [0, yPos],
-            size: [app.config.nameColumnWidth + app.config.cycles * cycleWidth, rowHeight],
-            fillColor: '#f8f8f8'  // Very light gray background
-        });
-        bgRect.sendToBack();
+        // Draw vertical grid lines for this cycle number row
+        for (let idx = 0; idx <= maxCycles; idx++) {
+            const xPos = app.config.nameColumnWidth + idx * cycleWidth;
+            
+            // Only draw if within primary clock's bounds
+            if (xPos <= primaryMaxX) {
+                const line = new paper.Path.Line({
+                    from: [xPos, yPos],
+                    to: [xPos, yPos + rowHeight],
+                    strokeColor: app.config.gridColor,
+                    strokeWidth: 1
+                });
+            }
+        }
     }
     
     static drawSignal(app, signal, index) {

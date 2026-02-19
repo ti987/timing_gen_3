@@ -42,8 +42,7 @@ class TimingGenApp {
             delayColor: '#0000FF', // color for delay uncertainty region (default: blue)
             gridColor: '#e0e0e0',
             signalColor: '#000000',
-            backgroundColor: '#ffffff',
-            showCycleNumbers: true // show cycle number rows for non-primary clocks
+            backgroundColor: '#ffffff'
         };
         
         // Data model v3.4.0 - Extended with AC Table tool and Group row type
@@ -330,6 +329,18 @@ class TimingGenApp {
         document.getElementById('cancel-arrow-text-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Signal name context menu
+        document.getElementById('edit-signal-name-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            TimingGenUI.showEditSignalDialog(this);
+        });
+        document.getElementById('signal-options-name-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            TimingGenUI.showSignalOptionsDialog(this);
+        });
+        document.getElementById('delete-signal-name-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            this.deleteSignal();
+        });
         document.getElementById('font-signal-name-menu').addEventListener('click', () => this.showSignalNameFontDialog());
         document.getElementById('cancel-signal-name-menu').addEventListener('click', () => this.hideAllMenus());
         
@@ -1776,8 +1787,8 @@ class TimingGenApp {
                     // Right-click on text row name column - show delete/cancel menu
                     this.currentEditingText = row.name;
                     TimingGenUI.showContextMenu('text-row-name-context-menu', ev.clientX, ev.clientY);
-                } else if (row.type === 'measure') {
-                    // Right-click on measure row name column - show delete/cancel menu
+                } else if (row.type === 'measure' || row.type === 'group') {
+                    // Right-click on measure/group row name column - show delete/cancel menu
                     this.currentEditingMeasureRow = row.index;
                     TimingGenUI.showContextMenu('measure-row-name-context-menu', ev.clientX, ev.clientY);
                 }
