@@ -1,5 +1,5 @@
 // Timing Gen 3 - Tear Marks Module
-// Version 3.4.1
+// Version 3.5.0
 // Handles tear mark functionality for cycle visualization
 
 class TimingGenTear {

@@ -1,5 +1,5 @@
 // Timing Gen 3 - Measure Tool Module
-// Version 3.4.1
+// Version 3.5.0
 // Handles measure functionality for timing measurements
 
 class TimingGenMeasure {
@@ -36,16 +36,20 @@ class TimingGenMeasure {
     }
     
     /**
-     * Get cycle number at X position
+     * Get cycle number at X position for a specific signal
      * @param {TimingGenApp} app - Main application instance
      * @param {number} xPos - X position in canvas coordinates
+     * @param {Object} signal - Signal object to determine domain cycle width
      * @returns {number|null} Cycle number or null if outside bounds
      */
-    static getCycleAtX(app, xPos) {
+    static getCycleAtX(app, xPos, signal) {
         const relativeX = xPos - app.config.nameColumnWidth;
         if (relativeX < 0) return null;
         
-        const cycle = Math.round(relativeX / app.config.cycleWidth);
+        // Use signal-specific cycle width if signal is provided
+        const cycleWidth = signal ? app.getCycleWidthForSignal(signal) : app.config.cycleWidth;
+        
+        const cycle = Math.round(relativeX / cycleWidth);
         if (cycle < 0 || cycle > app.config.cycles) {
             return null;
         }
@@ -114,12 +118,15 @@ class TimingGenMeasure {
             return app.config.nameColumnWidth + absCycle * app.config.cycleWidth;
         }
         
+        // Get domain-specific cycle width for this signal
+        const cycleWidth = app.getCycleWidthForSignal(signal);
+        
         if (signal.type === 'clock' && cycle < 0) {
             const absCycle = Math.abs(cycle + 1);
-            return app.config.nameColumnWidth + absCycle * app.config.cycleWidth + app.config.cycleWidth / 2;
+            return app.config.nameColumnWidth + absCycle * cycleWidth + cycleWidth / 2;
         }
         
-        const baseX = app.config.nameColumnWidth + cycle * app.config.cycleWidth;
+        const baseX = app.config.nameColumnWidth + cycle * cycleWidth;
         
         if (signal.type === 'clock') {
             return baseX;
@@ -167,17 +174,17 @@ class TimingGenMeasure {
         
         const signalIndex = app.getSignalIndexAtY(yPos);
         if (signalIndex === -1 || signalIndex >= signals.length) {
-            const cycle = TimingGenMeasure.getCycleAtX(app, xPos);
+            const cycle = TimingGenMeasure.getCycleAtX(app, xPos, null);
             return { signalIndex: 0, cycle: cycle !== null ? cycle : 0 };
         }
         
         const signal = app.getSignalByIndex(signalIndex);
         if (!signal) {
-            const cycle = TimingGenMeasure.getCycleAtX(app, xPos);
+            const cycle = TimingGenMeasure.getCycleAtX(app, xPos, null);
             return { signalIndex: 0, cycle: cycle !== null ? cycle : 0 };
         }
         
-        const clickedCycle = TimingGenMeasure.getCycleAtX(app, xPos);
+        const clickedCycle = TimingGenMeasure.getCycleAtX(app, xPos, signal);
         if (clickedCycle === null) {
             return { signalIndex, cycle: 0 };
         }
@@ -280,18 +287,19 @@ class TimingGenMeasure {
         
         const signalIndex = app.getSignalIndexAtY(yPos);
         if (signalIndex === -1 || signalIndex >= signals.length) {
-            const cycle = TimingGenMeasure.getCycleAtX(app, xPos);
+            const cycle = TimingGenMeasure.getCycleAtX(app, xPos, null);
             return { signalIndex: 0, cycle: cycle !== null ? cycle : 0 };
         }
         
         const signal = app.getSignalByIndex(signalIndex);
         if (!signal) {
-            const cycle = TimingGenMeasure.getCycleAtX(app, xPos);
+            const cycle = TimingGenMeasure.getCycleAtX(app, xPos, null);
             return { signalIndex: 0, cycle: cycle !== null ? cycle : 0 };
         }
         
         const relativeX = xPos - app.config.nameColumnWidth;
-        const nearestCycle = Math.round(relativeX / app.config.cycleWidth);
+        const cycleWidth = app.getCycleWidthForSignal(signal);
+        const nearestCycle = Math.round(relativeX / cycleWidth);
         const cycle = Math.max(0, Math.min(app.config.cycles, nearestCycle));
         
         return { signalIndex, cycle };

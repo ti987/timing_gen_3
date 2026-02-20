@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<!-- Version 3.4.1 -->
+<!-- Version 3.5.0 -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -69,6 +69,29 @@
                 <option value="bus">Bus</option>
             </select>
             <br><br>
+            <div id="clock-options-container" style="display: none;">
+                <label>Period:</label>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <input type="number" id="signal-period-input" min="0.001" step="0.001" value="10" style="flex: 1;">
+                    <select id="signal-period-unit-input" style="flex: 0 0 80px;">
+                        <option value="fs">fs</option>
+                        <option value="ps">ps</option>
+                        <option value="ns" selected>ns</option>
+                        <option value="us">us</option>
+                        <option value="ms">ms</option>
+                    </select>
+                </div>
+                <label>Phase (0.0 - 1.0):</label>
+                <input type="number" id="signal-phase-input" min="0" max="1" step="0.01" value="0" style="width: 100%;">
+                <br><br>
+            </div>
+            <div id="signal-clock-domain-container" style="display: none;">
+                <label>Clock Domain:</label>
+                <select id="signal-clock-domain-input" style="width: 100%;">
+                    <option value="">-- Select Clock --</option>
+                </select>
+                <br><br>
+            </div>
             <button id="dialog-ok-btn" class="dialog-btn">OK</button>
             <button id="dialog-cancel-btn" class="dialog-btn">Cancel</button>
         </div>
@@ -116,6 +139,9 @@
 
     <!-- Context Menu for Signal Name -->
     <div id="signal-name-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="edit-signal-name-menu">Edit</div>
+        <div class="menu-item" id="signal-options-name-menu">Options</div>
+        <div class="menu-item" id="delete-signal-name-menu">Delete</div>
         <div class="menu-item" id="font-signal-name-menu">Font</div>
         <div class="menu-item" id="cancel-signal-name-menu">Cancel</div>
     </div>
@@ -139,6 +165,24 @@
         <div class="menu-item" id="insert-cycles-bit-menu">Insert Cycles</div>
         <div class="menu-item" id="delete-cycles-bit-menu">Delete Cycles</div>
         <div class="menu-item" id="cancel-bit-cycle-menu">Cancel</div>
+    </div>
+
+    <!-- Context Menu for Clock Signal Cycle -->
+    <div id="clock-cycle-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="disable-clock-cycle-menu">Disable</div>
+        <div class="menu-item" id="enable-clock-cycle-menu">Enable</div>
+        <div class="menu-item submenu">
+            <span>Disable State</span>
+            <div class="submenu-content">
+                <div class="menu-item" data-disable-state="0">0 (Low)</div>
+                <div class="menu-item" data-disable-state="1">1 (High)</div>
+                <div class="menu-item" data-disable-state="Z">Z (High-Z)</div>
+            </div>
+        </div>
+        <div class="menu-item" id="clock-cycle-options-menu">Cycle Options</div>
+        <div class="menu-item" id="insert-cycles-clock-menu">Insert Cycles</div>
+        <div class="menu-item" id="delete-cycles-clock-menu">Delete Cycles</div>
+        <div class="menu-item" id="cancel-clock-cycle-menu">Cancel</div>
     </div>
 
     <!-- Context Menu for Bus Signal Cycle -->
@@ -226,6 +270,32 @@
     <div id="signal-options-dialog" class="dialog" style="display: none;">
         <div class="dialog-content" style="min-width: 400px;">
             <h3>Signal Options</h3>
+            
+            <div id="signal-options-clock-container" style="display: none;">
+                <label>Period:</label>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <input type="number" id="signal-period-option-input" min="0.001" step="0.001" value="10" style="flex: 1;">
+                    <select id="signal-period-unit-option-input" style="flex: 0 0 80px;">
+                        <option value="fs">fs</option>
+                        <option value="ps">ps</option>
+                        <option value="ns" selected>ns</option>
+                        <option value="us">us</option>
+                        <option value="ms">ms</option>
+                    </select>
+                </div>
+                
+                <label>Phase (0.0 - 1.0):</label>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                    <input type="number" id="signal-phase-option-input" min="0" max="1" step="0.01" value="0" style="flex: 1;">
+                </div>
+            </div>
+            
+            <div id="signal-options-domain-container" style="display: none;">
+                <label>Clock Domain:</label>
+                <select id="signal-clock-domain-option-input" style="width: 100%; margin-bottom: 15px;">
+                    <option value="">-- Select Clock --</option>
+                </select>
+            </div>
             
             <label>Slew (transition pixels):</label>
             <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
@@ -365,6 +435,11 @@
             <label>Start Cycle:</label>
             <input type="number" id="counter-start-cycle-input" value="0" min="0">
             <br><br>
+            <label>Clock Domain:</label>
+            <select id="counter-clock-domain-input" style="width: 100%;">
+                <option value="">-- Select Clock --</option>
+            </select>
+            <br><br>
             <button id="counter-dialog-ok-btn" class="dialog-btn">OK</button>
             <button id="counter-dialog-cancel-btn" class="dialog-btn">Cancel</button>
         </div>
@@ -379,6 +454,19 @@
             <br><br>
             <button id="edit-counter-ok-btn" class="dialog-btn">OK</button>
             <button id="edit-counter-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+    
+    <!-- Counter Options Dialog -->
+    <div id="counter-options-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content">
+            <h3>Counter Options</h3>
+            <label>Clock Domain:</label>
+            <select id="counter-domain-option-input" style="width: 100%; margin-bottom: 15px;">
+                <option value="">-- Select Clock --</option>
+            </select>
+            <button id="counter-options-ok-btn" class="dialog-btn">OK</button>
+            <button id="counter-options-cancel-btn" class="dialog-btn">Cancel</button>
         </div>
     </div>
 
@@ -537,7 +625,14 @@
         <div class="menu-item" id="cancel-text-row-menu">Cancel</div>
     </div>
 
-    <!-- Context Menu for Counter Cycle -->
+    <!-- Context Menu for Counter Row Name -->
+    <div id="counter-name-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="counter-options-menu">Options</div>
+        <div class="menu-item" id="delete-counter-menu">Delete</div>
+        <div class="menu-item" id="cancel-counter-name-menu">Cancel</div>
+    </div>
+    
+    <!-- Context Menu for Counter Cycle (existing) -->
     <div id="counter-cycle-context-menu" class="context-menu" style="display: none;">
         <div class="menu-item" id="continue-counter-menu">Continue</div>
         <div class="menu-item" id="restart-counter-menu">Restart Value</div>

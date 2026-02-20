@@ -1,5 +1,5 @@
 // Timing Gen 3 - Interactive Digital Logic Waveform Editor
-// Version 3.4.1
+// Version 3.5.0
 // Main JavaScript Application using Paper.js
 //
 // Key Features:
@@ -262,12 +262,16 @@ class TimingGenApp {
         document.getElementById('color-cancel-btn').addEventListener('click', () => this.hideColorDialog());
         
         // Counter row dialog
-        document.getElementById('counter-dialog-ok-btn').addEventListener('click', () => this.addCounterRow());
+        document.getElementById('counter-dialog-ok-btn').addEventListener('click', () => TimingGenTextCounter.addCounterRow(this));
         document.getElementById('counter-dialog-cancel-btn').addEventListener('click', () => this.hideAddCounterDialog());
         
         // Edit counter dialog
         document.getElementById('edit-counter-ok-btn').addEventListener('click', () => this.updateCounterValue());
         document.getElementById('edit-counter-cancel-btn').addEventListener('click', () => this.hideEditCounterDialog());
+        
+        // Counter options dialog
+        document.getElementById('counter-options-ok-btn').addEventListener('click', () => TimingGenTextCounter.saveCounterOptions(this));
+        document.getElementById('counter-options-cancel-btn').addEventListener('click', () => TimingGenTextCounter.hideCounterOptionsDialog(this));
         
         // AC Table dialog
         document.getElementById('ac-table-dialog-ok-btn').addEventListener('click', () => this.addACTable());
@@ -325,6 +329,18 @@ class TimingGenApp {
         document.getElementById('cancel-arrow-text-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Signal name context menu
+        document.getElementById('edit-signal-name-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            TimingGenUI.showEditSignalDialog(this);
+        });
+        document.getElementById('signal-options-name-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            TimingGenUI.showSignalOptionsDialog(this);
+        });
+        document.getElementById('delete-signal-name-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            this.deleteSignal();
+        });
         document.getElementById('font-signal-name-menu').addEventListener('click', () => this.showSignalNameFontDialog());
         document.getElementById('cancel-signal-name-menu').addEventListener('click', () => this.hideAllMenus());
         
@@ -362,11 +378,36 @@ class TimingGenApp {
         document.getElementById('blank-counter-menu').addEventListener('click', () => this.blankCounter());
         document.getElementById('cancel-counter-cycle-menu').addEventListener('click', () => this.hideAllMenus());
         
+        // Counter name context menu handlers
+        document.getElementById('counter-options-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            if (this.currentEditingCounterName) {
+                TimingGenTextCounter.showCounterOptionsDialog(this, this.currentEditingCounterName);
+            }
+        });
+        document.getElementById('delete-counter-menu').addEventListener('click', () => this.deleteCounter());
+        document.getElementById('cancel-counter-name-menu').addEventListener('click', () => this.hideAllMenus());
+        
         // Measure row name context menu
         document.getElementById('delete-measure-row-menu').addEventListener('click', () => this.deleteMeasureRow());
         document.getElementById('cancel-measure-row-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Add signal dialog
+        // Add signal dialog
+        document.getElementById('signal-type-select').addEventListener('change', function() {
+            const clockOptionsContainer = document.getElementById('clock-options-container');
+            const clockDomainContainer = document.getElementById('signal-clock-domain-container');
+            
+            if (this.value === 'clock') {
+                clockOptionsContainer.style.display = 'block';
+                clockDomainContainer.style.display = 'none';
+            } else {
+                // Bit or Bus signals need clock domain selection
+                clockOptionsContainer.style.display = 'none';
+                clockDomainContainer.style.display = 'block';
+            }
+        });
+        
         document.getElementById('dialog-ok-btn').addEventListener('click', () => this.addSignal());
         document.getElementById('dialog-cancel-btn').addEventListener('click', () => TimingGenUI.hideAddSignalDialog());
         
@@ -443,6 +484,25 @@ class TimingGenApp {
             TimingGenUI.showDeleteCyclesDialog(this);
         });
         document.getElementById('cancel-bit-cycle-menu').addEventListener('click', () => this.hideAllMenus());
+        
+        // Clock cycle context menu handlers
+        document.getElementById('disable-clock-cycle-menu').addEventListener('click', () => this.disableClockCycle());
+        document.getElementById('enable-clock-cycle-menu').addEventListener('click', () => this.enableClockCycle());
+        document.getElementById('clock-cycle-options-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            TimingGenUI.showCycleOptionsDialog(this);
+        });
+        document.getElementById('insert-cycles-clock-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            this.insertCycleMode = 'signal';
+            TimingGenUI.showInsertCyclesDialog(this);
+        });
+        document.getElementById('delete-cycles-clock-menu').addEventListener('click', () => {
+            this.hideAllMenus();
+            this.deleteCycleMode = 'signal';
+            TimingGenUI.showDeleteCyclesDialog(this);
+        });
+        document.getElementById('cancel-clock-cycle-menu').addEventListener('click', () => this.hideAllMenus());
         
         // Cycle context menu handlers (for cycle header)
         document.getElementById('insert-cycles-global-menu').addEventListener('click', () => {
@@ -597,10 +657,12 @@ class TimingGenApp {
         document.getElementById('text-context-menu').style.display = 'none';
         document.getElementById('text-row-name-context-menu').style.display = 'none';
         document.getElementById('counter-cycle-context-menu').style.display = 'none';
+        document.getElementById('counter-name-context-menu').style.display = 'none';
         document.getElementById('measure-row-name-context-menu').style.display = 'none';
         document.getElementById('ac-cell-context-menu').style.display = 'none';
         document.getElementById('ac-param-context-menu').style.display = 'none';
         document.getElementById('ac-table-context-menu').style.display = 'none';
+        document.getElementById('clock-cycle-context-menu').style.display = 'none';
         
         // Clear editing state to prevent stale references
         // Note: Don't clear everything as some dialogs might still need the state
@@ -909,12 +971,40 @@ class TimingGenApp {
             values: {}
         };
         
+        // Add period and phase for clock signals
+        if (type === 'clock') {
+            // Capture period
+            const periodValue = parseFloat(document.getElementById('signal-period-input').value);
+            const periodUnit = document.getElementById('signal-period-unit-input').value;
+            if (isNaN(periodValue) || periodValue <= 0) {
+                alert('Please enter a valid period value greater than 0');
+                return;
+            }
+            signal.period = periodValue;
+            signal.periodUnit = periodUnit;
+            
+            // Capture phase
+            const phaseValue = parseFloat(document.getElementById('signal-phase-input').value);
+            if (isNaN(phaseValue) || phaseValue < 0 || phaseValue > 1) {
+                alert('Please enter a valid phase value between 0.0 and 1.0');
+                return;
+            }
+            signal.phase = phaseValue;
+        }
+        
         // Add base_clock for bit and bus signals
         if (type === 'bit' || type === 'bus') {
-            // Find the first clock signal, or use 'clk' as default
-            const signals = this.getSignals();
-            const clockSignal = signals.find(sg => sg.type === 'clock');
-            signal.base_clock = clockSignal ? clockSignal.name : 'clk';
+            // Get selected clock from dropdown
+            const selectedClock = document.getElementById('signal-clock-domain-input').value;
+            
+            if (selectedClock) {
+                signal.base_clock = selectedClock;
+            } else {
+                // Find the first clock signal, or use 'clk' as default
+                const signals = this.getSignals();
+                const clockSignal = signals.find(sg => sg.type === 'clock');
+                signal.base_clock = clockSignal ? clockSignal.name : 'clk';
+            }
         }
         
         // Initialize default values
@@ -931,21 +1021,34 @@ class TimingGenApp {
         // Add to data store
         this.signalsData.set(name, signal);
         
-        // Add to rows array - insert before AC tables to keep them at the bottom
+        // If this is a clock, check if we need to add a cycle-numbers row before it
+        let insertIndex = this.rows.length; // Default to end
+        
+        // Find where to insert (before AC tables)
         const acTableIndex = this.rows.findIndex(r => r.type === 'ac-table');
         if (acTableIndex >= 0) {
-            // Insert before the first AC table
-            this.rows.splice(acTableIndex, 0, {
-                type: 'signal',
-                name: name
-            });
-        } else {
-            // No AC table, add at end
-            this.rows.push({
-                type: 'signal',
-                name: name
-            });
+            insertIndex = acTableIndex;
         }
+        
+        // If this is a clock (2nd or later), add a cycle-numbers row first
+        if (type === 'clock') {
+            const existingClocks = this.getClockSignals();
+            if (existingClocks.length > 0) {
+                // This is the 2nd+ clock, insert a cycle-numbers row first
+                this.rows.splice(insertIndex, 0, {
+                    type: 'cycle-numbers',
+                    name: `cycle-numbers-${name}`,
+                    clockName: name
+                });
+                insertIndex++; // Adjust insert position for the signal itself
+            }
+        }
+        
+        // Add the signal row
+        this.rows.splice(insertIndex, 0, {
+            type: 'signal',
+            name: name
+        });
         
         TimingGenUI.hideAddSignalDialog();
         this.render();
@@ -1588,7 +1691,16 @@ class TimingGenApp {
                 }
             } else if (clickedRow && clickedRow.type === 'counter') {
                 // Left-click on counter to edit value at this cycle
-                const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
+                const counterData = this.counterData.get(clickedRow.name);
+                // Use domain-specific cycle width if counter has base_clock
+                let cycleWidth = this.config.cycleWidth;
+                if (counterData && counterData.base_clock) {
+                    const clock = this.signalsData.get(counterData.base_clock);
+                    if (clock) {
+                        cycleWidth = this.getCycleWidthForClock(clock);
+                    }
+                }
+                const cycle = Math.floor((xPos - this.config.nameColumnWidth) / cycleWidth);
                 if (cycle >= 0 && cycle < this.config.cycles) {
                     this.showEditCounterDialog(clickedRow.name, cycle);
                     return;
@@ -1597,16 +1709,20 @@ class TimingGenApp {
         }
         
         // Check signal interaction - clear selection if clicking waveform
-        const cycle = Math.floor((xPos - this.config.nameColumnWidth) / this.config.cycleWidth);
         const signalIndex = this.getSignalIndexAtY(yPos);
         
-        if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
+        if (signalIndex !== -1) {
             const signal = this.getSignalByIndex(signalIndex);
+            // Use domain-specific cycle width for accurate click detection
+            const cycleWidth = this.getCycleWidthForSignal(signal);
+            const cycle = Math.floor((xPos - this.config.nameColumnWidth) / cycleWidth);
             
-            if (signal.type === 'bit') {
-                this.toggleBitSignal(signalIndex, cycle);
-            } else if (signal.type === 'bus') {
-                TimingGenUI.showBusValueDialog(this, signalIndex, cycle);
+            if (cycle >= 0 && cycle < this.config.cycles) {
+                if (signal.type === 'bit') {
+                    this.toggleBitSignal(signalIndex, cycle);
+                } else if (signal.type === 'bus') {
+                    TimingGenUI.showBusValueDialog(this, signalIndex, cycle);
+                }
             }
         }
     }
@@ -1659,14 +1775,20 @@ class TimingGenApp {
                     const signalIndex = this.getSignalIndexAtY(paperY);
                     if (signalIndex !== -1) {
                         this.currentEditingSignal = signalIndex;
-                        TimingGenUI.showContextMenu('signal-context-menu', ev.clientX, ev.clientY);
+                        const signal = this.getSignalByIndex(signalIndex);
+                        this.currentEditingSignalName = signal.name;
+                        TimingGenUI.showContextMenu('signal-name-context-menu', ev.clientX, ev.clientY);
                     }
+                } else if (row.type === 'counter') {
+                    // Right-click on counter row name column - show counter name context menu
+                    this.currentEditingCounterName = row.name;
+                    TimingGenUI.showContextMenu('counter-name-context-menu', ev.clientX, ev.clientY);
                 } else if (row.type === 'text') {
                     // Right-click on text row name column - show delete/cancel menu
                     this.currentEditingText = row.name;
                     TimingGenUI.showContextMenu('text-row-name-context-menu', ev.clientX, ev.clientY);
-                } else if (row.type === 'measure') {
-                    // Right-click on measure row name column - show delete/cancel menu
+                } else if (row.type === 'measure' || row.type === 'group') {
+                    // Right-click on measure/group row name column - show delete/cancel menu
                     this.currentEditingMeasureRow = row.index;
                     TimingGenUI.showContextMenu('measure-row-name-context-menu', ev.clientX, ev.clientY);
                 }
@@ -1675,7 +1797,6 @@ class TimingGenApp {
         }
         
         // Check if right-click is in waveform area
-        const cycle = Math.floor((paperX - this.config.nameColumnWidth) / this.config.cycleWidth);
         const row = this.getRowAtY(paperY);
         
         // First check for arrow elements (they overlay signals)
@@ -1824,6 +1945,16 @@ class TimingGenApp {
         if (row) {
             if (row.type === 'counter') {
                 // Right-click on counter row - show counter cycle context menu
+                const counterData = this.counterData.get(row.name);
+                // Use domain-specific cycle width if counter has base_clock
+                let cycleWidth = this.config.cycleWidth;
+                if (counterData && counterData.base_clock) {
+                    const clock = this.signalsData.get(counterData.base_clock);
+                    if (clock) {
+                        cycleWidth = this.getCycleWidthForClock(clock);
+                    }
+                }
+                const cycle = Math.floor((paperX - this.config.nameColumnWidth) / cycleWidth);
                 this.currentEditingCounter = { name: row.name, cycle: cycle };
                 TimingGenUI.showContextMenu('counter-cycle-context-menu', ev.clientX, ev.clientY);
                 return;
@@ -1881,18 +2012,27 @@ class TimingGenApp {
             } else if (row.type === 'signal') {
                 const signalIndex = this.getSignalIndexAtY(paperY);
                 
-                if (signalIndex !== -1 && cycle >= 0 && cycle < this.config.cycles) {
+                if (signalIndex !== -1) {
                     const signal = this.getSignalByIndex(signalIndex);
+                    // Use domain-specific cycle width for accurate click detection
+                    const cycleWidth = this.getCycleWidthForSignal(signal);
+                    const cycle = Math.floor((paperX - this.config.nameColumnWidth) / cycleWidth);
                     
-                    // Show appropriate cycle context menu based on signal type
-                    if (signal.type === 'bit') {
-                        this.currentEditingSignal = signalIndex;
-                        this.currentEditingCycle = cycle;
-                        TimingGenUI.showBitCycleContextMenu(this, ev.clientX, ev.clientY);
-                    } else if (signal.type === 'bus') {
-                        this.currentEditingSignal = signalIndex;
-                        this.currentEditingCycle = cycle;
-                        TimingGenUI.showBusCycleContextMenu(this, ev.clientX, ev.clientY);
+                    if (cycle >= 0 && cycle < this.config.cycles) {
+                        // Show appropriate cycle context menu based on signal type
+                        if (signal.type === 'bit') {
+                            this.currentEditingSignal = signalIndex;
+                            this.currentEditingCycle = cycle;
+                            TimingGenUI.showBitCycleContextMenu(this, ev.clientX, ev.clientY);
+                        } else if (signal.type === 'bus') {
+                            this.currentEditingSignal = signalIndex;
+                            this.currentEditingCycle = cycle;
+                            TimingGenUI.showBusCycleContextMenu(this, ev.clientX, ev.clientY);
+                        } else if (signal.type === 'clock') {
+                            this.currentEditingSignal = signalIndex;
+                            this.currentEditingCycle = cycle;
+                            TimingGenUI.showClockCycleContextMenu(this, ev.clientX, ev.clientY);
+                        }
                     }
                 }
             }
@@ -2101,6 +2241,83 @@ class TimingGenApp {
         }
     }
     
+    disableClockCycle() {
+        this.hideAllMenus();
+        if (this.currentEditingSignal !== null && this.currentEditingCycle !== null) {
+            const signal = this.getSignalByIndex(this.currentEditingSignal);
+            if (signal && signal.type === 'clock') {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
+                // Initialize cycleOptions if needed
+                if (!signal.cycleOptions) {
+                    signal.cycleOptions = {};
+                }
+                if (!signal.cycleOptions[this.currentEditingCycle]) {
+                    signal.cycleOptions[this.currentEditingCycle] = {};
+                }
+                
+                // Set disabled flag and default disable state
+                signal.cycleOptions[this.currentEditingCycle].disabled = true;
+                if (!signal.cycleOptions[this.currentEditingCycle].disableState) {
+                    signal.cycleOptions[this.currentEditingCycle].disableState = '0';
+                }
+                
+                this.render();
+            }
+        }
+    }
+    
+    enableClockCycle() {
+        this.hideAllMenus();
+        if (this.currentEditingSignal !== null && this.currentEditingCycle !== null) {
+            const signal = this.getSignalByIndex(this.currentEditingSignal);
+            if (signal && signal.type === 'clock') {
+                // Capture state before action
+                this.undoRedoManager.captureState();
+                
+                // Remove disabled flag
+                if (signal.cycleOptions && signal.cycleOptions[this.currentEditingCycle]) {
+                    delete signal.cycleOptions[this.currentEditingCycle].disabled;
+                    delete signal.cycleOptions[this.currentEditingCycle].disableState;
+                    
+                    // Clean up empty objects
+                    if (Object.keys(signal.cycleOptions[this.currentEditingCycle]).length === 0) {
+                        delete signal.cycleOptions[this.currentEditingCycle];
+                    }
+                    if (Object.keys(signal.cycleOptions).length === 0) {
+                        delete signal.cycleOptions;
+                    }
+                }
+                
+                this.render();
+            }
+        }
+    }
+    
+    setClockDisableState(signalIndex, cycle, state) {
+        const signal = this.getSignalByIndex(signalIndex);
+        if (signal && signal.type === 'clock') {
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
+            // Initialize cycleOptions if needed
+            if (!signal.cycleOptions) {
+                signal.cycleOptions = {};
+            }
+            if (!signal.cycleOptions[cycle]) {
+                signal.cycleOptions[cycle] = {};
+            }
+            
+            // Set the disable state
+            signal.cycleOptions[cycle].disableState = state;
+            // Also enable disabled flag
+            signal.cycleOptions[cycle].disabled = true;
+            
+            this.render();
+        }
+    }
+    
     getBitValueAtCycle(signal, cycle) {
         // Find the last defined value before or at this cycle
         let value = 0; // default
@@ -2150,9 +2367,46 @@ class TimingGenApp {
         return this.config.slew || 0;
     }
     
+    // Get inherited phase delay from signal's domain clock in time units
+    // Returns the phase delay in the same time units as the clock period
+    getPhaseDelayForSignal(signal) {
+        // Only applies to bit and bus signals (not clocks themselves)
+        if (!signal || signal.type === 'clock') {
+            return 0;
+        }
+        
+        // Get the clock for this signal's domain
+        const clock = this.getClockForSignal(signal);
+        if (!clock) {
+            return 0;
+        }
+        
+        // Get clock's phase (0.0 to 1.0) and period
+        const phase = clock.phase || 0;
+        
+        // Get the clock's period in time units
+        const clockPeriodInNs = this.convertPeriodToNs(clock.period, clock.periodUnit);
+        
+        // Calculate phase delay: phase * period
+        return phase * clockPeriodInNs;
+    }
+    
+    // Helper to convert period to nanoseconds for consistent calculations
+    convertPeriodToNs(period, unit) {
+        const conversions = {
+            'fs': 0.000001,  // femtoseconds to nanoseconds
+            'ps': 0.001,     // picoseconds to nanoseconds
+            'ns': 1,         // nanoseconds (base)
+            'us': 1000,      // microseconds to nanoseconds
+            'ms': 1000000    // milliseconds to nanoseconds
+        };
+        return period * (conversions[unit] || 1);
+    }
+    
     // Get effective delay value with cascading priority: cycle > signal > global
     // Each attribute (delayMin, delayMax, delayColor) is resolved independently
     // Returns object with {min, max, color} delay in pixels
+    // Also includes inherited phase delay from signal's domain clock
     getEffectiveDelay(signal, cycle) {
         // Start with defaults from code (0 for delays, config color for color)
         let delayMinInTime = 0;
@@ -2203,6 +2457,11 @@ class TimingGenApp {
             }
         }
         
+        // Add inherited phase delay from signal's domain clock
+        const phaseDelay = this.getPhaseDelayForSignal(signal);
+        delayMinInTime += phaseDelay;
+        delayMaxInTime += phaseDelay;
+        
         // Convert delay time to fraction of clock period, then to pixels
         // delay is in same unit as clock period (e.g., both in ns)
         // delayFraction = delayInTime / clockPeriod
@@ -2221,6 +2480,7 @@ class TimingGenApp {
     
     // Get effective delay value in time units (not pixels) with cascading priority: cycle > signal > global
     // Returns object with {min, max} delay in time units (same as clockPeriod units)
+    // Also includes inherited phase delay from signal's domain clock
     getEffectiveDelayInTime(signal, cycle) {
         // Start with defaults from code (0 for delays)
         let delayMinInTime = 0;
@@ -2258,6 +2518,11 @@ class TimingGenApp {
                 delayMaxInTime = cycleOpts.delayMax;
             }
         }
+        
+        // Add inherited phase delay from signal's domain clock
+        const phaseDelay = this.getPhaseDelayForSignal(signal);
+        delayMinInTime += phaseDelay;
+        delayMaxInTime += phaseDelay;
         
         return { min: delayMinInTime, max: delayMaxInTime };
     }
@@ -3303,6 +3568,26 @@ class TimingGenApp {
         TimingGenTextCounter.deleteTextRow(this);
     }
     
+    deleteCounter() {
+        this.hideAllMenus();
+        if (this.currentEditingCounterName) {
+            // Capture state before action
+            this.undoRedoManager.captureState();
+            
+            // Remove from data store
+            this.counterData.delete(this.currentEditingCounterName);
+            
+            // Remove from rows array
+            const rowIndex = this.rows.findIndex(r => r.type === 'counter' && r.name === this.currentEditingCounterName);
+            if (rowIndex !== -1) {
+                this.rows.splice(rowIndex, 1);
+            }
+            
+            this.currentEditingCounterName = null;
+            this.render();
+        }
+    }
+    
     deleteMeasureRow() {
         if (this.currentEditingMeasureRow !== null) {
             // Confirm deletion
@@ -3345,10 +3630,125 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('waveform-canvas').__timingGenApp = app;
 });
 
+// ================================================================================
+// Clock Domain Management Methods
+// ================================================================================
+
+/**
+ * Get all clock signals in the diagram
+ * @returns {Array} Array of clock signal objects
+ */
+TimingGenApp.prototype.getClockSignals = function() {
+    const signals = this.getSignals();
+    return signals.filter(signal => signal.type === 'clock');
+};
+
+/**
+ * Get the clock signal for a given signal (based on base_clock property)
+ * @param {Object} signal - The signal to get the clock for
+ * @returns {Object|null} Clock signal object or null if not found
+ */
+TimingGenApp.prototype.getClockForSignal = function(signal) {
+    if (signal.type === 'clock') {
+        return signal; // Clock is its own domain
+    }
+    
+    if (!signal.base_clock) {
+        return null;
+    }
+    
+    return this.signalsData.get(signal.base_clock) || null;
+};
+
+/**
+ * Get all signals in a specific clock domain
+ * @param {string} clockName - Name of the clock signal
+ * @returns {Array} Array of signals in the domain (including the clock itself)
+ */
+TimingGenApp.prototype.getSignalsInDomain = function(clockName) {
+    const signals = this.getSignals();
+    const domainSignals = [];
+    
+    for (const signal of signals) {
+        if (signal.name === clockName) {
+            // The clock itself
+            domainSignals.push(signal);
+        } else if (signal.base_clock === clockName) {
+            // Signals referencing this clock
+            domainSignals.push(signal);
+        }
+    }
+    
+    return domainSignals;
+};
+
+/**
+ * Get all clock domains in the diagram
+ * @returns {Object} Map of clock name to array of signals in that domain
+ */
+TimingGenApp.prototype.getAllClockDomains = function() {
+    const clocks = this.getClockSignals();
+    const domains = {};
+    
+    for (const clock of clocks) {
+        domains[clock.name] = this.getSignalsInDomain(clock.name);
+    }
+    
+    return domains;
+};
+
+/**
+ * Calculate cycle width for a specific clock based on its period
+ * Uses a base scale factor to maintain reasonable pixel sizes
+ * @param {Object} clock - Clock signal object
+ * @returns {number} Cycle width in pixels
+ */
+TimingGenApp.prototype.getCycleWidthForClock = function(clock) {
+    if (!clock || !clock.period) {
+        // Fallback to global cycleWidth
+        return this.config.cycleWidth;
+    }
+    
+    // Base scale: 1ns = 6 pixels (default 10ns = 60px)
+    const baseScale = 6;
+    
+    // Convert period to nanoseconds for consistent scaling
+    let periodInNs = clock.period;
+    switch (clock.periodUnit) {
+        case 'fs':
+            periodInNs = clock.period / 1000000;
+            break;
+        case 'ps':
+            periodInNs = clock.period / 1000;
+            break;
+        case 'ns':
+            periodInNs = clock.period;
+            break;
+        case 'us':
+            periodInNs = clock.period * 1000;
+            break;
+        case 'ms':
+            periodInNs = clock.period * 1000000;
+            break;
+    }
+    
+    return periodInNs * baseScale;
+};
+
+/**
+ * Get cycle width for a specific signal based on its clock domain
+ * @param {Object} signal - Signal object
+ * @returns {number} Cycle width in pixels
+ */
+TimingGenApp.prototype.getCycleWidthForSignal = function(signal) {
+    const clock = this.getClockForSignal(signal);
+    return this.getCycleWidthForClock(clock);
+};
+
     printData = function() {
         const app = window.timingGenApp;
         const data = {
-            version: '3.3.3',
+            version: '3.5.0',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,

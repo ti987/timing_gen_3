@@ -63,7 +63,7 @@ class TimingGenData {
         const tears = Array.from(app.tears || new Set());
         
         const data = {
-            version: '3.4.0',
+            version: '3.5.0',
             config: {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,

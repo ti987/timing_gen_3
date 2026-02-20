@@ -40,6 +40,10 @@ class TimingGenRendering {
                             TimingGenRendering.drawSignal(app, signal, signalIndex);
                         }
                     }
+                } else if (row.type === 'cycle-numbers') {
+                    // Draw cycle number row for non-primary clocks
+                    app.signalLayer.activate();
+                    TimingGenRendering.drawCycleNumberRow(app, row, rowIndex);
                 } else if (row.type === 'measure') {
                     // Draw measure - get data from Map
                     const measure = app.measuresData.get(row.name);
@@ -110,39 +114,105 @@ class TimingGenRendering {
         // Calculate total rows from unified row system
         const totalRows = app.rowManager.getTotalRows();
         
+        // Find the first AC table row to stop grid lines before it
+        let maxHeightForGrid = app.config.headerHeight;
+        let firstACTableIndex = -1;
+        if (app.rows) {
+            for (let i = 0; i < app.rows.length; i++) {
+                if (app.rows[i].type === 'ac-table') {
+                    firstACTableIndex = i;
+                    break;
+                }
+            }
+        }
+        
         // Calculate total height by summing all row heights
         let maxHeight = app.config.headerHeight;
         for (let i = 0; i < totalRows; i++) {
             maxHeight += app.rowManager.getRowHeight(i);
+            // Stop accumulating height before AC tables for grid purposes
+            if (firstACTableIndex === -1 || i < firstACTableIndex) {
+                maxHeightForGrid = maxHeight;
+            }
         }
         
-        // Vertical lines (cycle dividers) - draw to max height based on signals
-        for (let idx = 0; idx <= app.config.cycles; idx++) {
-            const xPos = app.config.nameColumnWidth + idx * app.config.cycleWidth;
-            const line = new paper.Path.Line({
-                from: [xPos, 0],
-                to: [xPos, maxHeight],
-                strokeColor: app.config.gridColor,
-                strokeWidth: 1
-            });
+        // Draw vertical grid lines per clock domain
+        // Group signals by their clock domain
+        const domains = app.getAllClockDomains();
+        const clocks = app.getClockSignals();
+        
+        // If no clocks, use default grid
+        if (clocks.length === 0) {
+            for (let idx = 0; idx <= app.config.cycles; idx++) {
+                const xPos = app.config.nameColumnWidth + idx * app.config.cycleWidth;
+                const line = new paper.Path.Line({
+                    from: [xPos, 0],
+                    to: [xPos, maxHeightForGrid],
+                    strokeColor: app.config.gridColor,
+                    strokeWidth: 1
+                });
+            }
+        } else {
+            // Draw grid for each signal based on its clock domain
+            for (let rowIdx = 0; rowIdx < totalRows; rowIdx++) {
+                if (!app.rows[rowIdx] || app.rows[rowIdx].type !== 'signal') {
+                    continue;
+                }
+                
+                const signal = app.signalsData.get(app.rows[rowIdx].name);
+                if (!signal) continue;
+                
+                const cycleWidth = app.getCycleWidthForSignal(signal);
+                const yStart = app.rowManager.getRowYPosition(rowIdx);
+                const yEnd = yStart + app.rowManager.getRowHeight(rowIdx);
+                
+                // Only draw if not past AC table
+                if (firstACTableIndex === -1 || rowIdx < firstACTableIndex) {
+                    for (let idx = 0; idx <= app.config.cycles; idx++) {
+                        const xPos = app.config.nameColumnWidth + idx * cycleWidth;
+                        const line = new paper.Path.Line({
+                            from: [xPos, yStart],
+                            to: [xPos, yEnd],
+                            strokeColor: app.config.gridColor,
+                            strokeWidth: 1
+                        });
+                    }
+                }
+            }
         }
         
-        // Horizontal lines (row dividers)
-        for (let idx = 0; idx <= totalRows; idx++) {
-            const yPos = app.rowManager.getRowYPosition(idx);
-            
-            const line = new paper.Path.Line({
-                from: [0, yPos],
-                to: [app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth, yPos],
-                strokeColor: app.config.gridColor,
-                strokeWidth: 1
-            });
+        // Horizontal lines (row dividers) - skip during SVG export
+        if (!app.exportingSVG) {
+            for (let idx = 0; idx <= totalRows; idx++) {
+                const yPos = app.rowManager.getRowYPosition(idx);
+                
+                // Calculate max x position based on longest domain
+                let maxX = app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth;
+                if (clocks.length > 0) {
+                    // Find the widest clock domain
+                    let maxCycleWidth = app.config.cycleWidth;
+                    for (const clock of clocks) {
+                        const cw = app.getCycleWidthForClock(clock);
+                        if (cw > maxCycleWidth) {
+                            maxCycleWidth = cw;
+                        }
+                    }
+                    maxX = app.config.nameColumnWidth + app.config.cycles * maxCycleWidth;
+                }
+                
+                const line = new paper.Path.Line({
+                    from: [0, yPos],
+                    to: [maxX, yPos],
+                    strokeColor: app.config.gridColor,
+                    strokeWidth: 1
+                });
+            }
         }
         
-        // Name column divider
+        // Name column divider - draw to maxHeightForGrid (before AC tables)
         const divider = new paper.Path.Line({
             from: [app.config.nameColumnWidth, 0],
-            to: [app.config.nameColumnWidth, maxHeight],
+            to: [app.config.nameColumnWidth, maxHeightForGrid],
             strokeColor: '#999',
             strokeWidth: 2
         });
@@ -161,9 +231,14 @@ class TimingGenRendering {
     }
     
     static drawHeader(app) {
+        // Skip header during SVG export
+        if (app.exportingSVG) {
+            return;
+        }
+        
         for (let idx = 0; idx < app.config.cycles; idx++) {
             const xPos = app.config.nameColumnWidth + idx * app.config.cycleWidth + app.config.cycleWidth / 2;
-            const yPos = 30;
+            const yPos = 15; // Adjusted for 20px header height
             
             const text = new paper.PointText({
                 point: [xPos, yPos],
@@ -173,6 +248,90 @@ class TimingGenRendering {
                 fontSize: 12,
                 justification: 'center'
             });
+        }
+    }
+    
+    static drawCycleNumberRow(app, row, rowIndex) {
+        // Skip cycle number rows during SVG export
+        if (app.exportingSVG) {
+            return;
+        }
+        
+        // Draw a dedicated 20px row with cycle numbers for non-primary clocks
+        const yPos = app.rowManager.getRowYPosition(rowIndex);
+        const rowHeight = app.rowManager.getRowHeight(rowIndex);
+        
+        // Get the clock this row is for
+        const clockName = row.clockName;
+        const clock = app.signalsData.get(clockName);
+        if (!clock || clock.type !== 'clock') {
+            return; // Invalid clock reference
+        }
+        
+        // Get primary clock (first clock) to determine max cycles
+        const clocks = app.getClockSignals();
+        const primaryClock = clocks.length > 0 ? clocks[0] : null;
+        
+        // Calculate max cycles to render for this non-primary clock
+        let maxCycles = app.config.cycles;
+        if (primaryClock && primaryClock.name !== clockName) {
+            // Calculate primary clock's total time
+            const primaryPeriodNs = app.getCycleWidthForClock(primaryClock) / 6; // 1ns = 6px
+            const primaryTotalTime = primaryPeriodNs * app.config.cycles;
+            
+            // Calculate how many cycles of this clock fit in primary's time
+            const thisPeriodNs = app.getCycleWidthForClock(clock) / 6;
+            // Use Math.ceil to include the last partial cycle
+            maxCycles = Math.ceil(primaryTotalTime / thisPeriodNs);
+        }
+        
+        // Get cycle width for this clock's domain
+        const cycleWidth = app.getCycleWidthForClock(clock);
+        
+        // Calculate the max X position for this domain (to primary clock's end)
+        const primaryCycleWidth = primaryClock ? app.getCycleWidthForClock(primaryClock) : app.config.cycleWidth;
+        const primaryMaxX = app.config.nameColumnWidth + app.config.cycles * primaryCycleWidth;
+        
+        // Draw white background for the row
+        const bgRect = new paper.Path.Rectangle({
+            point: [0, yPos],
+            size: [primaryMaxX, rowHeight],
+            fillColor: '#ffffff'  // White background
+        });
+        bgRect.sendToBack();
+        
+        // Draw cycle numbers centered in the 20px row
+        const numberYPos = yPos + rowHeight / 2 + 4; // Center vertically with slight offset for text
+        
+        for (let idx = 0; idx < maxCycles; idx++) {
+            const xPos = app.config.nameColumnWidth + idx * cycleWidth + cycleWidth / 2;
+            
+            // Only draw if within primary clock's bounds
+            if (xPos <= primaryMaxX) {
+                const text = new paper.PointText({
+                    point: [xPos, numberYPos],
+                    content: idx.toString(),
+                    fillColor: '#666666',  // Gray to distinguish from main header
+                    fontFamily: 'Arial',
+                    fontSize: 11,
+                    justification: 'center'
+                });
+            }
+        }
+        
+        // Draw vertical grid lines for this cycle number row
+        for (let idx = 0; idx <= maxCycles; idx++) {
+            const xPos = app.config.nameColumnWidth + idx * cycleWidth;
+            
+            // Only draw if within primary clock's bounds
+            if (xPos <= primaryMaxX) {
+                const line = new paper.Path.Line({
+                    from: [xPos, yPos],
+                    to: [xPos, yPos + rowHeight],
+                    strokeColor: app.config.gridColor,
+                    strokeWidth: 1
+                });
+            }
         }
     }
     
@@ -218,29 +377,159 @@ class TimingGenRendering {
         }
     }
     
+    static getMaxCyclesForSignal(app, signal) {
+        // Calculate the maximum cycles to render for a signal
+        // Non-primary clocks and their domain signals are limited by primary clock's duration
+        
+        // Get all clocks
+        const clocks = app.getClockSignals();
+        if (clocks.length === 0) {
+            return app.config.cycles; // No clocks, use default
+        }
+        
+        const primaryClock = clocks[0];
+        
+        // If this is the primary clock or a signal in the primary domain, use full cycles
+        if (signal.type === 'clock' && signal.name === primaryClock.name) {
+            return app.config.cycles;
+        }
+        
+        // Check if this signal belongs to primary clock domain
+        if ((signal.type === 'bit' || signal.type === 'bus') && signal.base_clock === primaryClock.name) {
+            return app.config.cycles;
+        }
+        
+        // For non-primary clocks and their signals, calculate limited cycles
+        let targetClock;
+        if (signal.type === 'clock') {
+            targetClock = signal;
+        } else if (signal.base_clock) {
+            targetClock = app.signalsData.get(signal.base_clock);
+        }
+        
+        if (!targetClock || targetClock.name === primaryClock.name) {
+            return app.config.cycles; // Default to full cycles if can't determine
+        }
+        
+        // Calculate primary clock's total time
+        const primaryPeriodNs = app.getCycleWidthForClock(primaryClock) / 6; // 1ns = 6px
+        const primaryTotalTime = primaryPeriodNs * app.config.cycles;
+        
+        // Calculate how many cycles of target clock fit in primary's time
+        const targetPeriodNs = app.getCycleWidthForClock(targetClock) / 6;
+        // Use Math.ceil to include the last partial cycle
+        const maxCycles = Math.ceil(primaryTotalTime / targetPeriodNs);
+        
+        return maxCycles;
+    }
+    
+    static getPrimaryClockMaxX(app) {
+        // Get the max X position based on primary clock's width
+        const clocks = app.getClockSignals();
+        if (clocks.length === 0) {
+            return app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth;
+        }
+        
+        const primaryClock = clocks[0];
+        const primaryCycleWidth = app.getCycleWidthForClock(primaryClock);
+        return app.config.nameColumnWidth + app.config.cycles * primaryCycleWidth;
+    }
+    
     static drawClockWaveform(app, signal, baseY, rowHeight) {
        const highY = baseY + rowHeight/4;
        const lowY = baseY + rowHeight - rowHeight/4;
+       const midY = baseY + rowHeight/2;
         
         const path = new paper.Path();
         path.strokeColor = app.config.signalColor;
         path.strokeWidth = 2;
         
-        for (let idx = 0; idx < app.config.cycles; idx++) {
-            const x1 = app.config.nameColumnWidth + idx * app.config.cycleWidth;
-            const x2 = x1 + app.config.cycleWidth / 2;
-            const x3 = x1 + app.config.cycleWidth;
+        // Get cycle width for this clock's domain
+        const cycleWidth = app.getCycleWidthForSignal(signal);
+        
+        // Get phase value (default 0)
+        const phase = signal.phase !== undefined ? signal.phase : 0;
+        const phaseDelay = phase * cycleWidth;
+        
+        // Get max cycles for this signal (limited for non-primary clocks)
+        const maxCycles = TimingGenRendering.getMaxCyclesForSignal(app, signal);
+        
+        // Get primary clock's max X for clipping
+        const primaryMaxX = TimingGenRendering.getPrimaryClockMaxX(app);
+        
+        let lastY = lowY; // Track the last Y position
+        
+        for (let idx = 0; idx < maxCycles; idx++) {
+            const x1 = app.config.nameColumnWidth + idx * cycleWidth + phaseDelay;
+            const x2 = x1 + cycleWidth / 2;
+            let x3 = x1 + cycleWidth;
             
-            // Rising edge at start of cycle
-            if (idx === 0) {
-                path.moveTo(new paper.Point(x1, lowY));
+            // Clip x3 to primary clock's boundary
+            if (x3 > primaryMaxX) {
+                x3 = primaryMaxX;
             }
-            path.lineTo(new paper.Point(x1, highY));
-            path.lineTo(new paper.Point(x2, highY));
             
-            // Falling edge at middle of cycle
-            path.lineTo(new paper.Point(x2, lowY));
-            path.lineTo(new paper.Point(x3, lowY));
+            // Check if this cycle is disabled
+            const isDisabled = signal.cycleOptions && 
+                             signal.cycleOptions[idx] && 
+                             signal.cycleOptions[idx].disabled;
+            
+            if (isDisabled) {
+                // Get disable state (default to '0')
+                const disableState = signal.cycleOptions[idx].disableState || '0';
+                let disableY;
+                if (disableState === '1') {
+                    disableY = highY;
+                } else if (disableState === 'Z') {
+                    disableY = midY;
+                } else {
+                    disableY = lowY;
+                }
+                
+                // Transition to disable state at start of cycle
+                if (idx === 0) {
+                    path.moveTo(new paper.Point(app.config.nameColumnWidth, disableY));
+                } else {
+                    path.lineTo(new paper.Point(x1, lastY));
+                    path.lineTo(new paper.Point(x1, disableY));
+                }
+                
+                // Stay at disable state for the whole cycle
+                path.lineTo(new paper.Point(x3, disableY));
+                lastY = disableY;
+            } else {
+                // Normal clock waveform
+                if (idx === 0) {
+                    // Start from the beginning of the waveform area
+                    const startX = app.config.nameColumnWidth;
+                    path.moveTo(new paper.Point(startX, lowY));
+                    // If phase > 0, draw low line until phase point
+                    if (phaseDelay > 0) {
+                        path.lineTo(new paper.Point(x1, lowY));
+                    }
+                    lastY = lowY;
+                } else {
+                    // Connect from previous state
+                    path.lineTo(new paper.Point(x1, lastY));
+                }
+                
+                // Rising edge
+                path.lineTo(new paper.Point(x1, highY));
+                
+                // Only draw to x2 if it's within bounds
+                if (x2 <= primaryMaxX) {
+                    path.lineTo(new paper.Point(x2, highY));
+                    
+                    // Falling edge at middle of cycle
+                    path.lineTo(new paper.Point(x2, lowY));
+                    path.lineTo(new paper.Point(x3, lowY));
+                    lastY = lowY;
+                } else {
+                    // Clip at primary boundary
+                    path.lineTo(new paper.Point(primaryMaxX, highY));
+                    break; // Stop drawing
+                }
+            }
         }
     }
     
@@ -396,22 +685,28 @@ class TimingGenRendering {
        const lowY = baseY + rowHeight - rowHeight/4;
         const midY = baseY + rowHeight / 2;
         
+        // Get cycle width for this signal's clock domain
+        const cycleWidth = app.getCycleWidthForSignal(signal);
+        
+        // Get max cycles for this signal (limited for non-primary domains)
+        const maxCycles = TimingGenRendering.getMaxCyclesForSignal(app, signal);
+        
         // First, identify all X spans
         const xSpans = [];
         let idx = 0;
-        while (idx < app.config.cycles) {
+        while (idx < maxCycles) {
             const value = app.getBitValueAtCycle(signal, idx);
             if (value === 'X') {
                 const spanStart = idx;
                 let spanEnd = idx;
                 // Find the end of this X span
-                for (let jdx = idx + 1; jdx < app.config.cycles; jdx++) {
+                for (let jdx = idx + 1; jdx < maxCycles; jdx++) {
                     const nextValue = app.getBitValueAtCycle(signal, jdx);
                     if (nextValue !== 'X') {
                         spanEnd = jdx - 1;
                         break;
                     }
-                    if (jdx === app.config.cycles - 1) {
+                    if (jdx === maxCycles - 1) {
                         spanEnd = jdx;
                     }
                 }
@@ -431,7 +726,7 @@ class TimingGenRendering {
         let prevX = null;
         let prevY = null;
         
-        for (let idx = 0; idx <= app.config.cycles; idx++) {
+        for (let idx = 0; idx <= maxCycles; idx++) {
             // Get delay info object for this cycle (contains min, max, color)
             const delayInfo = idx < app.config.cycles && idx > 0 ?
                 app.getEffectiveDelay(signal, idx) : { min: 0, max: 0, color: app.config.delayColor };
@@ -439,8 +734,8 @@ class TimingGenRendering {
             // Get slew for this cycle
             const slew = idx < app.config.cycles ? app.getEffectiveSlew(signal, idx) : app.config.slew;
             
-            // Base x position at grid line
-            const baseX = app.config.nameColumnWidth + idx * app.config.cycleWidth;
+            // Base x position at grid line (using domain-specific cycle width)
+            const baseX = app.config.nameColumnWidth + idx * cycleWidth;
             // Actual transition point after minimum delay
             const xPos = baseX + delayInfo.min;
             
@@ -511,8 +806,8 @@ class TimingGenRendering {
             path.strokeWidth = 2;
             path.fillColor = '#999999';
 
-            var  x1 = app.config.nameColumnWidth + span.start * app.config.cycleWidth;
-            var  x2 = app.config.nameColumnWidth + (span.end + 1) * app.config.cycleWidth;
+            var  x1 = app.config.nameColumnWidth + span.start * cycleWidth;
+            var  x2 = app.config.nameColumnWidth + (span.end + 1) * cycleWidth;
 
             const delay1 = span.start < app.config.cycles && span.start > 0 ?
                 app.getEffectiveDelay(signal, span.start) : { min: 0, max: 0, color: app.config.delayColor };
@@ -590,9 +885,15 @@ class TimingGenRendering {
         const bottomY = baseY + rowHeight - rowHeight/4;
         const midY = baseY + rowHeight / 2;
         
+        // Get cycle width for this signal's clock domain
+        const cycleWidth = app.getCycleWidthForSignal(signal);
+        
+        // Get max cycles for this signal (limited for non-primary domains)
+        const maxCycles = TimingGenRendering.getMaxCyclesForSignal(app, signal);
+        
         // First pass: identify value spans with their cycles
         let idx = 0;
-        while (idx < app.config.cycles) {
+        while (idx < maxCycles) {
             const value = app.getBusValueAtCycle(signal, idx);
             
             // Find where this value span starts and ends
@@ -600,18 +901,18 @@ class TimingGenRendering {
             let spanEnd = idx;
             
             // Find the end of this value span
-            for (let jdx = idx + 1; jdx < app.config.cycles; jdx++) {
+            for (let jdx = idx + 1; jdx < maxCycles; jdx++) {
                 if (signal.values[jdx] !== undefined) {
                     spanEnd = jdx - 1;
                     break;
                 }
-                if (jdx === app.config.cycles - 1) {
+                if (jdx === maxCycles - 1) {
                     spanEnd = jdx;
                 }
             }
             
-            if (spanEnd === idx && idx < app.config.cycles - 1 && signal.values[idx + 1] === undefined) {
-                spanEnd = app.config.cycles - 1;
+            if (spanEnd === idx && idx < maxCycles - 1 && signal.values[idx + 1] === undefined) {
+                spanEnd = maxCycles - 1;
             }
             
             // Get delay info object for this cycle (contains min, max, color)
@@ -626,14 +927,14 @@ class TimingGenRendering {
             // Get slew for transitions
             const slew = app.getEffectiveSlew(signal, spanStart);
             
-            // Calculate start position (at grid line + delay)
+            // Calculate start position (at grid line + delay) - using domain-specific cycle width
             // The grid line is where the transition should end, so slew should start before it
-            const baseX1 = app.config.nameColumnWidth + spanStart * app.config.cycleWidth;
+            const baseX1 = app.config.nameColumnWidth + spanStart * cycleWidth;
             const x1 = baseX1; // + delayInfo.min; // Actual transition point (minimum delay)
 
             // obtain how far in next cycle has been drawn here
-            const nextDelay = spanEnd + 1 < app.config.cycles ? app.getEffectiveDelay(signal, spanEnd + 1) : {min:0,max:0, color:"black"};
-            const x2 = app.config.nameColumnWidth + (spanEnd + 1) * app.config.cycleWidth + nextDelay.min;
+            const nextDelay = spanEnd + 1 < maxCycles ? app.getEffectiveDelay(signal, spanEnd + 1) : {min:0,max:0, color:"black"};
+            const x2 = app.config.nameColumnWidth + (spanEnd + 1) * cycleWidth + nextDelay.min;
 
             
             if (value === 'Z') {
