@@ -2367,9 +2367,46 @@ class TimingGenApp {
         return this.config.slew || 0;
     }
     
+    // Get inherited phase delay from signal's domain clock in time units
+    // Returns the phase delay in the same time units as the clock period
+    getPhaseDelayForSignal(signal) {
+        // Only applies to bit and bus signals (not clocks themselves)
+        if (!signal || signal.type === 'clock') {
+            return 0;
+        }
+        
+        // Get the clock for this signal's domain
+        const clock = this.getClockForSignal(signal);
+        if (!clock) {
+            return 0;
+        }
+        
+        // Get clock's phase (0.0 to 1.0) and period
+        const phase = clock.phase || 0;
+        
+        // Get the clock's period in time units
+        const clockPeriodInNs = this.convertPeriodToNs(clock.period, clock.periodUnit);
+        
+        // Calculate phase delay: phase * period
+        return phase * clockPeriodInNs;
+    }
+    
+    // Helper to convert period to nanoseconds for consistent calculations
+    convertPeriodToNs(period, unit) {
+        const conversions = {
+            'fs': 0.000001,  // femtoseconds to nanoseconds
+            'ps': 0.001,     // picoseconds to nanoseconds
+            'ns': 1,         // nanoseconds (base)
+            'us': 1000,      // microseconds to nanoseconds
+            'ms': 1000000    // milliseconds to nanoseconds
+        };
+        return period * (conversions[unit] || 1);
+    }
+    
     // Get effective delay value with cascading priority: cycle > signal > global
     // Each attribute (delayMin, delayMax, delayColor) is resolved independently
     // Returns object with {min, max, color} delay in pixels
+    // Also includes inherited phase delay from signal's domain clock
     getEffectiveDelay(signal, cycle) {
         // Start with defaults from code (0 for delays, config color for color)
         let delayMinInTime = 0;
@@ -2420,6 +2457,11 @@ class TimingGenApp {
             }
         }
         
+        // Add inherited phase delay from signal's domain clock
+        const phaseDelay = this.getPhaseDelayForSignal(signal);
+        delayMinInTime += phaseDelay;
+        delayMaxInTime += phaseDelay;
+        
         // Convert delay time to fraction of clock period, then to pixels
         // delay is in same unit as clock period (e.g., both in ns)
         // delayFraction = delayInTime / clockPeriod
@@ -2438,6 +2480,7 @@ class TimingGenApp {
     
     // Get effective delay value in time units (not pixels) with cascading priority: cycle > signal > global
     // Returns object with {min, max} delay in time units (same as clockPeriod units)
+    // Also includes inherited phase delay from signal's domain clock
     getEffectiveDelayInTime(signal, cycle) {
         // Start with defaults from code (0 for delays)
         let delayMinInTime = 0;
@@ -2475,6 +2518,11 @@ class TimingGenApp {
                 delayMaxInTime = cycleOpts.delayMax;
             }
         }
+        
+        // Add inherited phase delay from signal's domain clock
+        const phaseDelay = this.getPhaseDelayForSignal(signal);
+        delayMinInTime += phaseDelay;
+        delayMaxInTime += phaseDelay;
         
         return { min: delayMinInTime, max: delayMaxInTime };
     }
