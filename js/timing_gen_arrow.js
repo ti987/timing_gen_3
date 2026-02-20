@@ -574,21 +574,24 @@ class TimingGenArrow {
         const baseY = app.rowManager.getRowYPosition(signalRow);
         const rowHeight = app.rowManager.getRowHeight(signalRow);
         
+        // Get domain-specific cycle width for this signal
+        const cycleWidth = app.getCycleWidthForSignal(signal);
+        
         let x, y;
         
         if (signal.type === 'clock') {
             // Clock signal POIs
             if (poiType === 'rising' || (poiType === 'auto' && cycle > 0)) {
                 // Middle of rising transition (at cycle boundary)
-                x = app.config.nameColumnWidth + cycle * app.config.cycleWidth;
+                x = app.config.nameColumnWidth + cycle * cycleWidth;
                 y = baseY + rowHeight * 0.5;
             } else if (poiType === 'falling') {
                 // Middle of falling transition (at mid-cycle)
-                x = app.config.nameColumnWidth + cycle * app.config.cycleWidth + app.config.cycleWidth * 0.5;
+                x = app.config.nameColumnWidth + cycle * cycleWidth + cycleWidth * 0.5;
                 y = baseY + rowHeight * 0.5;
             } else {
                 // Default: cycle boundary, middle
-                x = app.config.nameColumnWidth + cycle * app.config.cycleWidth;
+                x = app.config.nameColumnWidth + cycle * cycleWidth;
                 y = baseY + rowHeight * 0.5;
             }
         } else if (signal.type === 'bit' || signal.type === 'bus') {
@@ -601,18 +604,18 @@ class TimingGenArrow {
             // Calculate slew positions using signal-specific delay and slew values
             const delayInfo = app.getEffectiveDelay(signal, cycle);
             const slewPixels = app.getEffectiveSlew(signal, cycle);
-            const slewStartX = app.config.nameColumnWidth + cycle * app.config.cycleWidth + delayInfo.min;
+            const slewStartX = app.config.nameColumnWidth + cycle * cycleWidth + delayInfo.min;
             const slewEndX = slewStartX + slewPixels;
             const slewCenterX = slewStartX + slewPixels / 2;
             
             if (poiType === 'low' || (poiType === 'auto' && prevValue === 0)) {
-                x = app.config.nameColumnWidth + cycle * app.config.cycleWidth;
+                x = app.config.nameColumnWidth + cycle * cycleWidth;
                 y = baseY + rowHeight * 0.8;
             } else if (poiType === 'high' || (poiType === 'auto' && prevValue === 1)) {
-                x = app.config.nameColumnWidth + cycle * app.config.cycleWidth;
+                x = app.config.nameColumnWidth + cycle * cycleWidth;
                 y = baseY + rowHeight * 0.2;
             } else if (poiType === 'mid' || poiType === 'auto') {
-                x = app.config.nameColumnWidth + cycle * app.config.cycleWidth;
+                x = app.config.nameColumnWidth + cycle * cycleWidth;
                 y = baseY + rowHeight * 0.5;
             } else if (poiType === 'slew-start' && hasTransition) {
                 x = slewStartX;
@@ -639,7 +642,7 @@ class TimingGenArrow {
                 }
             } else if (poiType === 'delayed' && hasTransition) {
                 // Delayed point at delayMax position
-                const delayMaxX = app.config.nameColumnWidth + cycle * app.config.cycleWidth + delayInfo.max;
+                const delayMaxX = app.config.nameColumnWidth + cycle * cycleWidth + delayInfo.max;
                 x = delayMaxX;
                 // Y position at current value level (after transition)
                 if (currentValue === 0) {
@@ -651,12 +654,12 @@ class TimingGenArrow {
                 }
             } else {
                 // Fallback to cycle boundary, middle
-                x = app.config.nameColumnWidth + cycle * app.config.cycleWidth;
+                x = app.config.nameColumnWidth + cycle * cycleWidth;
                 y = baseY + rowHeight * 0.5;
             }
         } else {
             // Unknown signal type, use middle
-            x = app.config.nameColumnWidth + cycle * app.config.cycleWidth;
+            x = app.config.nameColumnWidth + cycle * cycleWidth;
             y = baseY + rowHeight * 0.5;
         }
         

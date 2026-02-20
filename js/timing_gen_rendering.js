@@ -281,14 +281,16 @@ class TimingGenRendering {
             
             // Calculate how many cycles of this clock fit in primary's time
             const thisPeriodNs = app.getCycleWidthForClock(clock) / 6;
-            maxCycles = Math.floor(primaryTotalTime / thisPeriodNs);
+            // Use Math.ceil to include the last partial cycle
+            maxCycles = Math.ceil(primaryTotalTime / thisPeriodNs);
         }
         
         // Get cycle width for this clock's domain
         const cycleWidth = app.getCycleWidthForClock(clock);
         
         // Calculate the max X position for this domain (to primary clock's end)
-        const primaryMaxX = app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth;
+        const primaryCycleWidth = primaryClock ? app.getCycleWidthForClock(primaryClock) : app.config.cycleWidth;
+        const primaryMaxX = app.config.nameColumnWidth + app.config.cycles * primaryCycleWidth;
         
         // Draw white background for the row
         const bgRect = new paper.Path.Rectangle({
@@ -415,7 +417,8 @@ class TimingGenRendering {
         
         // Calculate how many cycles of target clock fit in primary's time
         const targetPeriodNs = app.getCycleWidthForClock(targetClock) / 6;
-        const maxCycles = Math.floor(primaryTotalTime / targetPeriodNs);
+        // Use Math.ceil to include the last partial cycle
+        const maxCycles = Math.ceil(primaryTotalTime / targetPeriodNs);
         
         return maxCycles;
     }
