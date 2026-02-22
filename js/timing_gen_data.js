@@ -68,6 +68,7 @@ class TimingGenData {
                 cycles: app.config.cycles,
                 clockPeriod: app.config.clockPeriod,
                 clockPeriodUnit: app.config.clockPeriodUnit,
+                cycleWidth: app.config.cycleWidth,
                 signalRowHeight: app.config.signalRowHeight,
                 measureRowHeight: app.config.measureRowHeight,
                 slew: app.config.slew,
@@ -113,6 +114,9 @@ class TimingGenData {
                     }
                     if (data.config.clockPeriodUnit !== undefined) {
                         app.config.clockPeriodUnit = data.config.clockPeriodUnit;
+                    }
+                    if (data.config.cycleWidth !== undefined) {
+                        app.config.cycleWidth = data.config.cycleWidth;
                     }
                     if (data.config.signalRowHeight !== undefined) {
                         app.config.signalRowHeight = data.config.signalRowHeight;

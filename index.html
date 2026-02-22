@@ -39,6 +39,7 @@
             <div class="menu-dropdown">
                 <button id="help-menu-btn" class="menu-btn">Help</button>
                 <div id="help-submenu" class="submenu" style="display: none;">
+                    <div class="menu-item" id="users-manual-menu">User's Manual</div>
                     <div class="menu-item" id="about-menu">About</div>
                 </div>
             </div>
@@ -238,6 +239,12 @@
                 <span style="flex: 0 0 30px;">px</span>
             </div>
             
+            <label>Cycle Width (pixels per primary clock cycle):</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                <input type="number" id="cycle-width-input" value="60" min="0.001" max="1000" step="0.001" style="flex: 1;">
+                <span style="flex: 0 0 30px;">px</span>
+            </div>
+            
             <label>Slew (transition pixels):</label>
             <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
                 <input type="number" id="slew-input" value="4" min="0" max="50" style="flex: 1;">
@@ -379,6 +386,67 @@
             <br><br>
             <button id="delete-cycles-ok-btn" class="dialog-btn">OK</button>
             <button id="delete-cycles-cancel-btn" class="dialog-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- User's Manual Dialog -->
+    <div id="users-manual-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content" style="min-width: 500px; max-width: 700px; max-height: 80vh; overflow-y: auto;">
+            <h3>User's Manual</h3>
+
+            <h4>Getting Started</h4>
+            <p>Timing Gen 3 is an interactive digital logic waveform editor. Use the top menu buttons to add signals and tools, configure global options, save/load diagrams, and export to SVG.</p>
+
+            <h4>Adding Signals</h4>
+            <p>Click <strong>Add Signal</strong> to open the dialog. Enter a name, choose type (Clock, Bit, or Bus), set optional clock domain and period, then click <strong>OK</strong>.</p>
+            <ul>
+                <li><strong>Clock</strong>: Generates a square wave. Specify period and phase.</li>
+                <li><strong>Bit</strong>: Single-bit signal. Left-click to toggle; right-click for 0/1/X/Z.</li>
+                <li><strong>Bus</strong>: Multi-bit signal. Left-click to set value (hex, dec, string, X, Z).</li>
+            </ul>
+
+            <h4>Adding Tools</h4>
+            <p>Click <strong>Add Tool</strong> to access:</p>
+            <ul>
+                <li><strong>Measure</strong>: Click two signal transitions, then place the measurement label.</li>
+                <li><strong>Arrow</strong>: Click two points to draw a curved annotation arrow.</li>
+                <li><strong>Group</strong>: Groups multiple measure rows together.</li>
+                <li><strong>Text</strong>: Inserts a text annotation row.</li>
+                <li><strong>Counter</strong>: Inserts a cycle counter row with custom start values.</li>
+                <li><strong>AC Table</strong>: Inserts an AC characteristics table.</li>
+                <li><strong>Tear</strong>: Marks a cycle discontinuity (omitted cycles).</li>
+            </ul>
+
+            <h4>Global Options</h4>
+            <p>Click <strong>Global Option</strong> to configure:</p>
+            <ul>
+                <li><strong>Clock Period</strong>: The period of the primary reference clock (with time unit).</li>
+                <li><strong>Cycle Width</strong>: Number of pixels per primary clock cycle (range: 0.001–1000, default: 60). Widths for all clock domains are recalculated automatically. When a domain's cycle width falls below 20 px, its cycle numbers are hidden. Below 10 px, its vertical grid lines are hidden.</li>
+                <li><strong>Signal Row Height</strong>: Height of signal rows in pixels.</li>
+                <li><strong>Measure/Group Row Height</strong>: Height of measure and group rows.</li>
+                <li><strong>Slew</strong>: Transition slew in pixels for bit/bus signals.</li>
+                <li><strong>Delay Min/Max</strong>: Global propagation delay uncertainty range.</li>
+                <li><strong>Delay Uncertainty Color</strong>: Color of the delay shading.</li>
+            </ul>
+
+            <h4>Cycles Input</h4>
+            <p>Use the <strong>Cycles</strong> number input in the top bar to change the number of displayed cycles (5–100).</p>
+
+            <h4>Signal Reordering</h4>
+            <p>Click a signal name to select it (Ctrl/Cmd-click for multi-select, Shift-click for range). Drag selected names to reorder rows.</p>
+
+            <h4>Right-Click Menus</h4>
+            <p>Right-click on any signal name, signal waveform, bus cycle, or cycle header to access context menus for editing, deleting, inserting, or configuring options.</p>
+
+            <h4>Save / Load / Export</h4>
+            <ul>
+                <li><strong>Save</strong>: Downloads the diagram as a <code>.td3</code> JSON file.</li>
+                <li><strong>Load</strong>: Opens a previously saved <code>.td3</code> file.</li>
+                <li><strong>Export SVG</strong>: Downloads the diagram as an SVG image (cycle headers and selections are stripped).</li>
+            </ul>
+
+            <br>
+            <button id="users-manual-ok-btn" class="dialog-btn">Close</button>
         </div>
     </div>
 

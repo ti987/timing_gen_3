@@ -168,46 +168,49 @@ class TimingGenRendering {
                 
                 // Only draw if not past AC table
                 if (firstACTableIndex === -1 || rowIdx < firstACTableIndex) {
-                    // Draw regular cycle grids
-                    for (let idx = 0; idx <= app.config.cycles; idx++) {
-                        const xPos = app.config.nameColumnWidth + idx * cycleWidth;
-                        const line = new paper.Path.Line({
-                            from: [xPos, yStart],
-                            to: [xPos, yEnd],
-                            strokeColor: app.config.gridColor,
-                            strokeWidth: 1
-                        });
-                    }
-                    
-                    // For clock signals with phase > 0, draw additional phase delay grids
-                    if (signal.type === 'clock' && signal.phase > 0) {
-                        const phaseDelay = signal.phase * cycleWidth;
+                    // Skip vertical grids if cycle width is too small (< 10px) for this domain
+                    if (cycleWidth >= 10) {
+                        // Draw regular cycle grids
+                        for (let idx = 0; idx <= app.config.cycles; idx++) {
+                            const xPos = app.config.nameColumnWidth + idx * cycleWidth;
+                            const line = new paper.Path.Line({
+                                from: [xPos, yStart],
+                                to: [xPos, yEnd],
+                                strokeColor: app.config.gridColor,
+                                strokeWidth: 1
+                            });
+                        }
                         
-                        for (let idx = 0; idx < app.config.cycles; idx++) {
-                            // Rising edge grid (at phase-delayed cycle start)
-                            const risingX = app.config.nameColumnWidth + idx * cycleWidth + phaseDelay;
-                            if (risingX <= app.config.nameColumnWidth + app.config.cycles * cycleWidth) {
-                                const risingLine = new paper.Path.Line({
-                                    from: [risingX, yStart],
-                                    to: [risingX, yEnd],
-                                    strokeColor: app.config.gridColor,
-                                    strokeWidth: 1,
-                                    dashArray: [5, 5],  // Dashed line to distinguish from regular grids
-                                    opacity: 0.6
-                                });
-                            }
+                        // For clock signals with phase > 0, draw additional phase delay grids
+                        if (signal.type === 'clock' && signal.phase > 0) {
+                            const phaseDelay = signal.phase * cycleWidth;
                             
-                            // Falling edge grid (at phase-delayed mid-cycle)
-                            const fallingX = app.config.nameColumnWidth + idx * cycleWidth + cycleWidth * 0.5 + phaseDelay;
-                            if (fallingX <= app.config.nameColumnWidth + app.config.cycles * cycleWidth) {
-                                const fallingLine = new paper.Path.Line({
-                                    from: [fallingX, yStart],
-                                    to: [fallingX, yEnd],
-                                    strokeColor: app.config.gridColor,
-                                    strokeWidth: 1,
-                                    dashArray: [5, 5],  // Dashed line to distinguish from regular grids
-                                    opacity: 0.6
-                                });
+                            for (let idx = 0; idx < app.config.cycles; idx++) {
+                                // Rising edge grid (at phase-delayed cycle start)
+                                const risingX = app.config.nameColumnWidth + idx * cycleWidth + phaseDelay;
+                                if (risingX <= app.config.nameColumnWidth + app.config.cycles * cycleWidth) {
+                                    const risingLine = new paper.Path.Line({
+                                        from: [risingX, yStart],
+                                        to: [risingX, yEnd],
+                                        strokeColor: app.config.gridColor,
+                                        strokeWidth: 1,
+                                        dashArray: [5, 5],  // Dashed line to distinguish from regular grids
+                                        opacity: 0.6
+                                    });
+                                }
+                                
+                                // Falling edge grid (at phase-delayed mid-cycle)
+                                const fallingX = app.config.nameColumnWidth + idx * cycleWidth + cycleWidth * 0.5 + phaseDelay;
+                                if (fallingX <= app.config.nameColumnWidth + app.config.cycles * cycleWidth) {
+                                    const fallingLine = new paper.Path.Line({
+                                        from: [fallingX, yStart],
+                                        to: [fallingX, yEnd],
+                                        strokeColor: app.config.gridColor,
+                                        strokeWidth: 1,
+                                        dashArray: [5, 5],  // Dashed line to distinguish from regular grids
+                                        opacity: 0.6
+                                    });
+                                }
                             }
                         }
                     }
@@ -306,25 +309,19 @@ class TimingGenRendering {
         const clocks = app.getClockSignals();
         const primaryClock = clocks.length > 0 ? clocks[0] : null;
         
-        // Calculate max cycles to render for this non-primary clock
-        let maxCycles = app.config.cycles;
-        if (primaryClock && primaryClock.name !== clockName) {
-            // Calculate primary clock's total time
-            const primaryPeriodNs = app.getCycleWidthForClock(primaryClock) / 6; // 1ns = 6px
-            const primaryTotalTime = primaryPeriodNs * app.config.cycles;
-            
-            // Calculate how many cycles of this clock fit in primary's time
-            const thisPeriodNs = app.getCycleWidthForClock(clock) / 6;
-            // Use Math.ceil to include the last partial cycle
-            maxCycles = Math.ceil(primaryTotalTime / thisPeriodNs);
-        }
-        
         // Get cycle width for this clock's domain
         const cycleWidth = app.getCycleWidthForClock(clock);
         
         // Calculate the max X position for this domain (to primary clock's end)
         const primaryCycleWidth = primaryClock ? app.getCycleWidthForClock(primaryClock) : app.config.cycleWidth;
         const primaryMaxX = app.config.nameColumnWidth + app.config.cycles * primaryCycleWidth;
+        
+        // Calculate max cycles to render for this non-primary clock
+        let maxCycles = app.config.cycles;
+        if (primaryClock && primaryClock.name !== clockName && cycleWidth > 0) {
+            const primaryPixels = primaryCycleWidth * app.config.cycles;
+            maxCycles = Math.ceil(primaryPixels / cycleWidth);
+        }
         
         // Draw white background for the row
         const bgRect = new paper.Path.Rectangle({
@@ -335,36 +332,42 @@ class TimingGenRendering {
         bgRect.sendToBack();
         
         // Draw cycle numbers centered in the 20px row
-        const numberYPos = yPos + rowHeight / 2 + 4; // Center vertically with slight offset for text
-        
-        for (let idx = 0; idx < maxCycles; idx++) {
-            const xPos = app.config.nameColumnWidth + idx * cycleWidth + cycleWidth / 2;
+        // Skip text if cycle width is too small (< 20px)
+        if (cycleWidth >= 20) {
+            const numberYPos = yPos + rowHeight / 2 + 4; // Center vertically with slight offset for text
             
-            // Only draw if within primary clock's bounds
-            if (xPos <= primaryMaxX) {
-                const text = new paper.PointText({
-                    point: [xPos, numberYPos],
-                    content: idx.toString(),
-                    fillColor: '#666666',  // Gray to distinguish from main header
-                    fontFamily: 'Arial',
-                    fontSize: 11,
-                    justification: 'center'
-                });
+            for (let idx = 0; idx < maxCycles; idx++) {
+                const xPos = app.config.nameColumnWidth + idx * cycleWidth + cycleWidth / 2;
+                
+                // Only draw if within primary clock's bounds
+                if (xPos <= primaryMaxX) {
+                    const text = new paper.PointText({
+                        point: [xPos, numberYPos],
+                        content: idx.toString(),
+                        fillColor: '#666666',  // Gray to distinguish from main header
+                        fontFamily: 'Arial',
+                        fontSize: 11,
+                        justification: 'center'
+                    });
+                }
             }
         }
         
         // Draw vertical grid lines for this cycle number row
-        for (let idx = 0; idx <= maxCycles; idx++) {
-            const xPos = app.config.nameColumnWidth + idx * cycleWidth;
-            
-            // Only draw if within primary clock's bounds
-            if (xPos <= primaryMaxX) {
-                const line = new paper.Path.Line({
-                    from: [xPos, yPos],
-                    to: [xPos, yPos + rowHeight],
-                    strokeColor: app.config.gridColor,
-                    strokeWidth: 1
-                });
+        // Skip grids if cycle width is too small (< 10px)
+        if (cycleWidth >= 10) {
+            for (let idx = 0; idx <= maxCycles; idx++) {
+                const xPos = app.config.nameColumnWidth + idx * cycleWidth;
+                
+                // Only draw if within primary clock's bounds
+                if (xPos <= primaryMaxX) {
+                    const line = new paper.Path.Line({
+                        from: [xPos, yPos],
+                        to: [xPos, yPos + rowHeight],
+                        strokeColor: app.config.gridColor,
+                        strokeWidth: 1
+                    });
+                }
             }
         }
     }

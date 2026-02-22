@@ -27,7 +27,7 @@ An interactive web-based digital logic waveform editor for creating and editing 
 - **File Operations**:
   - Save/Load diagrams in JSON format
   - Export to SVG for documentation (with proper handling of text/counter tools)
-- **Configurable**: Adjustable number of cycles
+- **Configurable**: Adjustable number of cycles and cycle width (pixels per primary clock cycle)
 
 ## Setup
 
@@ -120,6 +120,26 @@ The application uses Paper.js from CDN, so no manual download is required. Howev
 ### Configuration
 
 - **Cycles**: Use the number input in the top menu to change the number of cycles displayed
+- **Cycle Width**: In Global Options, set the number of pixels per primary clock cycle (range: 0.001–1000 px, default: 60 px). All clock domain widths are recalculated proportionally. Clock domains with a cycle width below 20 px will not show reference cycle numbers; below 10 px, vertical grid lines are also hidden.
+
+### Global Options
+
+Open the **Global Option** dialog to configure:
+
+| Option | Description |
+|---|---|
+| Clock Period | Period of the primary reference clock (with time unit) |
+| Cycle Width | Pixels per primary clock cycle (0.001–1000, default 60) |
+| Signal Row Height | Height in pixels of each signal row |
+| Measure/Group Row Height | Height in pixels of measure and group rows |
+| Slew | Transition slew in pixels for bit/bus signals |
+| Delay Min/Max | Global propagation delay uncertainty range |
+| Delay Uncertainty Color | Color used for the delay shading |
+
+### Help
+
+- **User's Manual**: Click **Help → User's Manual** for an in-app overview of all features.
+- **About**: Click **Help → About** to see the application version.
 
 ## Tool Types
 

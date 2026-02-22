@@ -222,6 +222,10 @@ class TimingGenApp {
             document.getElementById('help-submenu').style.display = 'none';
             this.showAboutDialog();
         });
+        document.getElementById('users-manual-menu').addEventListener('click', () => {
+            document.getElementById('help-submenu').style.display = 'none';
+            this.showUsersManualDialog();
+        });
         
         // Close submenus when clicking outside
         document.addEventListener('click', (e) => {
@@ -240,6 +244,9 @@ class TimingGenApp {
         
         // About dialog
         document.getElementById('about-ok-btn').addEventListener('click', () => this.hideAboutDialog());
+        
+        // User's Manual dialog
+        document.getElementById('users-manual-ok-btn').addEventListener('click', () => this.hideUsersManualDialog());
         
         // Measure text dialog
         document.getElementById('measure-text-ok-btn').addEventListener('click', () => this.finalizeMeasure());
@@ -674,6 +681,14 @@ class TimingGenApp {
     
     hideAboutDialog() {
         document.getElementById('about-dialog').style.display = 'none';
+    }
+    
+    showUsersManualDialog() {
+        document.getElementById('users-manual-dialog').style.display = 'flex';
+    }
+    
+    hideUsersManualDialog() {
+        document.getElementById('users-manual-dialog').style.display = 'none';
     }
     
     showAddTextDialog() {
@@ -3709,30 +3724,18 @@ TimingGenApp.prototype.getCycleWidthForClock = function(clock) {
         return this.config.cycleWidth;
     }
     
-    // Base scale: 1ns = 6 pixels (default 10ns = 60px)
-    const baseScale = 6;
+    // Convert clock period to nanoseconds
+    const periodInNs = this.convertPeriodToNs(clock.period, clock.periodUnit || 'ns');
     
-    // Convert period to nanoseconds for consistent scaling
-    let periodInNs = clock.period;
-    switch (clock.periodUnit) {
-        case 'fs':
-            periodInNs = clock.period / 1000000;
-            break;
-        case 'ps':
-            periodInNs = clock.period / 1000;
-            break;
-        case 'ns':
-            periodInNs = clock.period;
-            break;
-        case 'us':
-            periodInNs = clock.period * 1000;
-            break;
-        case 'ms':
-            periodInNs = clock.period * 1000000;
-            break;
+    // Convert primary clock period to nanoseconds
+    const primaryPeriodInNs = this.convertPeriodToNs(this.config.clockPeriod, this.config.clockPeriodUnit);
+    
+    if (!primaryPeriodInNs || primaryPeriodInNs <= 0) {
+        return this.config.cycleWidth;
     }
     
-    return periodInNs * baseScale;
+    // Scale cycle width proportionally to period ratio
+    return this.config.cycleWidth * (periodInNs / primaryPeriodInNs);
 };
 
 /**
