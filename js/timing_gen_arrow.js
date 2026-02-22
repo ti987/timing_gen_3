@@ -580,18 +580,21 @@ class TimingGenArrow {
         let x, y;
         
         if (signal.type === 'clock') {
-            // Clock signal POIs
+            // Clock signal POIs - include phase delay
+            const phase = signal.phase !== undefined ? signal.phase : 0;
+            const phaseDelay = phase * cycleWidth;
+            
             if (poiType === 'rising' || (poiType === 'auto' && cycle > 0)) {
-                // Middle of rising transition (at cycle boundary)
-                x = app.config.nameColumnWidth + cycle * cycleWidth;
+                // Middle of rising transition (at cycle boundary + phase delay)
+                x = app.config.nameColumnWidth + cycle * cycleWidth + phaseDelay;
                 y = baseY + rowHeight * 0.5;
             } else if (poiType === 'falling') {
-                // Middle of falling transition (at mid-cycle)
-                x = app.config.nameColumnWidth + cycle * cycleWidth + cycleWidth * 0.5;
+                // Middle of falling transition (at mid-cycle + phase delay)
+                x = app.config.nameColumnWidth + cycle * cycleWidth + cycleWidth * 0.5 + phaseDelay;
                 y = baseY + rowHeight * 0.5;
             } else {
-                // Default: cycle boundary, middle
-                x = app.config.nameColumnWidth + cycle * cycleWidth;
+                // Default: cycle boundary + phase delay, middle
+                x = app.config.nameColumnWidth + cycle * cycleWidth + phaseDelay;
                 y = baseY + rowHeight * 0.5;
             }
         } else if (signal.type === 'bit' || signal.type === 'bus') {
