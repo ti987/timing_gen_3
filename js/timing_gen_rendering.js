@@ -168,6 +168,7 @@ class TimingGenRendering {
                 
                 // Only draw if not past AC table
                 if (firstACTableIndex === -1 || rowIdx < firstACTableIndex) {
+                    // Draw regular cycle grids
                     for (let idx = 0; idx <= app.config.cycles; idx++) {
                         const xPos = app.config.nameColumnWidth + idx * cycleWidth;
                         const line = new paper.Path.Line({
@@ -176,6 +177,39 @@ class TimingGenRendering {
                             strokeColor: app.config.gridColor,
                             strokeWidth: 1
                         });
+                    }
+                    
+                    // For clock signals with phase > 0, draw additional phase delay grids
+                    if (signal.type === 'clock' && signal.phase > 0) {
+                        const phaseDelay = signal.phase * cycleWidth;
+                        
+                        for (let idx = 0; idx < app.config.cycles; idx++) {
+                            // Rising edge grid (at phase-delayed cycle start)
+                            const risingX = app.config.nameColumnWidth + idx * cycleWidth + phaseDelay;
+                            if (risingX <= app.config.nameColumnWidth + app.config.cycles * cycleWidth) {
+                                const risingLine = new paper.Path.Line({
+                                    from: [risingX, yStart],
+                                    to: [risingX, yEnd],
+                                    strokeColor: app.config.gridColor,
+                                    strokeWidth: 1,
+                                    dashArray: [5, 5],  // Dashed line to distinguish from regular grids
+                                    opacity: 0.6
+                                });
+                            }
+                            
+                            // Falling edge grid (at phase-delayed mid-cycle)
+                            const fallingX = app.config.nameColumnWidth + idx * cycleWidth + cycleWidth * 0.5 + phaseDelay;
+                            if (fallingX <= app.config.nameColumnWidth + app.config.cycles * cycleWidth) {
+                                const fallingLine = new paper.Path.Line({
+                                    from: [fallingX, yStart],
+                                    to: [fallingX, yEnd],
+                                    strokeColor: app.config.gridColor,
+                                    strokeWidth: 1,
+                                    dashArray: [5, 5],  // Dashed line to distinguish from regular grids
+                                    opacity: 0.6
+                                });
+                            }
+                        }
                     }
                 }
             }
