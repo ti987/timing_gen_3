@@ -70,8 +70,8 @@ class TimingGenArrow {
         if (poi) {
             const signal = app.getSignalByIndex(poi.signalIndex);
             if (signal) {
-                // Get all available POIs for this signal and cycle
-                const allPOIs = TimingGenArrow.getAllPOIsForSignalCycle(app, signal.name, poi.cycle);
+                // Get all available POIs from nearby cycles
+                const allPOIs = TimingGenArrow.getAllNearbyPOIs(app, signal, mouseX);
                 const closestPOI = TimingGenArrow.findClosestPOI(allPOIs, mouseX, mouseY);
                 
                 if (closestPOI) {
@@ -456,15 +456,15 @@ class TimingGenArrow {
             if (poi) {
                 const signal = app.getSignalByIndex(poi.signalIndex);
                 if (signal) {
-                    // Get all POI options and find the closest one
-                    const allPOIs = TimingGenArrow.getAllPOIsForSignalCycle(app, signal.name, poi.cycle);
+                    // Get all POI options from nearby cycles and find the closest one
+                    const allPOIs = TimingGenArrow.getAllNearbyPOIs(app, signal, x);
                     const closestPOI = TimingGenArrow.findClosestPOI(allPOIs, x, y);
                     
                     if (closestPOI) {
                         arrow.startX = closestPOI.x;
                         arrow.startY = closestPOI.y;
                         arrow.signal1Name = signal.name;
-                        arrow.cycle1 = poi.cycle;
+                        arrow.cycle1 = closestPOI.cycle;
                         arrow.poi1Type = closestPOI.poiType;
                     }
                 }
@@ -483,15 +483,15 @@ class TimingGenArrow {
             if (poi) {
                 const signal = app.getSignalByIndex(poi.signalIndex);
                 if (signal) {
-                    // Get all POI options and find the closest one
-                    const allPOIs = TimingGenArrow.getAllPOIsForSignalCycle(app, signal.name, poi.cycle);
+                    // Get all POI options from nearby cycles and find the closest one
+                    const allPOIs = TimingGenArrow.getAllNearbyPOIs(app, signal, x);
                     const closestPOI = TimingGenArrow.findClosestPOI(allPOIs, x, y);
                     
                     if (closestPOI) {
                         arrow.endX = closestPOI.x;
                         arrow.endY = closestPOI.y;
                         arrow.signal2Name = signal.name;
-                        arrow.cycle2 = poi.cycle;
+                        arrow.cycle2 = closestPOI.cycle;
                         arrow.poi2Type = closestPOI.poiType;
                     }
                 }
@@ -743,6 +743,39 @@ class TimingGenArrow {
     }
     
     /**
+     * Get all POIs from a signal near the mouse position (including adjacent cycles)
+     * @param {TimingGenApp} app - Main application instance
+     * @param {Object} signal - Signal object
+     * @param {number} mouseX - Mouse X position
+     * @returns {Array} Array of all POIs from nearby cycles
+     */
+    static getAllNearbyPOIs(app, signal, mouseX) {
+        const relativeX = mouseX - app.config.nameColumnWidth;
+        const cycleWidth = app.getCycleWidthForSignal(signal);
+        const approximateCycle = relativeX / cycleWidth;
+        
+        // Get POIs from current cycle and adjacent cycles
+        const cycle1 = Math.max(0, Math.floor(approximateCycle));
+        const cycle2 = Math.min(app.config.cycles, Math.ceil(approximateCycle));
+        
+        let allPOIs = [];
+        
+        // Add POIs from cycle1
+        if (cycle1 >= 0 && cycle1 <= app.config.cycles) {
+            const pois1 = TimingGenArrow.getAllPOIsForSignalCycle(app, signal.name, cycle1);
+            allPOIs = allPOIs.concat(pois1);
+        }
+        
+        // Add POIs from cycle2 if different from cycle1
+        if (cycle2 !== cycle1 && cycle2 >= 0 && cycle2 <= app.config.cycles) {
+            const pois2 = TimingGenArrow.getAllPOIsForSignalCycle(app, signal.name, cycle2);
+            allPOIs = allPOIs.concat(pois2);
+        }
+        
+        return allPOIs;
+    }
+    
+    /**
      * Handle arrow click during arrow creation mode
      * @param {TimingGenApp} app - Main application instance
      * @param {paper.MouseEvent} event - Mouse event
@@ -756,15 +789,15 @@ class TimingGenArrow {
             if (poi) {
                 const signal = app.getSignalByIndex(poi.signalIndex);
                 if (signal) {
-                    // Get all POI options and find the closest one
-                    const allPOIs = TimingGenArrow.getAllPOIsForSignalCycle(app, signal.name, poi.cycle);
+                    // Get all POI options from nearby cycles and find the closest one
+                    const allPOIs = TimingGenArrow.getAllNearbyPOIs(app, signal, mouseX);
                     const closestPOI = TimingGenArrow.findClosestPOI(allPOIs, mouseX, mouseY);
                     
                     if (closestPOI) {
                         app.currentArrow.startX = closestPOI.x;
                         app.currentArrow.startY = closestPOI.y;
                         app.currentArrow.signal1Name = signal.name;
-                        app.currentArrow.cycle1 = poi.cycle;
+                        app.currentArrow.cycle1 = closestPOI.cycle;
                         app.currentArrow.poi1Type = closestPOI.poiType;
                         
                         app.arrowState = 'second-point';
@@ -781,15 +814,15 @@ class TimingGenArrow {
             if (poi) {
                 const signal = app.getSignalByIndex(poi.signalIndex);
                 if (signal) {
-                    // Get all POI options and find the closest one
-                    const allPOIs = TimingGenArrow.getAllPOIsForSignalCycle(app, signal.name, poi.cycle);
+                    // Get all POI options from nearby cycles and find the closest one
+                    const allPOIs = TimingGenArrow.getAllNearbyPOIs(app, signal, mouseX);
                     const closestPOI = TimingGenArrow.findClosestPOI(allPOIs, mouseX, mouseY);
                     
                     if (closestPOI) {
                         app.currentArrow.endX = closestPOI.x;
                         app.currentArrow.endY = closestPOI.y;
                         app.currentArrow.signal2Name = signal.name;
-                        app.currentArrow.cycle2 = poi.cycle;
+                        app.currentArrow.cycle2 = closestPOI.cycle;
                         app.currentArrow.poi2Type = closestPOI.poiType;
                         
                         // Finalize the arrow
