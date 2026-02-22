@@ -121,9 +121,19 @@ class TimingGenMeasure {
         // Get domain-specific cycle width for this signal
         const cycleWidth = app.getCycleWidthForSignal(signal);
         
-        if (signal.type === 'clock' && cycle < 0) {
-            const absCycle = Math.abs(cycle + 1);
-            return app.config.nameColumnWidth + absCycle * cycleWidth + cycleWidth / 2;
+        // For clocks, include phase delay
+        if (signal.type === 'clock') {
+            const phase = signal.phase !== undefined ? signal.phase : 0;
+            const phaseDelay = phase * cycleWidth;
+            
+            if (cycle < 0) {
+                // Falling edge: mid-cycle + phase delay
+                const absCycle = Math.abs(cycle + 1);
+                return app.config.nameColumnWidth + absCycle * cycleWidth + cycleWidth / 2 + phaseDelay;
+            } else {
+                // Rising edge: cycle boundary + phase delay
+                return app.config.nameColumnWidth + cycle * cycleWidth + phaseDelay;
+            }
         }
         
         const baseX = app.config.nameColumnWidth + cycle * cycleWidth;
@@ -216,8 +226,14 @@ class TimingGenMeasure {
             let nearestEdge = 'rising';
             let minDistance = Infinity;
             
+            // Get domain-specific cycle width and phase delay
+            const cycleWidth = app.getCycleWidthForSignal(signal);
+            const phase = signal.phase !== undefined ? signal.phase : 0;
+            const phaseDelay = phase * cycleWidth;
+            
             for (let cycle = Math.max(0, clickedCycle - 1); cycle <= Math.min(app.config.cycles, clickedCycle + 1); cycle++) {
-                const risingEdgeX = app.config.nameColumnWidth + cycle * app.config.cycleWidth;
+                // Rising edge: cycle boundary + phase delay
+                const risingEdgeX = app.config.nameColumnWidth + cycle * cycleWidth + phaseDelay;
                 const risingDistance = Math.abs(risingEdgeX - xPos);
                 
                 if (risingDistance < minDistance) {
@@ -227,7 +243,8 @@ class TimingGenMeasure {
                 }
                 
                 if (cycle < app.config.cycles) {
-                    const fallingEdgeX = app.config.nameColumnWidth + cycle * app.config.cycleWidth + app.config.cycleWidth / 2;
+                    // Falling edge: mid-cycle + phase delay
+                    const fallingEdgeX = app.config.nameColumnWidth + cycle * cycleWidth + cycleWidth / 2 + phaseDelay;
                     const fallingDistance = Math.abs(fallingEdgeX - xPos);
                     
                     if (fallingDistance < minDistance) {
@@ -272,6 +289,7 @@ class TimingGenMeasure {
     
     /**
      * Find the nearest point of interest (cycle boundary)
+     * Checks adjacent cycles to find truly closest POI
      * @param {TimingGenApp} app - Main application instance
      * @param {number} xPos - X position
      * @param {number} yPos - Y position
@@ -297,12 +315,73 @@ class TimingGenMeasure {
             return { signalIndex: 0, cycle: cycle !== null ? cycle : 0 };
         }
         
+        // Get approximate cycle position
         const relativeX = xPos - app.config.nameColumnWidth;
         const cycleWidth = app.getCycleWidthForSignal(signal);
-        const nearestCycle = Math.round(relativeX / cycleWidth);
-        const cycle = Math.max(0, Math.min(app.config.cycles, nearestCycle));
+        const approximateCycle = relativeX / cycleWidth;
         
-        return { signalIndex, cycle };
+        // Check cycles on both sides of the click position
+        const cycle1 = Math.max(0, Math.floor(approximateCycle));
+        const cycle2 = Math.min(app.config.cycles, Math.ceil(approximateCycle));
+        
+        // For clocks, check both rising and falling edges of adjacent cycles
+        if (signal.type === 'clock') {
+            const phase = signal.phase !== undefined ? signal.phase : 0;
+            const phaseDelay = phase * cycleWidth;
+            
+            let nearestCycle = cycle1;
+            let nearestEdge = 'rising';
+            let minDistance = Infinity;
+            
+            // Check cycle1 and cycle2
+            for (let cycle of [cycle1, cycle2]) {
+                if (cycle < 0 || cycle > app.config.cycles) continue;
+                
+                // Rising edge
+                const risingX = app.config.nameColumnWidth + cycle * cycleWidth + phaseDelay;
+                const risingDistance = Math.abs(risingX - xPos);
+                if (risingDistance < minDistance) {
+                    minDistance = risingDistance;
+                    nearestCycle = cycle;
+                    nearestEdge = 'rising';
+                }
+                
+                // Falling edge
+                if (cycle < app.config.cycles) {
+                    const fallingX = app.config.nameColumnWidth + cycle * cycleWidth + cycleWidth / 2 + phaseDelay;
+                    const fallingDistance = Math.abs(fallingX - xPos);
+                    if (fallingDistance < minDistance) {
+                        minDistance = fallingDistance;
+                        nearestCycle = cycle;
+                        nearestEdge = 'falling';
+                    }
+                }
+            }
+            
+            // For falling edges, use negative cycle notation
+            if (nearestEdge === 'falling') {
+                nearestCycle = -(nearestCycle + 1);
+            }
+            
+            return { signalIndex, cycle: nearestCycle };
+        }
+        
+        // For non-clock signals, check both cycle1 and cycle2 boundaries
+        let nearestCycle = cycle1;
+        let minDistance = Infinity;
+        
+        for (let cycle of [cycle1, cycle2]) {
+            if (cycle < 0 || cycle > app.config.cycles) continue;
+            
+            const cycleX = app.config.nameColumnWidth + cycle * cycleWidth;
+            const distance = Math.abs(cycleX - xPos);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestCycle = cycle;
+            }
+        }
+        
+        return { signalIndex, cycle: nearestCycle };
     }
     
     /**
