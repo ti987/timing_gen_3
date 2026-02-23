@@ -141,10 +141,14 @@ class TimingGenRendering {
         const domains = app.getAllClockDomains();
         const clocks = app.getClockSignals();
         
+        // The rightmost boundary for ALL drawing is the primary clock's last cycle
+        const primaryMaxX = TimingGenRendering.getPrimaryClockMaxX(app);
+        
         // If no clocks, use default grid
         if (clocks.length === 0) {
             for (let idx = 0; idx <= app.config.cycles; idx++) {
                 const xPos = app.config.nameColumnWidth + idx * app.config.cycleWidth;
+                if (xPos > primaryMaxX) break;
                 const line = new paper.Path.Line({
                     from: [xPos, 0],
                     to: [xPos, maxHeightForGrid],
@@ -170,9 +174,10 @@ class TimingGenRendering {
                 if (firstACTableIndex === -1 || rowIdx < firstACTableIndex) {
                     // Skip vertical grids if cycle width is too small (< 10px) for this domain
                     if (cycleWidth >= 10) {
-                        // Draw regular cycle grids
+                        // Draw regular cycle grids, capped at primaryMaxX
                         for (let idx = 0; idx <= app.config.cycles; idx++) {
                             const xPos = app.config.nameColumnWidth + idx * cycleWidth;
+                            if (xPos > primaryMaxX) break;
                             const line = new paper.Path.Line({
                                 from: [xPos, yStart],
                                 to: [xPos, yEnd],
@@ -188,20 +193,19 @@ class TimingGenRendering {
                             for (let idx = 0; idx < app.config.cycles; idx++) {
                                 // Rising edge grid (at phase-delayed cycle start)
                                 const risingX = app.config.nameColumnWidth + idx * cycleWidth + phaseDelay;
-                                if (risingX <= app.config.nameColumnWidth + app.config.cycles * cycleWidth) {
-                                    const risingLine = new paper.Path.Line({
-                                        from: [risingX, yStart],
-                                        to: [risingX, yEnd],
-                                        strokeColor: app.config.gridColor,
-                                        strokeWidth: 1,
-                                        dashArray: [5, 5],  // Dashed line to distinguish from regular grids
-                                        opacity: 0.6
-                                    });
-                                }
+                                if (risingX >= primaryMaxX) break;
+                                const risingLine = new paper.Path.Line({
+                                    from: [risingX, yStart],
+                                    to: [risingX, yEnd],
+                                    strokeColor: app.config.gridColor,
+                                    strokeWidth: 1,
+                                    dashArray: [5, 5],  // Dashed line to distinguish from regular grids
+                                    opacity: 0.6
+                                });
                                 
                                 // Falling edge grid (at phase-delayed mid-cycle)
                                 const fallingX = app.config.nameColumnWidth + idx * cycleWidth + cycleWidth * 0.5 + phaseDelay;
-                                if (fallingX <= app.config.nameColumnWidth + app.config.cycles * cycleWidth) {
+                                if (fallingX < primaryMaxX) {
                                     const fallingLine = new paper.Path.Line({
                                         from: [fallingX, yStart],
                                         to: [fallingX, yEnd],
@@ -219,27 +223,14 @@ class TimingGenRendering {
         }
         
         // Horizontal lines (row dividers) - skip during SVG export
+        // Cap at primaryMaxX so they never extend beyond the last cycle
         if (!app.exportingSVG) {
             for (let idx = 0; idx <= totalRows; idx++) {
                 const yPos = app.rowManager.getRowYPosition(idx);
                 
-                // Calculate max x position based on longest domain
-                let maxX = app.config.nameColumnWidth + app.config.cycles * app.config.cycleWidth;
-                if (clocks.length > 0) {
-                    // Find the widest clock domain
-                    let maxCycleWidth = app.config.cycleWidth;
-                    for (const clock of clocks) {
-                        const cw = app.getCycleWidthForClock(clock);
-                        if (cw > maxCycleWidth) {
-                            maxCycleWidth = cw;
-                        }
-                    }
-                    maxX = app.config.nameColumnWidth + app.config.cycles * maxCycleWidth;
-                }
-                
                 const line = new paper.Path.Line({
                     from: [0, yPos],
-                    to: [maxX, yPos],
+                    to: [primaryMaxX, yPos],
                     strokeColor: app.config.gridColor,
                     strokeWidth: 1
                 });
@@ -448,14 +439,23 @@ class TimingGenRendering {
             return app.config.cycles; // Default to full cycles if can't determine
         }
         
-        // Calculate primary clock's total time
-        const primaryPeriodNs = app.getCycleWidthForClock(primaryClock) / 6; // 1ns = 6px
-        const primaryTotalTime = primaryPeriodNs * app.config.cycles;
+        // Calculate max cycles using pixel widths directly — avoids the stale "/ 6" ns conversion
+        const primaryCycleWidth = app.getCycleWidthForClock(primaryClock);
+        const primaryTotalPixels = primaryCycleWidth * app.config.cycles;
         
-        // Calculate how many cycles of target clock fit in primary's time
-        const targetPeriodNs = app.getCycleWidthForClock(targetClock) / 6;
+        // Account for phase: a phased clock's first rising edge starts after phaseDelay pixels,
+        // so the number of full cycles that fit before primaryMaxX is smaller.
+        const targetCycleWidth = app.getCycleWidthForClock(targetClock);
+        const targetPhase = (targetClock.phase !== undefined ? targetClock.phase : 0);
+        const targetPhasePixels = targetPhase * targetCycleWidth;
+        
+        // Available pixels for cycles after the phase offset
+        const availablePixels = primaryTotalPixels - targetPhasePixels;
+        if (availablePixels <= 0) {
+            return 0;
+        }
         // Use Math.ceil to include the last partial cycle
-        const maxCycles = Math.ceil(primaryTotalTime / targetPeriodNs);
+        const maxCycles = Math.ceil(availablePixels / targetCycleWidth);
         
         return maxCycles;
     }
@@ -498,6 +498,10 @@ class TimingGenRendering {
         
         for (let idx = 0; idx < maxCycles; idx++) {
             const x1 = app.config.nameColumnWidth + idx * cycleWidth + phaseDelay;
+            // If the rising edge itself is already past the boundary, stop
+            if (x1 >= primaryMaxX) {
+                break;
+            }
             const x2 = x1 + cycleWidth / 2;
             let x3 = x1 + cycleWidth;
             
