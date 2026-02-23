@@ -84,6 +84,64 @@ class TimingGenACTable {
     }
     
     /**
+     * Calculate the nominal time difference between two measure endpoints in config.clockPeriodUnit.
+     * Correctly handles cross-domain signals by using each signal's actual clock period,
+     * and includes clock phase offsets for clock-type signals.
+     * For bit/bus signals the phase offset is already included via getEffectiveDelayInTime.
+     * @param {TimingGenApp} app - Main application instance
+     * @param {Object|null} signal1 - First signal
+     * @param {Object|null} signal2 - Second signal
+     * @param {Object} measure - Measure object with cycle1 and cycle2 properties
+     * @returns {number} Time difference (time2 - time1) in config.clockPeriodUnit
+     */
+    static calculateTimeDiff(app, signal1, signal2, measure) {
+        // Resolve the clock for a signal (signal itself if clock, its domain clock if bit/bus)
+        const getClockForSig = (sig) => {
+            if (!sig) return null;
+            if (sig.type === 'clock') return sig;
+            return app.getClockForSignal(sig);
+        };
+
+        // Return clock period in nanoseconds
+        const getPeriodNs = (clock) =>
+            clock
+                ? app.convertPeriodToNs(clock.period, clock.periodUnit)
+                : app.convertPeriodToNs(app.config.clockPeriod, app.config.clockPeriodUnit);
+
+        // Return absolute time in ns for a signal transition at the given cycle index.
+        // For clock signals: includes the clock's phase offset and handles falling edges (negative cycle).
+        // For bit/bus signals: returns the raw grid time (phase is part of the effective delay).
+        const getBaseTimeNs = (signal, cycle) => {
+            const clock = getClockForSig(signal);
+            const periodNs = getPeriodNs(clock);
+            const phase = (clock && clock.phase) || 0;
+
+            if (signal && signal.type === 'clock') {
+                if (cycle < 0) {
+                    // Falling edge stored as -(cycleIndex+1)
+                    const c = Math.abs(cycle + 1);
+                    return (c + phase + 0.5) * periodNs;
+                }
+                return (cycle + phase) * periodNs;
+            }
+            // Bit/bus: phase delay is already included in getEffectiveDelayInTime
+            return cycle * periodNs;
+        };
+
+        const time1Ns = getBaseTimeNs(signal1, measure.cycle1);
+        const time2Ns = getBaseTimeNs(signal2, measure.cycle2);
+        const timeDiffNs = time2Ns - time1Ns;
+
+        // Convert ns result to config.clockPeriodUnit
+        // nsPerUnit = how many ns make up one config unit
+        //   e.g. if unit='ps': nsPerUnit = 0.001 (1 ps = 0.001 ns) → divide to get ps
+        const configPeriodNs = app.convertPeriodToNs(app.config.clockPeriod, app.config.clockPeriodUnit);
+        if (!configPeriodNs || !app.config.clockPeriod) return timeDiffNs;
+        const nsPerUnit = configPeriodNs / app.config.clockPeriod;
+        return timeDiffNs / nsPerUnit;
+    }
+
+    /**
      * Create an AC table row from a measure
      * @param {TimingGenApp} app - Main application instance
      * @param {string} measureName - Name of the measure
@@ -92,7 +150,6 @@ class TimingGenACTable {
      */
     static createACTableRowFromMeasure(app, measureName, measure) {
         // Calculate min and max from cycle period and delays
-        const cyclePeriod = app.config.clockPeriod;
         const unit = app.config.clockPeriodUnit;
         
         // Get both signals for this measure
@@ -100,13 +157,13 @@ class TimingGenACTable {
         const signal2 = app.getSignalByName(measure.signal2Name);
         
         // Get effective delays for both signals at their respective cycles
-        // This handles the cascade: cycle > signal > global
+        // This handles the cascade: cycle > signal > global (and includes phase for bit/bus)
         const signal1Delays = app.getEffectiveDelayInTime(signal1, measure.cycle1);
         const signal2Delays = app.getEffectiveDelayInTime(signal2, measure.cycle2);
         
-        // Calculate cycle difference
-        const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
-        const timeValue = cyclePeriod * cycleDiff;
+        // Calculate the nominal time difference using each signal's actual clock domain period
+        // and including clock phase offsets for clock-type signals
+        const timeValue = TimingGenACTable.calculateTimeDiff(app, signal1, signal2, measure);
         
         // Calculate both min-to-min and max-to-max paths
         // Then assign the smaller to min and larger to max
@@ -161,8 +218,6 @@ class TimingGenACTable {
                 
                 // Recalculate min/max if not manually edited
                 if (!row.manuallyEdited.min || !row.manuallyEdited.max) {
-                    const cyclePeriod = app.config.clockPeriod;
-                    
                     // Get both signals for this measure
                     const signal1 = app.getSignalByName(measure.signal1Name);
                     const signal2 = app.getSignalByName(measure.signal2Name);
@@ -171,8 +226,7 @@ class TimingGenACTable {
                     const signal1Delays = app.getEffectiveDelayInTime(signal1, measure.cycle1);
                     const signal2Delays = app.getEffectiveDelayInTime(signal2, measure.cycle2);
                     
-                    const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
-                    const timeValue = cyclePeriod * cycleDiff;
+                    const timeValue = TimingGenACTable.calculateTimeDiff(app, signal1, signal2, measure);
                     
                     // Calculate both min-to-min and max-to-max paths
                     const minToMin = timeValue - signal1Delays.min + signal2Delays.min;
@@ -567,8 +621,7 @@ class TimingGenACTable {
                     const signal2Delays = app.getEffectiveDelayInTime(signal2, measure.cycle2);
                     
                     // Recalculate min/max based on measure cycles
-                    const cycleDiff = Math.abs(measure.cycle2 - measure.cycle1);
-                    const timeValue = cyclePeriod * cycleDiff;
+                    const timeValue = TimingGenACTable.calculateTimeDiff(app, signal1, signal2, measure);
                     
                     // Calculate both min-to-min and max-to-max paths
                     const minToMin = timeValue - signal1Delays.min + signal2Delays.min;

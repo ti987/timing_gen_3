@@ -728,6 +728,9 @@ class TimingGenRendering {
         // Get max cycles for this signal (limited for non-primary domains)
         const maxCycles = TimingGenRendering.getMaxCyclesForSignal(app, signal);
         
+        // Clip all drawing at the primary clock's right boundary
+        const primaryMaxX = TimingGenRendering.getPrimaryClockMaxX(app);
+        
         // First, identify all X spans
         const xSpans = [];
         let idx = 0;
@@ -771,8 +774,8 @@ class TimingGenRendering {
             // Get slew for this cycle
             const slew = idx < app.config.cycles ? app.getEffectiveSlew(signal, idx) : app.config.slew;
             
-            // Base x position at grid line (using domain-specific cycle width)
-            const baseX = app.config.nameColumnWidth + idx * cycleWidth;
+            // Base x position at grid line (using domain-specific cycle width), clipped at primary boundary
+            const baseX = Math.min(app.config.nameColumnWidth + idx * cycleWidth, primaryMaxX);
             // Actual transition point after minimum delay
             const xPos = baseX + delayInfo.min;
             
@@ -834,6 +837,11 @@ class TimingGenRendering {
                 prevX = xPos;
                 prevY = currentY;
             }
+            
+            // Stop drawing once we reach the primary clock boundary
+            if (baseX >= primaryMaxX) {
+                break;
+            }
         }
         
         // Draw X patterns as continuous spans
@@ -844,7 +852,7 @@ class TimingGenRendering {
             path.fillColor = '#999999';
 
             var  x1 = app.config.nameColumnWidth + span.start * cycleWidth;
-            var  x2 = app.config.nameColumnWidth + (span.end + 1) * cycleWidth;
+            var  x2 = Math.min(app.config.nameColumnWidth + (span.end + 1) * cycleWidth, primaryMaxX);
 
             const delay1 = span.start < app.config.cycles && span.start > 0 ?
                 app.getEffectiveDelay(signal, span.start) : { min: 0, max: 0, color: app.config.delayColor };
@@ -928,6 +936,9 @@ class TimingGenRendering {
         // Get max cycles for this signal (limited for non-primary domains)
         const maxCycles = TimingGenRendering.getMaxCyclesForSignal(app, signal);
         
+        // Clip all drawing at the primary clock's right boundary
+        const primaryMaxX = TimingGenRendering.getPrimaryClockMaxX(app);
+        
         // First pass: identify value spans with their cycles
         let idx = 0;
         while (idx < maxCycles) {
@@ -971,7 +982,7 @@ class TimingGenRendering {
 
             // obtain how far in next cycle has been drawn here
             const nextDelay = spanEnd + 1 < maxCycles ? app.getEffectiveDelay(signal, spanEnd + 1) : {min:0,max:0, color:"black"};
-            const x2 = app.config.nameColumnWidth + (spanEnd + 1) * cycleWidth + nextDelay.min;
+            const x2 = Math.min(app.config.nameColumnWidth + (spanEnd + 1) * cycleWidth + nextDelay.min, primaryMaxX);
 
             
             if (value === 'Z') {
