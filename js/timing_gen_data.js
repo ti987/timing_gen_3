@@ -357,10 +357,10 @@ class TimingGenData {
                     signal.cycleOptions[cycleIndex].disabled;
                 if (isDisabled) {
                     const ds = signal.cycleOptions[cycleIndex].disableState || '0';
-                    chars += ds === '1' ? '\u00AF' : '_';
+                    chars += ds === '1' ? '\u203E' : '_';
                 } else {
                     const halfPeriods = tAdj / (clockPeriodNs / 2);
-                    chars += Math.floor(halfPeriods) % 2 === 0 ? '_' : '\u00AF';
+                    chars += Math.floor(halfPeriods) % 2 === 0 ? '_' : '\u203E';
                 }
             }
         }
@@ -402,7 +402,7 @@ class TimingGenData {
                 }
             } else {
                 if (curVal === 'X') chars += 'X';
-                else if (curVal === 1) chars += '\u00AF';
+                else if (curVal === 1) chars += '\u203E';
                 else chars += '_';
             }
         }
@@ -441,17 +441,17 @@ class TimingGenData {
             } else if (isTransition && curVal !== prevVal) {
                 arr[c] = 'X';
             } else {
-                arr[c] = '\u00AF';
+                arr[c] = '\u203E';
             }
         }
 
         // Pass 2: embed value labels inside runs of '¯' with the same underlying value.
         let c = 0;
         while (c < numCols) {
-            if (arr[c] === '\u00AF') {
+            if (arr[c] === '\u203E') {
                 const runStart = c;
                 const runVal = vals[c];
-                while (c < numCols && arr[c] === '\u00AF' && vals[c] === runVal) {
+                while (c < numCols && arr[c] === '\u203E' && vals[c] === runVal) {
                     c++;
                 }
                 const runLen = c - runStart;

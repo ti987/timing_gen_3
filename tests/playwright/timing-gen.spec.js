@@ -431,14 +431,14 @@ test.describe('Timing Gen 3 Application', () => {
     });
 
     // Primary clock: alternates _ and ¯ every character
-    expect(result.clkWave).toBe('_\u00AF_\u00AF_\u00AF_\u00AF');
+    expect(result.clkWave).toBe('_\u203E_\u203E_\u203E_\u203E');
 
     // Bit: starts low (__), rises (/), high (¯), falls (\), then low (____)
     // Cycle 0: __ , Cycle 1 start: /, Cycle 1 rest: ¯, Cycle 2 start: \, Cycle 2 rest: _, Cycle 3: _
     expect(result.bitWave[0]).toBe('_'); // cycle 0 low
     expect(result.bitWave[1]).toBe('_');
     expect(result.bitWave[2]).toBe('/'); // rising at cycle 1
-    expect(result.bitWave[3]).toBe('\u00AF'); // high
+    expect(result.bitWave[3]).toBe('\u203E'); // high
     expect(result.bitWave[4]).toBe('\\'); // falling at cycle 2
     expect(result.bitWave[5]).toBe('_'); // low
 
@@ -448,7 +448,7 @@ test.describe('Timing Gen 3 Application', () => {
     expect(result.busWave[0]).toBe('X'); // cycle 0 = 'X' value
     expect(result.busWave[1]).toBe('X'); // still X
     expect(result.busWave[4]).toBe('X'); // transition at cycle 2 boundary
-    expect(result.busWave[5]).toBe('\u00AF'); // first char of segment
+    expect(result.busWave[5]).toBe('\u203E'); // first char of segment
     expect(result.busWave[6]).toBe('A');  // value label embedded
     expect(result.busWave[7]).toBe('5');
   });
@@ -476,11 +476,11 @@ test.describe('Timing Gen 3 Application', () => {
     });
 
     // Fits: segment starts at col 5, label 'TOOLONG' at cols 6-12
-    expect(result.w1[5]).toBe('\u00AF');
+    expect(result.w1[5]).toBe('\u203E');
     expect(result.w1.slice(6, 13)).toBe('TOOLONG');
 
     // Doesn't fit: segment starts at col 5, col 6 = '*'
-    expect(result.w2[5]).toBe('\u00AF');
+    expect(result.w2[5]).toBe('\u203E');
     expect(result.w2[6]).toBe('*');
   });
 
@@ -503,10 +503,10 @@ test.describe('Timing Gen 3 Application', () => {
     });
 
     // 2x period clock: 2 lows then 2 highs per primary cycle pair
-    expect(result.clk2Wave).toBe('__\u00AF\u00AF__\u00AF\u00AF');
+    expect(result.clk2Wave).toBe('__\u203E\u203E__\u203E\u203E');
     // Phased clock (0.5 phase): pre-phase low then clock low, then alternating
     // Indices: 0=_, 1=_ (pre-phase+clock-low), 2=¯, 3=_, 4=¯, 5=_, 6=¯, 7=_
-    expect(result.clkPhasedWave).toBe('__\u00AF_\u00AF_\u00AF_');
+    expect(result.clkPhasedWave).toBe('__\u203E_\u203E_\u203E_');
   });
 });
 
