@@ -442,11 +442,46 @@ test.describe('Timing Gen 3 Application', () => {
     expect(result.bitWave[4]).toBe('\\'); // falling at cycle 2
     expect(result.bitWave[5]).toBe('_'); // low
 
-    // Bus: X for unknown, ¯ for valid value, X on transition
+    // Bus: X for unknown, label embedded when it fits, * when it doesn't
+    // Cycles 0-1: X; transition X at col 4; cycles 2-3: A5 segment (cols 5-7, length 3)
+    // 'A5' length=2 <= 3-1=2 → fits: col5=¯, col6=A, col7=5
     expect(result.busWave[0]).toBe('X'); // cycle 0 = 'X' value
     expect(result.busWave[1]).toBe('X'); // still X
     expect(result.busWave[4]).toBe('X'); // transition at cycle 2 boundary
-    expect(result.busWave[5]).toBe('\u00AF'); // valid value after transition
+    expect(result.busWave[5]).toBe('\u00AF'); // first char of segment
+    expect(result.busWave[6]).toBe('A');  // value label embedded
+    expect(result.busWave[7]).toBe('5');
+  });
+
+  test('Export ASCII bus: value label and * truncation', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const app = window.timingGenApp;
+      const clk = { name: 'clk', type: 'clock', period: 10, periodUnit: 'ns', phase: 0, values: {} };
+      app.signalsData.set('clk', clk);
+
+      const primaryPeriodNs = app.convertPeriodToNs(clk.period, clk.periodUnit);
+
+      // 8 cycles = 16 cols; 'TOOLONG' (7 chars) from cycle 2 to end (7 cycles = 14 cols for run)
+      // run of 11 cols (cols 5..15); label 7 chars <= 11-1=10 → fits
+      const busFits = { name: 'b1', type: 'bus', base_clock: 'clk', values: { 0: 'X', 2: 'TOOLONG' } };
+      app.signalsData.set('b1', busFits);
+      const w1 = TimingGenData._asciiBus(app, busFits, 16, primaryPeriodNs);
+
+      // 8 cycles; 'VeryLongValueLabel' (18 chars) from cycle 2: run = 11 cols, 18 > 10 → '*'
+      const busTooLong = { name: 'b2', type: 'bus', base_clock: 'clk', values: { 0: 'X', 2: 'VeryLongValueLabel' } };
+      app.signalsData.set('b2', busTooLong);
+      const w2 = TimingGenData._asciiBus(app, busTooLong, 16, primaryPeriodNs);
+
+      return { w1, w2 };
+    });
+
+    // Fits: segment starts at col 5, label 'TOOLONG' at cols 6-12
+    expect(result.w1[5]).toBe('\u00AF');
+    expect(result.w1.slice(6, 13)).toBe('TOOLONG');
+
+    // Doesn't fit: segment starts at col 5, col 6 = '*'
+    expect(result.w2[5]).toBe('\u00AF');
+    expect(result.w2[6]).toBe('*');
   });
 
   test('Export ASCII handles non-primary clock domain', async ({ page }) => {

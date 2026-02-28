@@ -410,6 +410,7 @@ class TimingGenData {
     }
 
     // Generate ASCII waveform for a bus signal.
+    // Valid-value segments show the bus value label if it fits (label.length <= segment_length - 1).
     static _asciiBus(app, signal, numCols, primaryPeriodNs) {
         const clock = app.getClockForSignal(signal);
         const clockPeriodNs = clock
@@ -418,7 +419,9 @@ class TimingGenData {
         const phase = (clock && clock.phase) || 0;
         const phaseOffsetNs = phase * clockPeriodNs;
 
-        let chars = '';
+        // Pass 1: build per-column character and active value.
+        const arr = new Array(numCols);
+        const vals = new Array(numCols);
         for (let c = 0; c < numCols; c++) {
             const t = c * primaryPeriodNs / 2;
             const tForDomain = t - phaseOffsetNs;
@@ -432,15 +435,40 @@ class TimingGenData {
             const prevVal = app.getBusValueAtCycle(signal, prevDomainCycle);
             const isTransition = c > 0 && domainCycle !== prevDomainCycle;
 
+            vals[c] = curVal;
             if (curVal === 'X') {
-                chars += 'X';
+                arr[c] = 'X';
             } else if (isTransition && curVal !== prevVal) {
-                chars += 'X';
+                arr[c] = 'X';
             } else {
-                chars += '\u00AF';
+                arr[c] = '\u00AF';
             }
         }
-        return chars;
+
+        // Pass 2: embed value labels inside runs of '¯' with the same underlying value.
+        let c = 0;
+        while (c < numCols) {
+            if (arr[c] === '\u00AF') {
+                const runStart = c;
+                const runVal = vals[c];
+                while (c < numCols && arr[c] === '\u00AF' && vals[c] === runVal) {
+                    c++;
+                }
+                const runLen = c - runStart;
+                const label = String(runVal);
+                if (label.length <= runLen - 1) {
+                    for (let j = 0; j < label.length; j++) {
+                        arr[runStart + 1 + j] = label[j];
+                    }
+                } else if (runLen >= 2) {
+                    arr[runStart + 1] = '*';
+                }
+            } else {
+                c++;
+            }
+        }
+
+        return arr.join('');
     }
 
     static exportToSVG(app) {
