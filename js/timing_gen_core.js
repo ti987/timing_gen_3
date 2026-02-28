@@ -40,6 +40,7 @@ class TimingGenApp {
             delayMin: 0, // minimum delay value in clock period units
             delayMax: 0, // maximum delay value in clock period units
             delayColor: '#0000FF', // color for delay uncertainty region (default: blue)
+            asciiColsPerHalfPeriod: 1, // columns per primary clock half-period in ASCII export (default: 1)
             gridColor: '#e0e0e0',
             signalColor: '#000000',
             backgroundColor: '#ffffff'

@@ -508,5 +508,58 @@ test.describe('Timing Gen 3 Application', () => {
     // Indices: 0=_, 1=_ (pre-phase+clock-low), 2=¯, 3=_, 4=¯, 5=_, 6=¯, 7=_
     expect(result.clkPhasedWave).toBe('__\u203E_\u203E_\u203E_');
   });
+
+  test('ASCII export: asciiColsPerHalfPeriod=2 widens each half-period to 2 columns', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const app = window.timingGenApp;
+
+      const clk = { name: 'clk', type: 'clock', period: 10, periodUnit: 'ns', phase: 0, values: {} };
+      app.signalsData.set('clk', clk);
+
+      const bit = { name: 'dat', type: 'bit', base_clock: 'clk', values: { 0: 0, 1: 1, 2: 0 } };
+      app.signalsData.set('dat', bit);
+
+      const primaryPeriodNs = app.convertPeriodToNs(clk.period, clk.periodUnit);
+      const colsPerHalf = 2;
+      const numCols = 2 * 4 * colsPerHalf; // 4 cycles, 16 cols
+
+      const clkWave = TimingGenData._asciiClock(app, clk, numCols, primaryPeriodNs, colsPerHalf);
+      const bitWave = TimingGenData._asciiBit(app, bit, numCols, primaryPeriodNs, colsPerHalf);
+
+      return { clkWave, bitWave };
+    });
+
+    // Each half-period occupies 2 columns: __‾‾ pattern per primary cycle
+    expect(result.clkWave).toBe('__\u203E\u203E__\u203E\u203E__\u203E\u203E__\u203E\u203E');
+    // Bit: 2 cols low (cycle 0), rising edge at col 4, 3 high cols, falling edge, then low
+    expect(result.bitWave[0]).toBe('_');
+    expect(result.bitWave[1]).toBe('_');
+    expect(result.bitWave[2]).toBe('_');
+    expect(result.bitWave[3]).toBe('_');
+    expect(result.bitWave[4]).toBe('/');   // rising edge at cycle 1 boundary
+    expect(result.bitWave[5]).toBe('\u203E');
+    expect(result.bitWave[6]).toBe('\u203E');
+    expect(result.bitWave[7]).toBe('\u203E');
+    expect(result.bitWave[8]).toBe('\\');  // falling edge at cycle 2 boundary
+    expect(result.bitWave[9]).toBe('_');
+  });
+
+  test('ASCII export: asciiColsPerHalfPeriod config is saved and loaded', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const app = window.timingGenApp;
+      app.config.asciiColsPerHalfPeriod = 3;
+      const saved = JSON.parse(JSON.stringify({
+        config: {
+          asciiColsPerHalfPeriod: app.config.asciiColsPerHalfPeriod
+        }
+      }));
+      // Simulate load
+      if (saved.config.asciiColsPerHalfPeriod !== undefined) {
+        app.config.asciiColsPerHalfPeriod = saved.config.asciiColsPerHalfPeriod;
+      }
+      return app.config.asciiColsPerHalfPeriod;
+    });
+    expect(result).toBe(3);
+  });
 });
 

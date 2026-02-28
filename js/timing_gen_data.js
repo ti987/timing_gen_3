@@ -74,7 +74,8 @@ class TimingGenData {
                 slew: app.config.slew,
                 delayMin: app.config.delayMin,
                 delayMax: app.config.delayMax,
-                delayColor: app.config.delayColor
+                delayColor: app.config.delayColor,
+                asciiColsPerHalfPeriod: app.config.asciiColsPerHalfPeriod
             },
             rows: rowsWithData,
             arrows: arrows,
@@ -143,6 +144,9 @@ class TimingGenData {
                     }
                     if (data.config.delayColor !== undefined) {
                         app.config.delayColor = data.config.delayColor;
+                    }
+                    if (data.config.asciiColsPerHalfPeriod !== undefined) {
+                        app.config.asciiColsPerHalfPeriod = data.config.asciiColsPerHalfPeriod;
                     }
                 }
                 
@@ -310,17 +314,18 @@ class TimingGenData {
             ? app.convertPeriodToNs(primaryClock.period || app.config.clockPeriod, primaryClock.periodUnit || app.config.clockPeriodUnit)
             : app.convertPeriodToNs(app.config.clockPeriod, app.config.clockPeriodUnit);
 
-        const numCols = 2 * app.config.cycles;
+        const colsPerHalf = app.config.asciiColsPerHalfPeriod || 1;
+        const numCols = 2 * app.config.cycles * colsPerHalf;
         const maxNameLen = Math.max(...signals.map(s => s.name.length));
 
         const lines = signals.map(signal => {
             let waveform;
             if (signal.type === 'clock') {
-                waveform = TimingGenData._asciiClock(app, signal, numCols, primaryPeriodNs);
+                waveform = TimingGenData._asciiClock(app, signal, numCols, primaryPeriodNs, colsPerHalf);
             } else if (signal.type === 'bit') {
-                waveform = TimingGenData._asciiBit(app, signal, numCols, primaryPeriodNs);
+                waveform = TimingGenData._asciiBit(app, signal, numCols, primaryPeriodNs, colsPerHalf);
             } else {
-                waveform = TimingGenData._asciiBus(app, signal, numCols, primaryPeriodNs);
+                waveform = TimingGenData._asciiBus(app, signal, numCols, primaryPeriodNs, colsPerHalf);
             }
             return signal.name.padEnd(maxNameLen) + ' ' + waveform;
         });
@@ -336,8 +341,8 @@ class TimingGenData {
     }
 
     // Generate ASCII waveform for a clock signal.
-    // Each column represents one primary half-period.
-    static _asciiClock(app, signal, numCols, primaryPeriodNs) {
+    // Each column represents one primary half-period divided by colsPerHalf.
+    static _asciiClock(app, signal, numCols, primaryPeriodNs, colsPerHalf = 1) {
         const clockPeriodNs = app.convertPeriodToNs(
             signal.period || app.config.clockPeriod,
             signal.periodUnit || app.config.clockPeriodUnit
@@ -346,7 +351,7 @@ class TimingGenData {
         const phaseOffsetNs = phase * clockPeriodNs;
         let chars = '';
         for (let c = 0; c < numCols; c++) {
-            const t = c * primaryPeriodNs / 2;
+            const t = c * primaryPeriodNs / (2 * colsPerHalf);
             const tAdj = t - phaseOffsetNs;
             if (tAdj < 0) {
                 chars += '_';
@@ -368,7 +373,7 @@ class TimingGenData {
     }
 
     // Generate ASCII waveform for a bit signal.
-    static _asciiBit(app, signal, numCols, primaryPeriodNs) {
+    static _asciiBit(app, signal, numCols, primaryPeriodNs, colsPerHalf = 1) {
         const clock = app.getClockForSignal(signal);
         const clockPeriodNs = clock
             ? app.convertPeriodToNs(clock.period, clock.periodUnit || 'ns')
@@ -378,11 +383,11 @@ class TimingGenData {
 
         let chars = '';
         for (let c = 0; c < numCols; c++) {
-            const t = c * primaryPeriodNs / 2;
+            const t = c * primaryPeriodNs / (2 * colsPerHalf);
             const tForDomain = t - phaseOffsetNs;
             const domainCycle = tForDomain < 0 ? 0 : Math.floor(tForDomain / clockPeriodNs);
 
-            const tPrev = (c - 1) * primaryPeriodNs / 2;
+            const tPrev = (c - 1) * primaryPeriodNs / (2 * colsPerHalf);
             const tPrevForDomain = tPrev - phaseOffsetNs;
             const prevDomainCycle = (c === 0 || tPrevForDomain < 0) ? 0 : Math.floor(tPrevForDomain / clockPeriodNs);
 
@@ -411,7 +416,7 @@ class TimingGenData {
 
     // Generate ASCII waveform for a bus signal.
     // Valid-value segments show the bus value label if it fits (label.length <= segment_length - 1).
-    static _asciiBus(app, signal, numCols, primaryPeriodNs) {
+    static _asciiBus(app, signal, numCols, primaryPeriodNs, colsPerHalf = 1) {
         const clock = app.getClockForSignal(signal);
         const clockPeriodNs = clock
             ? app.convertPeriodToNs(clock.period, clock.periodUnit || 'ns')
@@ -423,11 +428,11 @@ class TimingGenData {
         const arr = new Array(numCols);
         const vals = new Array(numCols);
         for (let c = 0; c < numCols; c++) {
-            const t = c * primaryPeriodNs / 2;
+            const t = c * primaryPeriodNs / (2 * colsPerHalf);
             const tForDomain = t - phaseOffsetNs;
             const domainCycle = tForDomain < 0 ? 0 : Math.floor(tForDomain / clockPeriodNs);
 
-            const tPrev = (c - 1) * primaryPeriodNs / 2;
+            const tPrev = (c - 1) * primaryPeriodNs / (2 * colsPerHalf);
             const tPrevForDomain = tPrev - phaseOffsetNs;
             const prevDomainCycle = (c === 0 || tPrevForDomain < 0) ? 0 : Math.floor(tPrevForDomain / clockPeriodNs);
 

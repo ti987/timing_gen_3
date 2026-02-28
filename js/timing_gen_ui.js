@@ -67,6 +67,7 @@ class TimingGenUI {
         document.getElementById('delay-min-input').value = app.config.delayMin;
         document.getElementById('delay-max-input').value = app.config.delayMax;
         document.getElementById('delay-color-input').value = app.config.delayColor;
+        document.getElementById('ascii-cols-per-half-input').value = app.config.asciiColsPerHalfPeriod;
         
         // Update delay unit labels to match clock period unit
         document.getElementById('delay-min-unit-label').textContent = app.config.clockPeriodUnit;
@@ -90,6 +91,7 @@ class TimingGenUI {
         const delayMin = parseFloat(document.getElementById('delay-min-input').value);
         const delayMax = parseFloat(document.getElementById('delay-max-input').value);
         const delayColor = document.getElementById('delay-color-input').value;
+        const asciiColsPerHalf = parseInt(document.getElementById('ascii-cols-per-half-input').value);
         
         if (isNaN(clockPeriod) || clockPeriod <= 0) {
             alert('Please enter a valid clock period');
@@ -131,6 +133,11 @@ class TimingGenUI {
             return;
         }
         
+        if (isNaN(asciiColsPerHalf) || asciiColsPerHalf < 1 || asciiColsPerHalf > 20) {
+            alert('Please enter a valid columns per half-period value (1-20)');
+            return;
+        }
+        
         app.config.clockPeriod = clockPeriod;
         app.config.clockPeriodUnit = clockPeriodUnit;
         app.config.cycleWidth = cycleWidth;
@@ -141,6 +148,7 @@ class TimingGenUI {
         app.config.delayMin = delayMin;
         app.config.delayMax = delayMax;
         app.config.delayColor = delayColor;
+        app.config.asciiColsPerHalfPeriod = asciiColsPerHalf;
         
         // Update delay unit labels in other dialogs
         document.getElementById('signal-delay-min-unit-label').textContent = clockPeriodUnit;
