@@ -396,5 +396,82 @@ test.describe('Timing Gen 3 Application', () => {
     expect(saveLoadResult.savedGroupData).toBeTruthy();
     expect(saveLoadResult.savedGroupData.measures).toContain('M0');
   });
+
+  test('Export ASCII button is present and ASCII waveforms are generated correctly', async ({ page }) => {
+    // Verify the Export ASCII button exists
+    await expect(page.getByRole('button', { name: 'Export ASCII' })).toBeVisible();
+
+    // Add signals via the app, then call _asciiClock/_asciiBit/_asciiBus directly
+    const result = await page.evaluate(() => {
+      const app = window.timingGenApp;
+
+      // Add a primary clock signal (10ns)
+      const clk = { name: 'clk', type: 'clock', period: 10, periodUnit: 'ns', phase: 0, values: {} };
+      app.signalsData.set('clk', clk);
+      app.rows.push({ type: 'signal', name: 'clk' });
+
+      // Add a bit signal in the primary domain (starts low, goes high at cycle 1, falls at cycle 2)
+      const bit = { name: 'dat', type: 'bit', base_clock: 'clk', values: { 0: 0, 1: 1, 2: 0 } };
+      app.signalsData.set('dat', bit);
+      app.rows.push({ type: 'signal', name: 'dat' });
+
+      // Add a bus signal
+      const bus = { name: 'bus', type: 'bus', base_clock: 'clk', values: { 0: 'X', 2: 'A5' } };
+      app.signalsData.set('bus', bus);
+      app.rows.push({ type: 'signal', name: 'bus' });
+
+      const primaryPeriodNs = app.convertPeriodToNs(clk.period, clk.periodUnit);
+      const numCols = 2 * 4; // 4 cycles
+
+      const clkWave = TimingGenData._asciiClock(app, clk, numCols, primaryPeriodNs);
+      const bitWave = TimingGenData._asciiBit(app, bit, numCols, primaryPeriodNs);
+      const busWave = TimingGenData._asciiBus(app, bus, numCols, primaryPeriodNs);
+
+      return { clkWave, bitWave, busWave };
+    });
+
+    // Primary clock: alternates _ and ¯ every character
+    expect(result.clkWave).toBe('_\u00AF_\u00AF_\u00AF_\u00AF');
+
+    // Bit: starts low (__), rises (/), high (¯), falls (\), then low (____)
+    // Cycle 0: __ , Cycle 1 start: /, Cycle 1 rest: ¯, Cycle 2 start: \, Cycle 2 rest: _, Cycle 3: _
+    expect(result.bitWave[0]).toBe('_'); // cycle 0 low
+    expect(result.bitWave[1]).toBe('_');
+    expect(result.bitWave[2]).toBe('/'); // rising at cycle 1
+    expect(result.bitWave[3]).toBe('\u00AF'); // high
+    expect(result.bitWave[4]).toBe('\\'); // falling at cycle 2
+    expect(result.bitWave[5]).toBe('_'); // low
+
+    // Bus: X for unknown, ¯ for valid value, X on transition
+    expect(result.busWave[0]).toBe('X'); // cycle 0 = 'X' value
+    expect(result.busWave[1]).toBe('X'); // still X
+    expect(result.busWave[4]).toBe('X'); // transition at cycle 2 boundary
+    expect(result.busWave[5]).toBe('\u00AF'); // valid value after transition
+  });
+
+  test('Export ASCII handles non-primary clock domain', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const app = window.timingGenApp;
+
+      const primaryPeriodNs = app.convertPeriodToNs(app.config.clockPeriod, app.config.clockPeriodUnit);
+      const numCols = 2 * 4; // 4 primary cycles
+
+      // Non-primary clock: 2x period (20ns)
+      const clk2 = { name: 'clk2', type: 'clock', period: 20, periodUnit: 'ns', phase: 0, values: {} };
+      const clk2Wave = TimingGenData._asciiClock(app, clk2, numCols, primaryPeriodNs);
+
+      // Phased clock: same period as primary but phase=0.5
+      const clkPhased = { name: 'clkP', type: 'clock', period: 10, periodUnit: 'ns', phase: 0.5, values: {} };
+      const clkPhasedWave = TimingGenData._asciiClock(app, clkPhased, numCols, primaryPeriodNs);
+
+      return { clk2Wave, clkPhasedWave };
+    });
+
+    // 2x period clock: 2 lows then 2 highs per primary cycle pair
+    expect(result.clk2Wave).toBe('__\u00AF\u00AF__\u00AF\u00AF');
+    // Phased clock (0.5 phase): pre-phase low then clock low, then alternating
+    // Indices: 0=_, 1=_ (pre-phase+clock-low), 2=¯, 3=_, 4=¯, 5=_, 6=¯, 7=_
+    expect(result.clkPhasedWave).toBe('__\u00AF_\u00AF_\u00AF_');
+  });
 });
 

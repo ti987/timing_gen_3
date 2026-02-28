@@ -35,6 +35,7 @@
             <button id="save-btn" class="menu-btn">Save</button>
             <button id="load-btn" class="menu-btn">Load</button>
             <button id="export-svg-btn" class="menu-btn">Export SVG</button>
+            <button id="export-ascii-btn" class="menu-btn">Export ASCII</button>
             <input type="file" id="file-input" accept=".td3,.json" style="display: none;">
             <div class="menu-dropdown">
                 <button id="help-menu-btn" class="menu-btn">Help</button>
@@ -443,6 +444,7 @@
                 <li><strong>Save</strong>: Downloads the diagram as a <code>.td3</code> JSON file.</li>
                 <li><strong>Load</strong>: Opens a previously saved <code>.td3</code> file.</li>
                 <li><strong>Export SVG</strong>: Downloads the diagram as an SVG image (cycle headers and selections are stripped).</li>
+                <li><strong>Export ASCII</strong>: Downloads the diagram as a plain-text waveform file using unicode characters (<code>¯</code>, <code>_</code>, <code>/</code>, <code>\</code>, <code>X</code>). Only clock, bit, and bus signals are included.</li>
             </ul>
 
             <br>

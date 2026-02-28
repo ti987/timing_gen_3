@@ -170,6 +170,7 @@ class TimingGenApp {
         document.getElementById('save-btn').addEventListener('click', () => TimingGenData.saveToJSON(this));
         document.getElementById('load-btn').addEventListener('click', () => document.getElementById('file-input').click());
         document.getElementById('export-svg-btn').addEventListener('click', () => TimingGenData.exportToSVG(this));
+        document.getElementById('export-ascii-btn').addEventListener('click', () => TimingGenData.exportToASCII(this));
         document.getElementById('file-input').addEventListener('change', (ev) => TimingGenData.loadFromJSON(this, ev));
         document.getElementById('cycles-input').addEventListener('change', (ev) => this.updateCycles(ev.target.value));
         

@@ -297,6 +297,152 @@ class TimingGenData {
         ev.target.value = ''; // Reset file input
     }
     
+    static exportToASCII(app) {
+        const signals = app.getSignals().filter(s => ['clock', 'bit', 'bus'].includes(s.type));
+        if (signals.length === 0) {
+            alert('No clock, bit, or bus signals to export');
+            return;
+        }
+
+        const clocks = app.getClockSignals();
+        const primaryClock = clocks[0];
+        const primaryPeriodNs = primaryClock
+            ? app.convertPeriodToNs(primaryClock.period || app.config.clockPeriod, primaryClock.periodUnit || app.config.clockPeriodUnit)
+            : app.convertPeriodToNs(app.config.clockPeriod, app.config.clockPeriodUnit);
+
+        const numCols = 2 * app.config.cycles;
+        const maxNameLen = Math.max(...signals.map(s => s.name.length));
+
+        const lines = signals.map(signal => {
+            let waveform;
+            if (signal.type === 'clock') {
+                waveform = TimingGenData._asciiClock(app, signal, numCols, primaryPeriodNs);
+            } else if (signal.type === 'bit') {
+                waveform = TimingGenData._asciiBit(app, signal, numCols, primaryPeriodNs);
+            } else {
+                waveform = TimingGenData._asciiBus(app, signal, numCols, primaryPeriodNs);
+            }
+            return signal.name.padEnd(maxNameLen) + ' ' + waveform;
+        });
+
+        const text = lines.join('\n');
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'timing_diagram.txt';
+        anchor.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // Generate ASCII waveform for a clock signal.
+    // Each column represents one primary half-period.
+    static _asciiClock(app, signal, numCols, primaryPeriodNs) {
+        const clockPeriodNs = app.convertPeriodToNs(
+            signal.period || app.config.clockPeriod,
+            signal.periodUnit || app.config.clockPeriodUnit
+        );
+        const phase = signal.phase || 0;
+        const phaseOffsetNs = phase * clockPeriodNs;
+        let chars = '';
+        for (let c = 0; c < numCols; c++) {
+            const t = c * primaryPeriodNs / 2;
+            const tAdj = t - phaseOffsetNs;
+            if (tAdj < 0) {
+                chars += '_';
+            } else {
+                const cycleIndex = Math.floor(tAdj / clockPeriodNs);
+                const isDisabled = signal.cycleOptions &&
+                    signal.cycleOptions[cycleIndex] &&
+                    signal.cycleOptions[cycleIndex].disabled;
+                if (isDisabled) {
+                    const ds = signal.cycleOptions[cycleIndex].disableState || '0';
+                    chars += ds === '1' ? '\u00AF' : '_';
+                } else {
+                    const halfPeriods = tAdj / (clockPeriodNs / 2);
+                    chars += Math.floor(halfPeriods) % 2 === 0 ? '_' : '\u00AF';
+                }
+            }
+        }
+        return chars;
+    }
+
+    // Generate ASCII waveform for a bit signal.
+    static _asciiBit(app, signal, numCols, primaryPeriodNs) {
+        const clock = app.getClockForSignal(signal);
+        const clockPeriodNs = clock
+            ? app.convertPeriodToNs(clock.period, clock.periodUnit || 'ns')
+            : primaryPeriodNs;
+        const phase = (clock && clock.phase) || 0;
+        const phaseOffsetNs = phase * clockPeriodNs;
+
+        let chars = '';
+        for (let c = 0; c < numCols; c++) {
+            const t = c * primaryPeriodNs / 2;
+            const tForDomain = t - phaseOffsetNs;
+            const domainCycle = tForDomain < 0 ? 0 : Math.floor(tForDomain / clockPeriodNs);
+
+            const tPrev = (c - 1) * primaryPeriodNs / 2;
+            const tPrevForDomain = tPrev - phaseOffsetNs;
+            const prevDomainCycle = (c === 0 || tPrevForDomain < 0) ? 0 : Math.floor(tPrevForDomain / clockPeriodNs);
+
+            const curVal = app.getBitValueAtCycle(signal, domainCycle);
+            const prevVal = app.getBitValueAtCycle(signal, prevDomainCycle);
+            const isTransition = c > 0 && domainCycle !== prevDomainCycle;
+
+            if (isTransition && curVal !== prevVal) {
+                if (curVal === 'X' || prevVal === 'X') {
+                    chars += 'X';
+                } else if (prevVal === 0 && curVal === 1) {
+                    chars += '/';
+                } else if (prevVal === 1 && curVal === 0) {
+                    chars += '\\';
+                } else {
+                    chars += 'X';
+                }
+            } else {
+                if (curVal === 'X') chars += 'X';
+                else if (curVal === 1) chars += '\u00AF';
+                else chars += '_';
+            }
+        }
+        return chars;
+    }
+
+    // Generate ASCII waveform for a bus signal.
+    static _asciiBus(app, signal, numCols, primaryPeriodNs) {
+        const clock = app.getClockForSignal(signal);
+        const clockPeriodNs = clock
+            ? app.convertPeriodToNs(clock.period, clock.periodUnit || 'ns')
+            : primaryPeriodNs;
+        const phase = (clock && clock.phase) || 0;
+        const phaseOffsetNs = phase * clockPeriodNs;
+
+        let chars = '';
+        for (let c = 0; c < numCols; c++) {
+            const t = c * primaryPeriodNs / 2;
+            const tForDomain = t - phaseOffsetNs;
+            const domainCycle = tForDomain < 0 ? 0 : Math.floor(tForDomain / clockPeriodNs);
+
+            const tPrev = (c - 1) * primaryPeriodNs / 2;
+            const tPrevForDomain = tPrev - phaseOffsetNs;
+            const prevDomainCycle = (c === 0 || tPrevForDomain < 0) ? 0 : Math.floor(tPrevForDomain / clockPeriodNs);
+
+            const curVal = app.getBusValueAtCycle(signal, domainCycle);
+            const prevVal = app.getBusValueAtCycle(signal, prevDomainCycle);
+            const isTransition = c > 0 && domainCycle !== prevDomainCycle;
+
+            if (curVal === 'X') {
+                chars += 'X';
+            } else if (isTransition && curVal !== prevVal) {
+                chars += 'X';
+            } else {
+                chars += '\u00AF';
+            }
+        }
+        return chars;
+    }
+
     static exportToSVG(app) {
         // Store current selection state and header height
         const savedSelection = new Set(app.selectedSignals);
